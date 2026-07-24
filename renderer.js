@@ -5459,6 +5459,75 @@ setupOcrTranslate()
 setupAssistant()
 
 // ─── Home dashboard ───────────────────────────────────────────────────────────
+// ── Home news helpers ─────────────────────────────────────────────────────────
+
+let _newsLastFetchedAt = 0
+
+function renderHomeNews (nr) {
+  const el = $('homeNews')
+  if (!el) return
+  if (nr && nr.ok && Array.isArray(nr.news) && nr.news.length) {
+    _newsLastFetchedAt = nr.ts || Date.now()
+    updateNewsAge()
+    el.className = ''
+    el.innerHTML = (nr.cached
+      ? '<div class="news-cached-note">Showing cached news — couldn\'t reach hello.vrchat.com just now.</div>'
+      : '') +
+      nr.news.map(n => {
+        const dateStr = n.date
+          ? new Date(n.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+          : ''
+        return `<div class="news-item" data-url="${esc(n.link)}">
+          <div style="min-width:0">
+            <div class="news-title">${esc(n.title)}</div>
+            ${n.description ? `<div class="news-desc">${esc(n.description)}</div>` : ''}
+            <div class="news-date">${dateStr}</div>
+          </div>
+        </div>`
+      }).join('')
+    el.querySelectorAll('.news-item[data-url]').forEach(item => {
+      item.addEventListener('click', () => { if (item.dataset.url) api.openExternal(item.dataset.url) })
+    })
+  } else {
+    el.className = 'muted'
+    el.innerHTML = 'Could not load news. <button class="btn ghost" id="homeNewsRetryBtn" style="font-size:.75rem;padding:2px 8px;margin-left:4px">Retry</button>'
+    const retryBtn = $('homeNewsRetryBtn')
+    if (retryBtn) retryBtn.addEventListener('click', refreshHomeNews)
+  }
+}
+
+async function refreshHomeNews () {
+  const el = $('homeNews')
+  const btn = $('homeNewsRefresh')
+  if (btn) btn.disabled = true
+  if (el) { el.className = 'muted'; el.textContent = 'Refreshing…' }
+  try {
+    const nr = await api.vrchatNews()
+    renderHomeNews(nr)
+  } catch (_) { renderHomeNews(null) }
+  if (btn) btn.disabled = false
+}
+
+function updateNewsAge () {
+  const el = $('homeNewsAge')
+  if (!el || !_newsLastFetchedAt) return
+  const mins = Math.floor((Date.now() - _newsLastFetchedAt) / 60000)
+  el.textContent = mins < 1 ? 'just now' : `${mins}m ago`
+}
+
+// Tick the "X ago" label every minute so it stays accurate
+setInterval(updateNewsAge, 60000)
+
+// Background push from main process — runs every 5 minutes automatically
+api.on('home:newsUpdate', result => renderHomeNews(result))
+
+// Wire refresh button (runs once; button persists in DOM for the session)
+document.addEventListener('click', e => {
+  if (e.target && e.target.id === 'homeNewsRefresh') refreshHomeNews()
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function loadHome () {
   // Welcome hero
   try {
@@ -5506,31 +5575,11 @@ async function loadHome () {
     }
   } catch (_) {}
 
-  // VRChat news
+  // VRChat news — renderHomeNews handles display; background poller keeps it fresh
   try {
-    const el = $('homeNews')
-    if (el) {
-      const nr = await api.vrchatNews()
-      if (nr.ok && nr.news.length) {
-        el.className = ''
-        el.innerHTML = (nr.cached ? '<div class="news-cached-note">Showing cached news — couldn\'t reach hello.vrchat.com just now.</div>' : '') + nr.news.map(n => {
-          const dateStr = n.date ? new Date(n.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : ''
-          return `<div class="news-item" data-url="${esc(n.link)}">
-            <div style="min-width:0">
-              <div class="news-title">${esc(n.title)}</div>
-              ${n.description ? `<div class="news-desc">${esc(n.description)}</div>` : ''}
-              <div class="news-date">${dateStr}</div>
-            </div>
-          </div>`
-        }).join('')
-        el.querySelectorAll('.news-item[data-url]').forEach(item => {
-          item.addEventListener('click', () => { if (item.dataset.url) api.openExternal(item.dataset.url) })
-        })
-      } else {
-        setText('homeNews', nr.error ? 'Could not load news.' : 'No news items found.')
-      }
-    }
-  } catch (_) { setText('homeNews', 'Could not load news.') }
+    const nr = await api.vrchatNews()
+    renderHomeNews(nr)
+  } catch (_) { renderHomeNews(null) }
 
   // "More news" link
   const newsMore = $('homeNewsMore')

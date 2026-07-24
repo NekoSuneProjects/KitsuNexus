@@ -301,6 +301,9 @@ app.whenReady().then(async () => {
     const info = await updater.check(app.getVersion())
     if (info && info.ok && info.available) push('update:available', info)
   }, 4000)
+  // Background VRChat news poller — staggered so it doesn't hit the network
+  // at the same time as the update check and friend pollers on startup.
+  setTimeout(startNewsPoller, 10000)
 })
 
 app.on('window-all-closed', () => {
@@ -1507,17 +1510,14 @@ ipcMain.handle('vrchat:online', () => vrchatApi.getOnlineCount())
 async function fetchVrchatNewsOnce () {
   const { DOMParser } = require('@xmldom/xmldom')
   const { data } = await axios.get('https://hello.vrchat.com/blog?format=rss', {
-    timeout: 10000,
+    timeout: 15000,
     responseType: 'text',
     headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) NekoSuneAPPS/1.0' }
   })
-  // Custom error handler: xmldom's default one just console.warns and keeps
-  // going, which is fine, but we want a record of it in the main-process log
-  // if this feed ever starts breaking again rather than it failing silently.
   const doc = new DOMParser({
     onError: (level, msg) => console.warn(`[vrchat:news] xml ${level}:`, msg)
   }).parseFromString(data, 'text/xml')
-  const items = Array.from(doc.getElementsByTagName('item')).slice(0, 6)
+  const items = Array.from(doc.getElementsByTagName('item')).slice(0, 20)
   return items.map(item => {
     const get = tag => { const el = item.getElementsByTagName(tag)[0]; return el ? el.textContent.trim() : '' }
     const raw = get('description').replace(/<!\[CDATA\[|\]\]>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
@@ -1525,26 +1525,60 @@ async function fetchVrchatNewsOnce () {
   })
 }
 
+// Merges incoming news items with the persisted cache, deduped by link,
+// sorted newest-first, capped at 30. Call before returning to renderer so
+// the list grows over time rather than resetting to whatever the RSS shows
+// on each fetch.
+function mergeAndCacheNews (incoming) {
+  const existing = settings.get('vrchatNewsCache', [])
+  const byLink = new Map()
+  for (const item of existing) if (item.link) byLink.set(item.link, item)
+  for (const item of incoming) if (item.link) byLink.set(item.link, item)
+  const merged = [...byLink.values()]
+    .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+    .slice(0, 30)
+  settings.set('vrchatNewsCache', merged)
+  return merged
+}
+
+// On-demand IPC — called by renderer on tab open / manual refresh.
 ipcMain.handle('vrchat:news', async () => {
   try {
     let news
     try {
       news = await fetchVrchatNewsOnce()
     } catch (firstErr) {
-      // One retry after a short delay — most failures here are a transient
-      // network blip, not a real parse/format problem.
       await new Promise(resolve => setTimeout(resolve, 800))
       news = await fetchVrchatNewsOnce()
     }
-    if (news.length) settings.set('vrchatNewsCache', news)
-    return { ok: true, news }
+    const merged = mergeAndCacheNews(news)
+    return { ok: true, news: merged, ts: Date.now() }
   } catch (e) {
     console.error('[vrchat:news] failed after retry:', e.message)
     const cached = settings.get('vrchatNewsCache', [])
-    if (cached.length) return { ok: true, news: cached, cached: true }
+    if (cached.length) return { ok: true, news: cached, cached: true, ts: Date.now() }
     return { ok: false, error: e.message, news: [] }
   }
 })
+
+// Background poller — runs every 5 minutes, merges new items into the cache,
+// and pushes the result to the renderer so the home tab updates automatically
+// without the user having to refresh or re-open the tab.
+function startNewsPoller () {
+  const poll = async () => {
+    try {
+      const news = await fetchVrchatNewsOnce()
+      const merged = mergeAndCacheNews(news)
+      push('home:newsUpdate', { ok: true, news: merged, ts: Date.now() })
+    } catch (e) {
+      console.warn('[home:news] background poll failed:', e.message)
+      const cached = settings.get('vrchatNewsCache', [])
+      if (cached.length) push('home:newsUpdate', { ok: true, news: cached, cached: true, ts: Date.now() })
+    }
+  }
+  poll()
+  setInterval(poll, 5 * 60 * 1000)
+}
 
 // Configured Start — launch companion apps (and optionally VRChat).
 ipcMain.handle('apps:launch', (e, { paths, withVrchat } = {}) => {

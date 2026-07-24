@@ -239,6 +239,13 @@
     .news-desc { color:var(--muted); font-size:.77rem; line-height:1.45; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
     .news-date { color:var(--muted); font-size:.7rem; margin-top:3px; }
     .news-cached-note { color:var(--muted); font-size:.72rem; font-style:italic; padding-bottom:8px; margin-bottom:6px; border-bottom:1px solid var(--border); }
+    #homeNews { max-height:320px; overflow-y:auto; scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
+    #homeNews::-webkit-scrollbar { width:4px; }
+    #homeNews::-webkit-scrollbar-track { background:transparent; }
+    #homeNews::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+    .news-refresh-btn { background:none; border:1px solid var(--border); border-radius:5px; color:var(--muted); cursor:pointer; font-size:.72rem; line-height:1; padding:2px 7px; transition:border-color .15s,color .15s; -webkit-app-region:no-drag; }
+    .news-refresh-btn:hover { border-color:var(--accent); color:var(--accent); }
+    .news-refresh-btn:disabled { opacity:.4; cursor:default; }
     .card:hover { box-shadow:0 14px 40px -18px var(--accent); }
     .ql-profile-row { border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:8px; background:var(--panel2); }
     .ql-profile-row .ql-flag { display:flex; align-items:center; gap:4px; font-size:.78rem; color:var(--muted); }
@@ -366,9 +373,13 @@
           <div id="homeRecentWorlds" class="muted" style="font-size:.84rem">Log in to see recent worlds.</div>
         </div>
         <div class="card">
-          <h3 style="display:flex;justify-content:space-between;align-items:center">
+          <h3 style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
             📰 VRChat News
-            <span class="muted" id="homeNewsMore" style="font-size:.75rem;font-weight:500;cursor:pointer">hello.vrchat.com →</span>
+            <span style="display:flex;align-items:center;gap:8px;-webkit-app-region:no-drag">
+              <span id="homeNewsAge" class="muted" style="font-size:.68rem;font-weight:400"></span>
+              <button class="news-refresh-btn" id="homeNewsRefresh" title="Refresh news">↻</button>
+              <span class="muted" id="homeNewsMore" style="font-size:.75rem;font-weight:500;cursor:pointer">hello.vrchat.com →</span>
+            </span>
           </h3>
           <div id="homeNews" class="muted" style="font-size:.84rem">Loading news…</div>
         </div>

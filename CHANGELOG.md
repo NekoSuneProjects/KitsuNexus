@@ -5,6 +5,23 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.64] - 2026-07-24
+
+### Fixed
+- **Home tab VRChat News section now actually shows news and stays up to date.**
+  A background poller runs every 5 minutes, merges new articles into the
+  persisted cache, and pushes the result to the renderer automatically — the
+  home tab refreshes without the user having to click anything. Items are
+  accumulated across sessions (deduped by URL, capped at 30, newest first), so
+  previously-seen news is never lost when the feed rolls older items off.
+  A manual ↻ refresh button and "X ago" last-updated label are shown in the
+  news card header. On fetch failure the cached list is shown with a note; if
+  nothing is cached yet a Retry button appears instead of a dead "Could not
+  load news" message.
+- **News card is now a scrollable area** (max 320 px, thin auto-scrollbar) so
+  all accumulated articles are reachable without the card growing unbounded.
+  RSS fetch limit raised from 6 to 20 items per poll so the list fills quickly.
+
 ## [1.0.63] - 2026-07-23
 
 ### Fixed
