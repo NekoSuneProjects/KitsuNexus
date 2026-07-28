@@ -857,7 +857,7 @@ $('liveTypingTranslate').addEventListener('change', async e => {
 const SOURCES = [
   ['status', 'Status presets'], ['clock', 'Clock'], ['nowPlaying', 'Now playing'],
   ['world', 'World / instance'], ['stats', 'Component stats'], ['network', 'Network'],
-  ['heartRate', 'Heart rate'], ['window', 'Window activity'], ['discord', 'Discord voice'],
+  ['heartRate', 'Heart rate'], ['weather', 'Weather'], ['window', 'Window activity'], ['discord', 'Discord voice'],
   ['ton', 'Terrors of Nowhere'],
   ['tiktok', 'TikTok followers'], ['twitch', 'Twitch followers'], ['kick', 'Kick followers']
 ]
@@ -2871,6 +2871,11 @@ async function loadOscCaptureSources () {
     const selected = result.sources.some(source => source.id === saved) ? saved : result.selected
     select.value = result.sources.some(source => source.id === selected) ? selected : ''
     await api.oscAppsSelectCaptureSource(select.value)
+    // Main resolves with an `error` field (rather than rejecting) when the
+    // OS/compositor never returned a capture list (e.g. no Wayland portal) -
+    // still falls back to "Primary display" above, but surface why nothing
+    // else showed up instead of silently looking like there's just one screen.
+    setText('oscQrOut', result.error ? `Could not list capture sources: ${result.error}` : '')
   } catch (err) { setText('oscQrOut', `Could not list capture sources: ${err.message}`) }
 }
 
@@ -3008,7 +3013,7 @@ api.on('weather:update', s => {
   if (s && s.ok) {
     const weatherText = `${s.desc} · ${s.temp}${s.unit} (feels ${s.feels}${s.unit}) · wind ${s.wind} ${s.windUnit}`
     setText('weatherOut', `${s.desc} · ${s.temp}${s.unit} (feels ${s.feels}${s.unit})`)
-    setText('weatherSub', `${s.city} · wind ${s.wind} ${s.windUnit} · use {weather} in a preset`)
+    setText('weatherSub', `${s.city} · wind ${s.wind} ${s.windUnit} · toggle Weather on the Chatbox tab, or use {weather} in a preset`)
     composer.update({ weather: weatherText })
   } else { setText('weatherOut', '—'); if (s && s.error) setText('weatherSub', s.error) }
 })

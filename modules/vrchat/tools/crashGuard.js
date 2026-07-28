@@ -61,6 +61,11 @@ function rejoin (loc) {
 }
 
 function tick () {
+  // tasklist/reg/PowerShell (Get-WinEvent) below are all Windows-only - on
+  // any other platform this used to still fire every 15s, spawning a shell
+  // that just fails (ENOENT) each time since none of those commands exist,
+  // for a feature that could never actually detect a crash there anyway.
+  if (process.platform !== 'win32') return
   isVrchatRunning(running => {
     if (enabled && wasRunning && !running) {
       hadRecentCrashEvent(crashed => {
@@ -77,6 +82,7 @@ function start (opts = {}) {
   enabled = !!opts.enabled
   if (opts.getLocation) getLocation = opts.getLocation
   stop()
+  if (process.platform !== 'win32') return // see tick()'s comment - nothing to do on this platform
   tick()
   timer = setInterval(tick, 15000)
 }

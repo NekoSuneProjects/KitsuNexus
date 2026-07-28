@@ -5,6 +5,43 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.65] - 2026-07-28
+
+### Added
+- **Weather is now a first-class Chatbox source**, same as Now Playing/Stats/Heart Rate: a
+  "Weather" row on the Chatbox tab's per-source grid with its own Off / Own line / Rotate toggle
+  (`modules/vrchat/chatbox/chatboxComposer.js`). Previously the only way to see weather in
+  VRChat's chatbox was to manually type the undocumented `{weather}` token into a Status preset,
+  where it silently competed with every other preset for the single shared rotation slot — easy
+  to set up and still never actually see it show up. `{weather}` still works in presets too. Also
+  added `{weather}` to the Chatbox tab's "Show all tokens" reference list, where it was missing
+  entirely.
+
+### Fixed
+- **Linux build could freeze into "Not Responding"** when using OSCQR/ShazamOSC's capture-source
+  picker. Root cause: `oscApps:captureSources` (`main.js`) called `desktopCapturer.getSources()`
+  with no error handling and no timeout — under Wayland (GNOME/KDE's default now) without a
+  PipeWire screen-cast portal available, that call can hang indefinitely instead of failing,
+  leaving the awaiting main-process IPC handler stuck forever and freezing the whole app, not
+  just erroring in the OSC Apps tab (which is the "Failed to get sources" message actually
+  reported). Fixed by: enabling Chromium's PipeWire capturer + Ozone auto platform hint on Linux
+  startup so capture has a real chance of working under Wayland; wrapping both
+  `desktopCapturer.getSources()` call sites in a 6s timeout race so a missing portal fails fast
+  instead of hanging forever; and having the IPC handler resolve with an `error` field instead of
+  rejecting, so the renderer always gets an answer either way.
+- **`crashGuard.js` (auto-rejoin after a real VRChat crash) had no platform guard** and ran
+  Windows-only commands (`tasklist`, `reg query`, PowerShell `Get-WinEvent`) unconditionally every
+  15 seconds on every platform, including Linux/Mac, where those commands don't exist — each tick
+  spawned a shell that just failed (ENOENT) for a feature that could never actually detect a
+  crash there anyway. Now a no-op off Windows, matching every other Windows-only module in this
+  codebase.
+- **Packaging: `koffi`'s native binaries (used by the VR Overlay's OpenVR bindings) weren't in
+  `asarUnpack`**, so on any platform they'd fail to `dlopen` from inside the packaged app.asar the
+  moment that code path is required. Added `node_modules/koffi/**/*` to `asarUnpack`.
+- **Packaging: the Linux build had no `files` override**, unlike Windows, so it silently inherited
+  the broad top-level `files: ["**/*"]` glob and shipped extra non-runtime files the Windows
+  installer already excludes. Linux now uses the same explicit file whitelist as Windows.
+
 ## [1.0.64] - 2026-07-24
 
 ### Fixed

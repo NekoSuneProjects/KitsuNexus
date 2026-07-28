@@ -31,7 +31,7 @@ const HOLD_REFRESH_MS = 3000
 // Fixed render order for own-lines (top to bottom). The rotation line is placed
 // at the top by default (rotationPosition = 'top').
 const LINE_ORDER = [
-  'nowPlaying', 'world', 'discord', 'stats', 'network', 'heartRate', 'window',
+  'nowPlaying', 'world', 'discord', 'stats', 'network', 'heartRate', 'weather', 'window',
   'ton', 'tiktok', 'twitch', 'kick', 'clock'
 ]
 
@@ -61,6 +61,7 @@ class ChatboxComposer {
       stats: 'line',
       network: 'off',
       heartRate: 'line',
+      weather: 'off',
       window: 'off',
       ton: 'off',
       tiktok: 'off',
@@ -186,6 +187,7 @@ class ChatboxComposer {
         if (d.hrMin) extra.push(`${d.hrMin} min`)
         return `💗 ${d.hr}${extra.length ? ' | ' + extra.join(' | ') : ' bpm'}`
       }
+      case 'weather': return d.weather ? `🌦 ${d.weather}` : ''
       case 'window': { const w = this.windowText(); return w ? `🪟 ${w}` : '' }
       case 'ton': {
         if (d.tonRoundActive) {

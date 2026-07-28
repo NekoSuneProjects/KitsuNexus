@@ -87,6 +87,16 @@ process.on('unhandledRejection', err => console.error('[unhandledRejection]', er
 // "GPU Very high" usage to near zero. Must be called before app is ready.
 app.disableHardwareAcceleration()
 
+// Linux desktops (GNOME/KDE) default to Wayland now, where Chromium's screen/
+// window capture (desktopCapturer, used by OSCQR/ShazamOSC/VRChat-window
+// capture below) needs PipeWire explicitly enabled - without it, capture can
+// hang indefinitely waiting on a portal that's never offered instead of
+// failing fast. Both switches are no-ops under X11/Windows/Mac.
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer')
+  app.commandLine.appendSwitch('ozone-platform-hint', 'auto')
+}
+
 let mainWindow
 let tray
 let bleSelectCallback = null
@@ -94,6 +104,20 @@ let blePairingCallback = null
 let bleReconnectTarget = null
 const bleScanDevices = new Map()
 let oscAppsCaptureSourceId = ''
+
+// desktopCapturer.getSources() can hang indefinitely on Linux under Wayland
+// when the PipeWire/xdg-desktop-portal screen-cast backend isn't available
+// (no portal offered, nothing ever resolves or rejects) - unlike a normal
+// failure, that leaves the awaiting IPC handler stuck forever, which is what
+// actually froze the whole app ("Not Responding"), not just the visible
+// "Failed to get sources" error. Race it against a timeout so it always
+// settles one way or the other.
+function getDesktopSourcesSafe (opts, timeoutMs = 6000) {
+  return Promise.race([
+    desktopCapturer.getSources(opts),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Timed out waiting for the screen/window capture list (no permission from the desktop compositor?)')), timeoutMs))
+  ])
+}
 
 function cacheBleDevice (device) {
   if (!device?.deviceId) return
@@ -177,7 +201,7 @@ function createWindow () {
   // in Settings to choose that screen explicitly.)
   mainWindow.webContents.session.setDisplayMediaRequestHandler(async (request, callback) => {
     try {
-      const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] })
+      const sources = await getDesktopSourcesSafe({ types: ['screen', 'window'] })
       const selected = sources.find(source => source.id === oscAppsCaptureSourceId) ||
         sources.find(source => source.id.startsWith('screen:')) || sources[0]
       callback(selected ? { video: selected, audio: request.audioRequested ? 'loopback' : undefined } : {})
@@ -419,8 +443,12 @@ ipcMain.handle('oscApps:recognizeSong', (event, request = {}) => recognizeAudio(
 }))
 ipcMain.handle('oscApps:recognitionProviders', () => getProviderStatus())
 ipcMain.handle('oscApps:captureSources', async () => {
-  const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 0, height: 0 }, fetchWindowIcons: false })
-  return { selected: oscAppsCaptureSourceId, sources: sources.map(source => ({ id: source.id, name: source.name })) }
+  try {
+    const sources = await getDesktopSourcesSafe({ types: ['screen', 'window'], thumbnailSize: { width: 0, height: 0 }, fetchWindowIcons: false })
+    return { selected: oscAppsCaptureSourceId, sources: sources.map(source => ({ id: source.id, name: source.name })) }
+  } catch (err) {
+    return { selected: oscAppsCaptureSourceId, sources: [], error: err.message }
+  }
 })
 ipcMain.handle('oscApps:selectCaptureSource', (event, sourceId) => {
   oscAppsCaptureSourceId = String(sourceId || '')

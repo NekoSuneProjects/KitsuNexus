@@ -353,6 +353,28 @@ Confirmed from the [VRCNext](https://github.com/shinyflvre/VRCNext) repo — gap
   specific root cause: one retry on failure, real errors logged to console instead of swallowed,
   and falls back to the last successfully loaded news (marked "(cached)") instead of blanking
   the card.
+- [x] **Fixed: Weather never actually showed up in the VRChat chatbox** even after enabling it
+  and adding `{weather}` to a Status preset. It wasn't a fetch/data bug — `{weather}` worked as a
+  token, but it had no dedicated Chatbox-tab source row (unlike Now Playing/Stats/Heart Rate),
+  so it could only ever be typed manually into a preset, silently sharing the single rotation
+  slot with every other preset. Added a proper "Weather" row with its own Off/Own line/Rotate
+  toggle in `modules/vrchat/chatbox/chatboxComposer.js` + `renderer.js`'s source grid, and added
+  the missing `{weather}` entry to the "Show all tokens" list.
+- [x] **Fixed: Linux build could freeze into "Not Responding"** using OSCQR/ShazamOSC's
+  capture-source picker — `desktopCapturer.getSources()` (`main.js`) had no timeout and could
+  hang indefinitely under Wayland with no PipeWire portal available, freezing the whole app
+  rather than just erroring. Added a 6s timeout race on both capture-source call sites, enabled
+  Chromium's PipeWire capturer + Ozone auto-detection on Linux startup, and made the IPC handler
+  resolve with an error field instead of rejecting. Also fixed `crashGuard.js` running
+  Windows-only commands (`tasklist`/`reg query`/PowerShell) unconditionally on every platform
+  every 15s with no guard (now a no-op off Windows), added `koffi`'s native binaries to
+  `asarUnpack` (VR Overlay's OpenVR bindings couldn't `dlopen` from inside app.asar on any
+  platform), and gave the Linux electron-builder target the same explicit `files` whitelist
+  Windows already had (previously inherited the broad top-level glob and shipped extra files).
+  **Not verified on real Linux hardware** — this dev environment is Windows-only, so these are
+  targeted fixes for the specific reported symptoms (the exact "Failed to get sources" error
+  message, an actual freeze/hang, and file-based evidence like the `.mount_nekosu` AppImage path
+  in the reporter's screenshot), not a full Linux QA pass.
 
 ---
 

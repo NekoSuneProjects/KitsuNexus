@@ -1,6 +1,6 @@
 {
   "name": "nekosuneapps",
-  "version": "1.0.64",
+  "version": "1.0.65",
   "main": "main.js",
   "bin": "main.js",
   "scripts": {
@@ -40,7 +40,8 @@
       "node_modules/onnxruntime-common/**/*",
       "node_modules/sharp/**/*",
       "node_modules/@img/**/*",
-      "node_modules/ffmpeg-static/**/*"
+      "node_modules/ffmpeg-static/**/*",
+      "node_modules/koffi/**/*"
     ],
     "win": {
       "artifactName": "${productName}-Setup-${version}.${ext}",
@@ -81,6 +82,20 @@
       "target": [
         "AppImage",
         "deb"
+      ],
+      "files": [
+        "main.js",
+        "preload.js",
+        "renderer.js",
+        "index.html",
+        "settings.js",
+        "LICENSE",
+        "README.md",
+        "CHANGELOG.md",
+        "assets/**/*",
+        "modules/**/*",
+        "package.json",
+        "node_modules/**/*"
       ],
       "extraResources": [
         {
