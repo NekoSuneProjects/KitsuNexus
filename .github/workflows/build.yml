@@ -11,25 +11,32 @@ permissions:
 
 jobs:
   detect-runners:
-    # Our own self-hosted runners (org-level, "Default" group) are preferred
-    # for the Linux build when they're online - nekorpi1 (Linux ARM64) and
-    # vmi555990 (Linux X64). GitHub Actions has no native "try self-hosted,
-    # else hosted": a job queued for an offline self-hosted runner just waits
-    # forever (timeout-minutes only starts counting once a runner picks the
-    # job up, not while it's queued), so this job checks each runner's live
-    # status via the API first and hands the actual runs-on labels down to
-    # the build job through its matrix.
+    # Any online self-hosted runner is preferred over GitHub-hosted ones,
+    # matched generically by OS (and, for the Linux matrix, by X64/ARM64
+    # arch labels) rather than by name - currently nekorpi1 (Linux ARM64) and
+    # vmi555990 (Linux X64), but adding/renaming/replacing runners later, or
+    # adding a self-hosted Windows box, needs no workflow edit. GitHub
+    # Actions has no native "try self-hosted, else hosted": a job queued for
+    # an offline self-hosted runner just waits forever (timeout-minutes only
+    # starts counting once a runner picks the job up, not while it's
+    # queued), so this job checks runner status via the API first and hands
+    # the actual runs-on labels down to every other job through its outputs.
+    # Every other job now depends on this one (previously build-and-release
+    # ran in parallel with it) so its own runs-on can be resolved first - the
+    # cost is a small serial delay (this is just an API call, seconds) in
+    # exchange for the Windows job also getting self-hosted routing.
     #
     # Requires a repo secret RUNNER_STATUS_PAT: a PAT (classic with the "repo"
     # scope covering org runner read access, or fine-grained with the org's
     # "Self-hosted runners: Read" permission) - the default GITHUB_TOKEN can't
     # call the org runners API. If the secret is missing or the call fails,
-    # this falls back to GitHub-hosted runners for both arches rather than
+    # this falls back to GitHub-hosted runners across the board rather than
     # failing the whole release.
     runs-on: ubuntu-latest
     outputs:
       x64_runner: ${{ steps.pick.outputs.x64_runner }}
       arm64_runner: ${{ steps.pick.outputs.arm64_runner }}
+      windows_runner: ${{ steps.pick.outputs.windows_runner }}
     steps:
       - name: Check self-hosted runner status
         id: pick
@@ -37,6 +44,7 @@ jobs:
         run: |
           $x64Runner = '["ubuntu-latest"]'
           $arm64Runner = '["ubuntu-latest"]'
+          $windowsRunner = '["windows-latest"]'
           if ($env:RUNNER_STATUS_PAT) {
             try {
               $headers = @{
@@ -47,12 +55,15 @@ jobs:
               $resp = Invoke-RestMethod -Uri "https://api.github.com/orgs/${{ github.repository_owner }}/actions/runners?per_page=100" -Headers $headers
               # "busy" (mid-job) is still fine to target - it'll just run next.
               # Only "offline" means the job would queue forever - fall back then.
-              $onlineLinux = $resp.runners | Where-Object { $_.os -eq "linux" -and $_.status -eq "online" }
-              $x64  = $onlineLinux | Where-Object { $_.labels.name -contains "X64" }   | Select-Object -First 1
+              $online = $resp.runners | Where-Object { $_.status -eq "online" }
+              $onlineLinux = $online | Where-Object { $_.os -eq "linux" }
+              $x64   = $onlineLinux | Where-Object { $_.labels.name -contains "X64" }   | Select-Object -First 1
               $arm64 = $onlineLinux | Where-Object { $_.labels.name -contains "ARM64" } | Select-Object -First 1
-              if ($x64)  { $x64Runner  = '["self-hosted","Linux","X64"]' }
-              if ($arm64) { $arm64Runner = '["self-hosted","Linux","ARM64"]' }
-              Write-Output "Online self-hosted Linux runners: $($onlineLinux.name -join ', ')"
+              $win   = $online | Where-Object { $_.os -eq "windows" } | Select-Object -First 1
+              if ($x64)   { $x64Runner     = '["self-hosted","Linux","X64"]' }
+              if ($arm64) { $arm64Runner   = '["self-hosted","Linux","ARM64"]' }
+              if ($win)   { $windowsRunner = '["self-hosted","Windows"]' }
+              Write-Output "Online self-hosted runners: $($online.name -join ', ')"
             } catch {
               Write-Warning "Couldn't query self-hosted runner status ($_) - falling back to GitHub-hosted runners."
             }
@@ -61,17 +72,19 @@ jobs:
           }
           Write-Output "x64 runner: $x64Runner"
           Write-Output "arm64 runner: $arm64Runner"
+          Write-Output "windows runner: $windowsRunner"
           "x64_runner=$x64Runner" >> $env:GITHUB_OUTPUT
           "arm64_runner=$arm64Runner" >> $env:GITHUB_OUTPUT
+          "windows_runner=$windowsRunner" >> $env:GITHUB_OUTPUT
         env:
           RUNNER_STATUS_PAT: ${{ secrets.RUNNER_STATUS_PAT }}
 
   build:
     needs: [detect-runners]
     name: Build (${{ matrix.artifact }})
-    # runs-on is resolved from the matrix: a static label for Windows, and the
-    # detect-runners output (self-hosted if online, else the hosted fallback)
-    # for each Linux arch.
+    # runs-on is resolved from the matrix: every leg pulls its runner from
+    # detect-runners (self-hosted if a matching box is online, else the
+    # GitHub-hosted fallback).
     runs-on: ${{ fromJson(matrix.runner) }}
     strategy:
       fail-fast: false
@@ -80,7 +93,7 @@ jobs:
           - artifact: windows
             os_family: windows
             arch: x64
-            runner: '["windows-latest"]'
+            runner: ${{ needs.detect-runners.outputs.windows_runner }}
           - artifact: linux-x64
             os_family: linux
             arch: x64
@@ -172,11 +185,15 @@ jobs:
 
   release:
     name: Publish release
-    needs: build
+    needs: [detect-runners, build]
     # Publish on ANY tag (v1.0.7 or 1.0.7). !cancelled() lets the release run and
     # attach whatever built even if one OS/arch leg failed.
     if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/') }}
-    runs-on: ubuntu-latest
+    # Uses the detected Linux x64 runner (self-hosted vmi555990 if online, else
+    # ubuntu-latest). NOTE: this job relies on gh, jq, curl and awk - present on
+    # GitHub-hosted ubuntu, but make sure they're installed on the self-hosted
+    # X64 box too, or the VirusTotal/Discord/changelog steps will fail there.
+    runs-on: ${{ fromJson(needs.detect-runners.outputs.x64_runner) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
