@@ -10,17 +10,85 @@ permissions:
   contents: write
 
 jobs:
+  detect-runners:
+    # Our own self-hosted runners (org-level, "Default" group) are preferred
+    # for the Linux build when they're online - nekorpi1 (Linux ARM64) and
+    # vmi555990 (Linux X64). GitHub Actions has no native "try self-hosted,
+    # else hosted": a job queued for an offline self-hosted runner just waits
+    # forever (timeout-minutes only starts counting once a runner picks the
+    # job up, not while it's queued), so this job checks each runner's live
+    # status via the API first and hands the actual runs-on labels down to
+    # the build job through its matrix.
+    #
+    # Requires a repo secret RUNNER_STATUS_PAT: a PAT (classic with the "repo"
+    # scope covering org runner read access, or fine-grained with the org's
+    # "Self-hosted runners: Read" permission) - the default GITHUB_TOKEN can't
+    # call the org runners API. If the secret is missing or the call fails,
+    # this falls back to GitHub-hosted runners for both arches rather than
+    # failing the whole release.
+    runs-on: ubuntu-latest
+    outputs:
+      x64_runner: ${{ steps.pick.outputs.x64_runner }}
+      arm64_runner: ${{ steps.pick.outputs.arm64_runner }}
+    steps:
+      - name: Check self-hosted runner status
+        id: pick
+        shell: pwsh
+        run: |
+          $x64Runner = '["ubuntu-latest"]'
+          $arm64Runner = '["ubuntu-latest"]'
+          if ($env:RUNNER_STATUS_PAT) {
+            try {
+              $headers = @{
+                "Authorization" = "Bearer $env:RUNNER_STATUS_PAT"
+                "Accept"        = "application/vnd.github+json"
+                "User-Agent"    = "ZFTP-CI"
+              }
+              $resp = Invoke-RestMethod -Uri "https://api.github.com/orgs/${{ github.repository_owner }}/actions/runners?per_page=100" -Headers $headers
+              # "busy" (mid-job) is still fine to target - it'll just run next.
+              # Only "offline" means the job would queue forever - fall back then.
+              $onlineLinux = $resp.runners | Where-Object { $_.os -eq "linux" -and $_.status -eq "online" }
+              $x64  = $onlineLinux | Where-Object { $_.labels.name -contains "X64" }   | Select-Object -First 1
+              $arm64 = $onlineLinux | Where-Object { $_.labels.name -contains "ARM64" } | Select-Object -First 1
+              if ($x64)  { $x64Runner  = '["self-hosted","Linux","X64"]' }
+              if ($arm64) { $arm64Runner = '["self-hosted","Linux","ARM64"]' }
+              Write-Output "Online self-hosted Linux runners: $($onlineLinux.name -join ', ')"
+            } catch {
+              Write-Warning "Couldn't query self-hosted runner status ($_) - falling back to GitHub-hosted runners."
+            }
+          } else {
+            Write-Warning "RUNNER_STATUS_PAT secret not set - falling back to GitHub-hosted runners."
+          }
+          Write-Output "x64 runner: $x64Runner"
+          Write-Output "arm64 runner: $arm64Runner"
+          "x64_runner=$x64Runner" >> $env:GITHUB_OUTPUT
+          "arm64_runner=$arm64Runner" >> $env:GITHUB_OUTPUT
+        env:
+          RUNNER_STATUS_PAT: ${{ secrets.RUNNER_STATUS_PAT }}
+
   build:
-    name: Build (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    needs: [detect-runners]
+    name: Build (${{ matrix.artifact }})
+    # runs-on is resolved from the matrix: a static label for Windows, and the
+    # detect-runners output (self-hosted if online, else the hosted fallback)
+    # for each Linux arch.
+    runs-on: ${{ fromJson(matrix.runner) }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
-            artifact: windows
-          - os: ubuntu-latest
-            artifact: linux
+          - artifact: windows
+            os_family: windows
+            arch: x64
+            runner: '["windows-latest"]'
+          - artifact: linux-x64
+            os_family: linux
+            arch: x64
+            runner: ${{ needs.detect-runners.outputs.x64_runner }}
+          - artifact: linux-arm64
+            os_family: linux
+            arch: arm64
+            runner: ${{ needs.detect-runners.outputs.arm64_runner }}
 
     steps:
       - name: Checkout
@@ -32,13 +100,26 @@ jobs:
           node-version: 20
           cache: npm
 
-      # Linux needs extra libs for some native deps / AppImage packaging
+      # Linux needs extra libs for some native deps / AppImage packaging.
+      # On self-hosted runners these are usually pre-installed; apt-get is a
+      # cheap no-op if so.
       - name: Install Linux build deps
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os_family == 'linux'
         run: sudo apt-get update && sudo apt-get install -y rpm fakeroot dpkg libudev-dev
 
       - name: Install dependencies
         run: npm install
+
+      # OPTIONAL self-hosted-only patch. runner.environment is 'self-hosted'
+      # only when one of our own runners was online and picked up this job
+      # ("if online"); on the GitHub-hosted fallback it's 'github-hosted' and
+      # this step is skipped. Put the global sed substitution here.
+      - name: Self-hosted patch (sed global)
+        if: runner.environment == 'self-hosted'
+        run: |
+          echo "Running on self-hosted runner - applying patch."
+          # TODO: replace with your actual global sed, e.g.:
+          # sed -i 's|OLD|NEW|g' path/to/file
 
       # Builds the standalone update helper (updater/) for this OS and
       # normalizes its output to a fixed, predictable path/name so the main
@@ -49,7 +130,7 @@ jobs:
         run: npm install
 
       - name: Build updater helper (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.os_family == 'windows'
         working-directory: updater
         run: |
           npx electron-builder --win --publish never
@@ -57,16 +138,23 @@ jobs:
         shell: pwsh
 
       - name: Build updater helper (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os_family == 'linux'
         working-directory: updater
         run: |
-          npx electron-builder --linux dir --publish never
+          npx electron-builder --linux dir --${{ matrix.arch }} --publish never
           BIN_DIR=$(find dist -maxdepth 1 -iname '*-unpacked' | head -1)
           rm -rf linux-unpacked
           cp -R "$BIN_DIR" linux-unpacked
 
-      - name: Build app
-        run: npx electron-builder --publish never
+      - name: Build app (Windows)
+        if: matrix.os_family == 'windows'
+        run: npx electron-builder --win --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build app (Linux)
+        if: matrix.os_family == 'linux'
+        run: npx electron-builder --linux --${{ matrix.arch }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -86,7 +174,7 @@ jobs:
     name: Publish release
     needs: build
     # Publish on ANY tag (v1.0.7 or 1.0.7). !cancelled() lets the release run and
-    # attach whatever built even if one OS leg failed.
+    # attach whatever built even if one OS/arch leg failed.
     if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     steps:
@@ -171,7 +259,8 @@ jobs:
           {
             printf "\n---\n## 📦 Downloads\n"
             printf -- "- **Windows:** \`NekoSuneAPPS-Setup-%s.exe\` (installer) or \`.msi\`\n" "$VERSION"
-            printf -- "- **Linux:** \`.AppImage\` / \`.deb\`\n"
+            printf -- "- **Linux (x64):** \`.AppImage\` / \`.deb\`\n"
+            printf -- "- **Linux (arm64):** \`.AppImage\` / \`.deb\`\n"
             printf -- "\n> Installers are unsigned, so Windows SmartScreen may warn on first run — click *More info → Run anyway*.\n"
             if [ -s vt-notes.md ]; then printf "\n"; cat vt-notes.md; fi
           } >> NOTES.md
@@ -211,15 +300,19 @@ jobs:
           fi
 
           # Build a Downloads field from whatever assets actually got attached to the
-          # release (so a partial build - e.g. one OS leg failed - doesn't dead-link)
+          # release (so a partial build - e.g. one leg failed - doesn't dead-link).
+          # arm64 patterns come first so arch-specific labels win over the generic ones.
           DOWNLOADS=""
           while IFS=$'\t' read -r name url; do
             case "$name" in
-              *.exe)      label="🪟 Windows Installer (.exe)" ;;
-              *.msi)      label="🪟 Windows Installer (.msi)" ;;
-              *.AppImage) label="🐧 Linux (.AppImage)" ;;
-              *.deb)      label="🐧 Linux (.deb)" ;;
-              *)          continue ;;
+              *.exe)              label="🪟 Windows Installer (.exe)" ;;
+              *.msi)              label="🪟 Windows Installer (.msi)" ;;
+              *arm64*.AppImage)   label="🐧 Linux ARM64 (.AppImage)" ;;
+              *aarch64*.AppImage) label="🐧 Linux ARM64 (.AppImage)" ;;
+              *arm64*.deb)        label="🐧 Linux ARM64 (.deb)" ;;
+              *.AppImage)         label="🐧 Linux x64 (.AppImage)" ;;
+              *.deb)              label="🐧 Linux x64 (.deb)" ;;
+              *)                  continue ;;
             esac
             DOWNLOADS="${DOWNLOADS}[${label}](${url})"$'\n'
           done < <(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | [.name, .url] | @tsv')
