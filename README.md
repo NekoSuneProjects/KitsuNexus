@@ -9,19 +9,24 @@ HTTP API on top of them. It serves two features:
 2. **Discord Activity** — a live, read-only VRChat status panel that runs as an embedded iframe
    inside a Discord voice channel (`public/activity/`).
 
-This directory is intentionally separate from the Electron app: its own `package.json`, its own
-`node_modules`, deployed independently (Docker), and excluded from the desktop app's build
-(`!server/**` in the root `package.json`'s `build.files`). It is never bundled into NekoSuneAPPS
+This is a fully separate service from the Electron app — its own repo branch
+(`feature/discord-backend-server`, never merged into `main`), its own `package.json`/
+`node_modules`, deployed independently via Docker. It is never bundled into NekoSuneAPPS
 installers.
+
+The official deployment lives at `https://nekosuneappsvrc.nekosunevr.co.uk` — that's the default
+the Electron app uses (`DEFAULT_NEKOSUNE_BACKEND_URL` in `main.js`). Self-hosters can run their
+own copy of this service and point the Electron app at it instead via the "Backend URL" field on
+the Voice Bot card — see the `DISCORD_CLIENT_ID` row below for what else that entails.
 
 ## Env vars (`.env`, see `.env.example`)
 
 | Var | Purpose |
 |---|---|
-| `DISCORD_CLIENT_ID` | Must match `DEFAULT_DISCORD_APP_ID`/`DISCORD_APP_ID` in the Electron app (`1534167604304937142`) |
-| `DISCORD_CLIENT_SECRET` | Developer Portal → OAuth2 tab. Never put this in the Electron app. |
+| `DISCORD_CLIENT_ID` | The official deployment uses the same app as the locked Rich Presence ID (`1534167604304937142`), since Activities are configured per-application. Self-hosters: use your own Discord application instead — nothing requires matching the official one — but also update `CLIENT_ID` in `public/activity/app.js` to match if you use the Activity. |
+| `DISCORD_CLIENT_SECRET` | Developer Portal → OAuth2 tab, for whichever application ID you used above. Never put this in the Electron app. |
 | `DISCORD_BOT_TOKEN` | The shared/official bot's token. Never put this in the Electron app. |
-| `DISCORD_REDIRECT_URI` | Must exactly match a redirect registered in the Portal's OAuth2 tab |
+| `DISCORD_REDIRECT_URI` | Must exactly match a redirect registered in the Portal's OAuth2 tab. The official deployment uses `https://nekosuneappsvrc.nekosunevr.co.uk/oauth2/discord/callback`. |
 | `JWT_SECRET` | Signs this backend's own session tokens — `openssl rand -hex 32` |
 | `JWT_TTL` | Session token lifetime (default `12h`) |
 | `PORT` | Default `8080` |
@@ -55,8 +60,9 @@ Registry packages default to private.
 
 ## One-time manual setup (Discord Developer Portal, app `1534167604304937142`)
 
-- **OAuth2 → Redirects**: add `https://<your-chosen-host>/oauth2/discord/callback`.
-- **Activities → URL Mappings → Root Mapping**: prefix `/` → target `<your-chosen-host>`.
+- **OAuth2 → Redirects**: add `https://nekosuneappsvrc.nekosunevr.co.uk/oauth2/discord/callback`
+  (or your own domain, for self-hosted deployments).
+- **Activities → URL Mappings → Root Mapping**: prefix `/` → target your chosen host.
   Serving the API and the Activity's static assets from this same backend means one Root
   Mapping covers both; no separate Proxy Path Mapping is needed as long as the iframe's own
   fetches stay same-origin-relative.
