@@ -38,6 +38,21 @@ TLS termination is left to whatever reverse proxy already fronts your other neko
 services — this container serves plain HTTP on `PORT`, put it behind that proxy rather than
 exposing it directly.
 
+### Prebuilt image (GitHub Actions)
+
+`.github/workflows/docker.yml` builds and pushes this image to GitHub Container Registry on
+every push to `feature/discord-backend-server` (and via manual "Run workflow"), tagged both
+`latest` and with the commit SHA — no extra secrets needed, it uses the repo's built-in
+`GITHUB_TOKEN`. Pull it instead of building locally:
+
+```sh
+docker pull ghcr.io/nekosuneprojects/nekosuneapps/discord-backend:latest
+```
+
+The `ghcr.io/nekosuneprojects/nekosuneapps` package may need to be set to Public once (or your
+deploy host given read access) under the package's own Settings on GitHub — new GitHub Container
+Registry packages default to private.
+
 ## One-time manual setup (Discord Developer Portal, app `1534167604304937142`)
 
 - **OAuth2 → Redirects**: add `https://<your-chosen-host>/oauth2/discord/callback`.
