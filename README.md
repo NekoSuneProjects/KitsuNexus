@@ -27,7 +27,7 @@ the Voice Bot card — see the `DISCORD_CLIENT_ID` row below for what else that 
 
 | Var | Purpose |
 |---|---|
-| `DISCORD_CLIENT_ID` | The official deployment uses the same app as the locked Rich Presence ID (`1534167604304937142`), since Activities are configured per-application. Self-hosters: use your own Discord application instead — nothing requires matching the official one — but also update `CLIENT_ID` in `public/activity/app.js` to match if you use the Activity. |
+| `DISCORD_CLIENT_ID` | The official deployment uses the same app as the locked Rich Presence ID (`1534208250046578790`), since Activities are configured per-application. Self-hosters: use your own Discord application instead — nothing requires matching the official one — but also update `CLIENT_ID` in `public/activity/app.js` to match if you use the Activity. |
 | `DISCORD_CLIENT_SECRET` | Developer Portal → OAuth2 tab, for whichever application ID you used above. Never put this in the Electron app. |
 | `DISCORD_BOT_TOKEN` | The shared/official bot's token. Never put this in the Electron app. |
 | `DISCORD_REDIRECT_URI` | Must exactly match a redirect registered in the Portal's OAuth2 tab. The official deployment uses `https://nekosuneappsvrc.nekosunevr.co.uk/oauth2/discord/callback`. |
@@ -63,7 +63,7 @@ The `ghcr.io/nekosuneprojects/nekosuneapps` package may need to be set to Public
 deploy host given read access) under the package's own Settings on GitHub — new GitHub Container
 Registry packages default to private.
 
-## One-time manual setup (Discord Developer Portal, app `1534167604304937142`)
+## One-time manual setup (Discord Developer Portal, app `1534208250046578790`)
 
 - **Bot tab**: add a bot user if one doesn't exist yet and generate its token — that's
   `DISCORD_BOT_TOKEN`. A plain OAuth2 application isn't enough; `discordBotGateway.js` needs a
@@ -81,8 +81,8 @@ Registry packages default to private.
   fetches stay same-origin-relative.
 - Confirm **Activities** is enabled for this application before testing the iframe — it can't
   be tested locally or without this.
-- Don't hand out a plain Discord "Add to Server" bot-invite link — share
-  `https://<your-host>/oauth2/discord/authorize-bot` instead. See "Bot whitelist" below for why.
+- Don't hand out a plain Discord "Add to Server" bot-invite link — share `https://<your-host>/dashboard`
+  instead. See "Bot whitelist" below for why.
 
 ## Routes
 
@@ -90,9 +90,12 @@ Registry packages default to private.
 |---|---|---|---|
 | GET | `/` | none | Redirects to `DISCORD_INVITE_URL` if set, else a plain placeholder page |
 | GET | `/robots.txt` | none | Disallows all crawling |
-| GET | `/oauth2/discord/authorize` | none | Redirects to Discord's authorize URL — plain `identify` login (Electron's "Log in with Discord") |
-| GET | `/oauth2/discord/authorize-bot` | none | Redirects to Discord's authorize URL with combined `identify bot` scope — the ONLY path that can add the bot to a guild and have it stick (see Bot whitelist below). Not linked anywhere public; share it directly with whoever should be able to add the bot. |
-| GET | `/oauth2/discord/callback` | none (CSRF state-checked) | Code→token exchange for either flow above, redirects to Electron's `localhost:3737` loopback with a session JWT. If `guild_id` is present (came from the `-bot` flow), authorizes that guild. |
+| GET | `/dashboard` | browser session cookie | Web dashboard — log in, see which servers you've authorized, add the bot to another one |
+| GET | `/dashboard/logout` | none | Clears the dashboard session cookie |
+| GET | `/oauth2/discord/authorize` | none | Redirects to Discord's authorize URL — plain `identify` login, used ONLY by Electron's "Log in with Discord" (ends at its `localhost:3737` loopback, not the dashboard) |
+| GET | `/oauth2/discord/authorize-dashboard` | none | Same plain `identify` login, but for the web dashboard (ends with a session cookie + redirect to `/dashboard`) |
+| GET | `/oauth2/discord/authorize-bot` | none | Combined `identify bot` scope — the ONLY path that can add the bot to a guild and have it stick (see Bot whitelist below). Always ends at the dashboard, never Electron's loopback. |
+| GET | `/oauth2/discord/callback` | none (CSRF state-checked) | Code→token exchange for all three flows above. Sends Electron logins to its `localhost:3737` loopback with a session JWT; sends dashboard/bot logins to a session cookie + `/dashboard`. If `guild_id` is present (came from the `-bot` flow), authorizes that guild. |
 | POST | `/api/activity/token` | none | Code→token exchange for the Activity iframe's Embedded App SDK flow |
 | POST | `/api/status` | Bearer session JWT | Electron pushes its own live VRChat status |
 | GET | `/api/channel/:channelId/status` | Bearer session JWT | Activity iframe reads the channel's roster + statuses |

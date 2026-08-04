@@ -6,7 +6,7 @@ import { DiscordSDK } from 'https://esm.sh/@discord/embedded-app-sdk'
 
 // Must match DEFAULT_DISCORD_APP_ID (renderer.js) / DISCORD_APP_ID (main.js) in
 // the Electron app, and DISCORD_CLIENT_ID in this backend's .env.
-const CLIENT_ID = '1534167604304937142'
+const CLIENT_ID = '1534208250046578790'
 
 const discordSdk = new DiscordSDK(CLIENT_ID)
 let sessionToken = null
