@@ -1222,7 +1222,9 @@
 
           <div id="botOfficialFields" style="display:none">
             <div class="muted" style="font-size:.75rem;margin:8px 0">No token or bot setup needed — log in with your own Discord account and NekoSuneAPPS's official shared bot reads your voice state (and can server-mute/deafen you) the same way, as long as it's already in the server you're calling from.</div>
-            <div class="row"><button class="btn" id="discordIdentityLogin">Login with Discord</button><button class="btn ghost" id="discordIdentityLogout">Log out</button></div>
+            <label>Backend URL <span class="muted" style="font-size:.72rem">(self-hosting? point this at your own deployment instead)</span></label>
+            <input type="text" id="nekosuneBackendUrl" placeholder="https://nekosuneappsvrc.nekosunevr.co.uk" />
+            <div class="row" style="margin-top:8px"><button class="btn" id="discordIdentityLogin">Login with Discord</button><button class="btn ghost" id="discordIdentityLogout">Log out</button></div>
             <div class="muted" id="discordIdentityOut" style="margin-top:8px">Not logged in</div>
           </div>
 

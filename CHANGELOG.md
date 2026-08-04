@@ -28,12 +28,18 @@ This project follows [Semantic Versioning](https://semver.org/).
     `stopOfficialBot`/`setMuteOfficial`/`setDeafOfficial`) that polls the backend instead of
     running a local token-based gateway client, producing the identical state shape so the
     existing OSC/chatbox pipeline needed no changes.
+  - Defaults to the official `https://nekosuneappsvrc.nekosunevr.co.uk` deployment
+    (`DEFAULT_NEKOSUNE_BACKEND_URL` in `main.js`), but — unlike the locked RPC app ID — this is
+    intentionally user-overridable: a new "Backend URL" field on the Voice Bot card
+    (`nekosuneBackendUrl` setting) lets self-hosters point the app at their own deployment
+    instead, since a self-hoster runs their own bot/OAuth app entirely and needs nothing from
+    the official one.
   - **Not deployed by this session** — implemented and locally verified in isolation (backend
     routes exercised directly over HTTP; every changed/new file passed `node --check` and a
-    plain-Node require-resolution check), but end-to-end use requires deploying that branch
-    somewhere real, filling in its `.env` secrets, setting the placeholder
-    `NEKOSUNE_BACKEND_URL` in `main.js`, and one-time Discord Developer Portal setup (OAuth
-    redirect + Activities URL Mapping) documented in that branch's `README.md`.
+    plain-Node require-resolution check), but end-to-end use requires actually deploying the
+    official host, filling in that branch's `.env` secrets, and one-time Discord Developer
+    Portal setup (OAuth redirect + Activities URL Mapping) documented in that branch's
+    `README.md`.
 
 ### Changed
 - **Discord Rich Presence Application ID is now fixed and no longer user-editable.** Previously

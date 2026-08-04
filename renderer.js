@@ -3040,6 +3040,7 @@ async function refreshDiscordIdentityStatus () {
   const loggedIn = await api.discordIdentityStatus()
   setText('discordIdentityOut', loggedIn ? 'Logged in with Discord' : 'Not logged in')
 }
+$('nekosuneBackendUrl').addEventListener('change', () => api.saveSetting('nekosuneBackendUrl', $('nekosuneBackendUrl').value.trim()))
 $('discordIdentityLogin').addEventListener('click', async () => {
   setText('discordIdentityOut', 'Opening Discord login…')
   const r = await api.discordIdentityLogin()
@@ -4954,6 +4955,9 @@ async function init () {
   $('botAppId').value = bcfg.appId || ''
   $('botMode').value = await api.getSetting('discordBotMode', 'own')
   syncBotModeUI()
+  // Left blank = use the official NekoSuneVR-hosted backend (main.js falls
+  // back to DEFAULT_NEKOSUNE_BACKEND_URL); only self-hosters need to fill this in.
+  $('nekosuneBackendUrl').value = await api.getSetting('nekosuneBackendUrl', '')
   refreshDiscordIdentityStatus()
   $('spotiOscEnable').checked = await api.getSetting('spotiOscEnable', false)
   $('discordOscEnable').checked = await api.getSetting('discordOscEnable', false)

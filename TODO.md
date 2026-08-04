@@ -43,11 +43,14 @@ Legend: `[x]` done · `[~]` partial · `[ ]` todo · ⚠️ technical blocker.
   not as a subfolder here. It holds the shared bot token and OAuth client secret, which can
   never live in a distributed Electron app. Backend + Electron-side code (identity login,
   official-bot mode, status push) are implemented and locally verified (curl against the
-  running backend, `node --check`/require-resolution on every changed file). **Not deployed by
-  this session** — still needed before this works end to end: choose/deploy a real host for the
-  backend, set `NEKOSUNE_BACKEND_URL` in `main.js` (currently a placeholder), fill in that
-  branch's `.env` (bot token, OAuth client secret, JWT secret), register the OAuth redirect +
-  Activities URL Mapping in the Developer Portal for app `1534167604304937142`, and get
+  running backend, `node --check`/require-resolution on every changed file). Defaults to the
+  official `https://nekosuneappsvrc.nekosunevr.co.uk` deployment (`DEFAULT_NEKOSUNE_BACKEND_URL`
+  in `main.js`), but self-hosters can override it via the Backend URL field on the Voice Bot
+  card (`nekosuneBackendUrl` setting) to point at their own instance instead. **Not deployed by
+  this session** — still needed before this works end to end: actually deploy that official
+  host, fill in that branch's `.env` (bot token, OAuth client secret, JWT secret), register the
+  OAuth redirect + Activities URL Mapping in the Developer Portal for app
+  `1534167604304937142`, and get
   Activities enabled for that app. See that branch's `README.md` for the full one-time setup
   checklist.
 - [x] **Fixed: Discord Rich Presence's elapsed timer reset on every status change** instead of
