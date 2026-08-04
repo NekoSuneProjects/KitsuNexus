@@ -5,6 +5,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.66] - 2026-08-04
+
 ### Added
 - **Discord Activity (live VRChat status panel) + an official shared Discord bot mode**,
   backed by a new standalone backend service that lives on its own branch in this repo
