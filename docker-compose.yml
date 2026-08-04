@@ -5,3 +5,9 @@ services:
     ports:
       - "8080:8080"
     restart: unless-stopped
+    volumes:
+      # Persists the authorized-guilds whitelist (src/authorizedGuilds.js)
+      # across container restarts/redeploys — without this, every restart
+      # would forget which guilds were ever legitimately authorized and the
+      # bot would leave all of them again on the next connect.
+      - ./data:/app/data

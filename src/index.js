@@ -1,13 +1,26 @@
 const express = require('express')
 const cors = require('cors')
-const { port } = require('./config')
+const helmet = require('helmet')
+const { port, discordInviteUrl } = require('./config')
 const botGateway = require('./discordBotGateway')
 const oauthRoutes = require('./routes/oauth')
 const statusRoutes = require('./routes/status')
 
 function main () {
   const app = express()
+  // Reduces what a scanner can passively learn about this box (drops
+  // X-Powered-By, sets sane default security headers) — this API has no
+  // browser-rendered pages of its own besides the Activity iframe, so
+  // helmet's defaults are fine as-is with no extra CSP tuning needed here.
+  app.use(helmet())
   app.use(cors())
+
+  app.get('/robots.txt', (req, res) => res.type('text/plain').send('User-agent: *\nDisallow: /\n'))
+  app.get('/', (req, res) => {
+    if (discordInviteUrl) return res.redirect(discordInviteUrl)
+    res.type('text/plain').send('NekoSuneAPPS backend.')
+  })
+
   app.get('/healthz', (req, res) => res.json({ ok: true, botReady: botGateway.isReady() }))
   app.use(oauthRoutes)
   app.use(statusRoutes)

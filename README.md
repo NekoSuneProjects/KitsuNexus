@@ -6,6 +6,10 @@ HTTP API on top of them. It serves two features:
 
 1. **Official shared Discord bot** — lets ordinary users read (and, if logged in, control)
    their own voice state via the app's built-in bot instead of creating their own bot/token.
+   The bot auto-detects whichever voice channel a user is currently in by scanning the guilds
+   it's a member of; if that user isn't in a voice channel in any guild the bot can see (e.g.
+   they're not in a shared server with the bot at all), voice state just comes back empty and
+   the app correctly shows "not in voice" rather than stale/wrong data.
 2. **Discord Activity** — a live, read-only VRChat status panel that runs as an embedded iframe
    inside a Discord voice channel (`public/activity/`).
 
@@ -30,6 +34,7 @@ the Voice Bot card — see the `DISCORD_CLIENT_ID` row below for what else that 
 | `JWT_SECRET` | Signs this backend's own session tokens — `openssl rand -hex 32` |
 | `JWT_TTL` | Session token lifetime (default `12h`) |
 | `PORT` | Default `8080` |
+| `DISCORD_INVITE_URL` | Optional. `GET /` redirects here (e.g. your Discord server's invite) — left blank, `/` just serves a plain placeholder page. |
 
 ## Deploy
 
@@ -60,6 +65,14 @@ Registry packages default to private.
 
 ## One-time manual setup (Discord Developer Portal, app `1534167604304937142`)
 
+- **Bot tab**: add a bot user if one doesn't exist yet and generate its token — that's
+  `DISCORD_BOT_TOKEN`. A plain OAuth2 application isn't enough; `discordBotGateway.js` needs a
+  real bot user to log into the gateway.
+- **Bot tab → Privileged Gateway Intents**: enable **Server Members Intent**. The code requests
+  `GatewayIntentBits.GuildMembers`; Discord rejects the gateway connection without this toggle on.
+- **Installation → Installation Contexts**: keep **Guild Install** checked (required to add the
+  bot to any server at all). **User Install** isn't used by anything here — leave it checked or
+  not, it makes no difference.
 - **OAuth2 → Redirects**: add `https://nekosuneappsvrc.nekosunevr.co.uk/oauth2/discord/callback`
   (or your own domain, for self-hosted deployments).
 - **Activities → URL Mappings → Root Mapping**: prefix `/` → target your chosen host.
@@ -68,15 +81,18 @@ Registry packages default to private.
   fetches stay same-origin-relative.
 - Confirm **Activities** is enabled for this application before testing the iframe — it can't
   be tested locally or without this.
-- Invite the shared bot (`DISCORD_BOT_TOKEN`'s user) to whichever guilds should support the
-  official-bot mode or the Activity.
+- Don't hand out a plain Discord "Add to Server" bot-invite link — share
+  `https://<your-host>/oauth2/discord/authorize-bot` instead. See "Bot whitelist" below for why.
 
 ## Routes
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/oauth2/discord/authorize` | none | Redirects to Discord's authorize URL (Electron login) |
-| GET | `/oauth2/discord/callback` | none (CSRF state-checked) | Code→token exchange, redirects to Electron's `localhost:3737` loopback with a session JWT |
+| GET | `/` | none | Redirects to `DISCORD_INVITE_URL` if set, else a plain placeholder page |
+| GET | `/robots.txt` | none | Disallows all crawling |
+| GET | `/oauth2/discord/authorize` | none | Redirects to Discord's authorize URL — plain `identify` login (Electron's "Log in with Discord") |
+| GET | `/oauth2/discord/authorize-bot` | none | Redirects to Discord's authorize URL with combined `identify bot` scope — the ONLY path that can add the bot to a guild and have it stick (see Bot whitelist below). Not linked anywhere public; share it directly with whoever should be able to add the bot. |
+| GET | `/oauth2/discord/callback` | none (CSRF state-checked) | Code→token exchange for either flow above, redirects to Electron's `localhost:3737` loopback with a session JWT. If `guild_id` is present (came from the `-bot` flow), authorizes that guild. |
 | POST | `/api/activity/token` | none | Code→token exchange for the Activity iframe's Embedded App SDK flow |
 | POST | `/api/status` | Bearer session JWT | Electron pushes its own live VRChat status |
 | GET | `/api/channel/:channelId/status` | Bearer session JWT | Activity iframe reads the channel's roster + statuses |
@@ -88,11 +104,35 @@ Session JWTs only prove Discord identity (`identify` scope) — they are never t
 `:userId` routes reject any session whose ID doesn't match the URL, so one user's session can
 never query or control another user.
 
+## Bot whitelist — no random server can keep the bot
+
+Adding the bot to a guild through Discord's normal "Add to Server" link (the plain `bot` scope,
+with no cooperation from this backend) does **not** let it stay there. `src/authorizedGuilds.js`
+persists a whitelist (`data/authorized-guilds.json`, mounted as a volume in `docker-compose.yml`
+so it survives restarts) of guild IDs that were authorized through `/oauth2/discord/authorize-bot`
+— the only flow where an authenticated Discord user explicitly picked that guild during Discord's
+own consent screen, recorded against their Discord user ID in the callback.
+
+`src/discordBotGateway.js` enforces this: on `GuildCreate` (the bot joining any guild) and once
+more at startup (sweeping every guild it's already in), it checks the whitelist and immediately
+calls `guild.leave()` on anything not on it. A leaked or independently-generated "add bot" link
+still can't keep the bot around — it'll join and leave right away.
+
+## Security / privacy hardening
+
+- `helmet()` — drops `X-Powered-By` and sets standard security headers, so less is passively
+  leaked to scanners.
+- `robots.txt` disallows all crawling.
+- `/api/status` and the bot-control routes are rate-limited per authenticated Discord user
+  (`express-rate-limit`) — this API is public-facing and fed by every install of the app, unlike
+  everything else in NekoSuneAPPS, which is local-loopback only.
+
 ## Known limitations
 
 - Session JWTs are stateless — revoking local storage doesn't invalidate an already-issued token
   before its `JWT_TTL` expires. Keep the TTL short.
 - If the same user is connected to voice in two different guilds the bot is in, the first match
   wins (same ambiguity as the Electron app's existing bring-your-own-bot mode).
-- `statusStore` and the bot gateway's caches are in-memory only — a restart clears them; clients
-  simply repopulate on their next push/interval tick.
+- `statusStore` and the bot gateway's live voice-state cache are in-memory only — a restart clears
+  them; clients simply repopulate on their next push/interval tick. Only the authorized-guilds
+  whitelist is persisted to disk.

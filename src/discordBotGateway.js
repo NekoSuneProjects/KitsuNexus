@@ -9,9 +9,19 @@
 
 const { Client, GatewayIntentBits, Events } = require('discord.js')
 const { discordBotToken } = require('./config')
+const authorizedGuilds = require('./authorizedGuilds')
 
 let client = null
 let ready = false
+
+// Only /oauth2/discord/authorize-bot is allowed to let a guild keep the bot —
+// leave anything else immediately, whether it's a guild added before this
+// whitelist existed or one added via a leaked raw invite link.
+async function enforceWhitelist (guild) {
+  if (authorizedGuilds.isAuthorized(guild.id)) return
+  console.warn(`[discordBotGateway] leaving unauthorized guild "${guild.name}" (${guild.id}) — never went through /oauth2/discord/authorize-bot`)
+  try { await guild.leave() } catch (err) { console.warn('[discordBotGateway] failed to leave guild:', err.message) }
+}
 
 async function start () {
   client = new Client({
@@ -21,7 +31,12 @@ async function start () {
   client.once(Events.ClientReady, () => {
     ready = true
     console.log(`[discordBotGateway] logged in as ${client.user.tag}`)
+    // Retroactive sweep, e.g. after this whitelist was added to an
+    // already-running bot, or if the authorized-guilds data volume was lost.
+    for (const guild of client.guilds.cache.values()) enforceWhitelist(guild)
   })
+  // Fires the moment the bot is added to any guild, authorized or not.
+  client.on(Events.GuildCreate, guild => enforceWhitelist(guild))
   client.on(Events.Error, err => console.warn('[discordBotGateway] error:', err.message))
   await client.login(discordBotToken)
   return client

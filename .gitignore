@@ -2,6 +2,10 @@
 node_modules/
 *.log
 
+# Runtime data (authorized-guilds whitelist) — persisted via a mounted
+# volume in production, not committed
+data/
+
 # Secrets — NEVER commit
 .env
 .env.*
