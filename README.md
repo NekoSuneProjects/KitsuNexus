@@ -90,8 +90,9 @@ Registry packages default to private.
 |---|---|---|---|
 | GET | `/` | none | Redirects to `DISCORD_INVITE_URL` if set, else a plain placeholder page |
 | GET | `/robots.txt` | none | Disallows all crawling |
-| GET | `/dashboard` | browser session cookie | Web dashboard — log in, see which servers you've authorized, add the bot to another one |
+| GET | `/dashboard` | browser session cookie | Web dashboard — log in, see which servers you've authorized, add the bot to another one, remove it from ones you currently manage |
 | GET | `/dashboard/logout` | none | Clears the dashboard session cookie |
+| POST | `/dashboard/revoke/:guildId` | browser session cookie + live Manage Server check | Un-authorizes a guild and makes the bot leave it immediately |
 | GET | `/oauth2/discord/authorize` | none | Redirects to Discord's authorize URL — plain `identify` login, used ONLY by Electron's "Log in with Discord" (ends at its `localhost:3737` loopback, not the dashboard) |
 | GET | `/oauth2/discord/authorize-dashboard` | none | Same plain `identify` login, but for the web dashboard (ends with a session cookie + redirect to `/dashboard`) |
 | GET | `/oauth2/discord/authorize-bot` | none | Combined `identify bot` scope — the ONLY path that can add the bot to a guild and have it stick (see Bot whitelist below). Always ends at the dashboard, never Electron's loopback. |
@@ -116,10 +117,24 @@ so it survives restarts) of guild IDs that were authorized through `/oauth2/disc
 — the only flow where an authenticated Discord user explicitly picked that guild during Discord's
 own consent screen, recorded against their Discord user ID in the callback.
 
-`src/discordBotGateway.js` enforces this: on `GuildCreate` (the bot joining any guild) and once
-more at startup (sweeping every guild it's already in), it checks the whitelist and immediately
-calls `guild.leave()` on anything not on it. A leaked or independently-generated "add bot" link
-still can't keep the bot around — it'll join and leave right away.
+`src/discordBotGateway.js` enforces this: on `GuildCreate` (the bot joining any guild, after a
+15s grace window — see below) and once more at startup (sweeping every guild it's already in),
+it checks the whitelist and calls `guild.leave()` on anything not on it. A leaked or
+independently-generated "add bot" link still can't keep the bot around — it'll join and leave
+right away.
+
+**Grace window**: Discord adds the bot to a guild (firing `GuildCreate` over the gateway) as
+part of the same consent click that redirects the browser back to `/oauth2/discord/callback`,
+which is what actually records the authorization. Those two happen over independent channels
+with no ordering guarantee, so `GuildCreate`'s enforcement waits 15 seconds before checking —
+otherwise a guild that's about to be legitimately authorized could get kicked first.
+
+**Removing the bot**: only someone who *currently* holds Manage Server (or Administrator, or is
+the owner) in a guild can remove the bot from it via the dashboard — checked live against
+Discord (`hasManagePermission`), not just "whoever originally added it," since admin rights
+belong to the server, not to whoever happened to click "invite" first. Anyone without that
+permission sees the guild listed read-only; the `POST /dashboard/revoke/:guildId` route
+re-checks the same permission server-side regardless of what the UI shows.
 
 ## Security / privacy hardening
 

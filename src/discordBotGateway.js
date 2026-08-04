@@ -7,7 +7,7 @@
 // maintains guild.voiceStates.cache (and VoiceChannel#members derived from it) live
 // from gateway events, so lookups just read straight from discord.js's own cache.
 
-const { Client, GatewayIntentBits, Events } = require('discord.js')
+const { Client, GatewayIntentBits, Events, PermissionFlagsBits } = require('discord.js')
 const { discordBotToken } = require('./config')
 const authorizedGuilds = require('./authorizedGuilds')
 
@@ -57,6 +57,39 @@ async function start () {
 }
 
 function isReady () { return ready }
+
+// Used by the dashboard's "Remove" action: revoking a guild in
+// authorizedGuilds.js only updates the persisted list — this is what
+// actually makes the bot leave right away instead of waiting for it to be
+// re-added (or a restart) to notice it's no longer authorized.
+async function leaveGuild (guildId) {
+  const guild = client && client.guilds.cache.get(guildId)
+  if (!guild) return { ok: false, error: 'Bot is not currently in that guild' }
+  try {
+    await guild.leave()
+    return { ok: true }
+  } catch (err) { return { ok: false, error: err.message } }
+}
+
+// Gates the dashboard's "Remove" action: only someone who CURRENTLY holds
+// Manage Server (or Administrator, or is the guild owner) in this guild may
+// revoke it — not just whoever originally authorized it, since admin rights
+// are a property of the server, not of who happened to click "invite" first.
+// Live-fetched rather than read from cache, since the acting member may not
+// already be cached. Adding the bot doesn't need this same check here:
+// Discord's own OAuth consent screen already restricts the guild picker in
+// /oauth2/discord/authorize-bot to guilds where the authorizing user has
+// Manage Server — there's no separate "add" gate to enforce on our side.
+async function hasManagePermission (guildId, discordUserId) {
+  const guild = client && client.guilds.cache.get(guildId)
+  if (!guild) return false
+  try {
+    const member = await guild.members.fetch(discordUserId)
+    return member.permissions.has(PermissionFlagsBits.ManageGuild) || member.permissions.has(PermissionFlagsBits.Administrator)
+  } catch (_) {
+    return false // not a member of the guild (or fetch failed) — no permission
+  }
+}
 
 // Mirrors discordBot.js's readVoiceState(), generalized to any userId. First
 // guild match wins — same accepted ambiguity as the existing per-user bot.
@@ -115,4 +148,4 @@ async function setDeaf (guildId, userId, deaf) {
   } catch (err) { return { ok: false, error: err.message } }
 }
 
-module.exports = { start, isReady, getUserVoiceState, getChannelRoster, setMute, setDeaf }
+module.exports = { start, isReady, getUserVoiceState, getChannelRoster, setMute, setDeaf, leaveGuild, hasManagePermission }

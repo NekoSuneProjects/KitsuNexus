@@ -35,8 +35,16 @@ function authorize (guildId, discordUserId) {
   save()
 }
 
+// Removes a guild from the whitelist. Callers are responsible for also
+// making the bot actually leave (see discordBotGateway.js's leaveGuild) —
+// this module only owns the persisted list, not the live gateway connection.
+function revoke (guildId) {
+  delete guilds[guildId]
+  save()
+}
+
 function all () {
   return { ...guilds }
 }
 
-module.exports = { isAuthorized, authorize, all }
+module.exports = { isAuthorized, authorize, revoke, all }

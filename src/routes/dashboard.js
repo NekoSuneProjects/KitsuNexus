@@ -7,6 +7,7 @@ const express = require('express')
 const jwt = require('jsonwebtoken')
 const { jwtSecret } = require('../config')
 const authorizedGuilds = require('../authorizedGuilds')
+const botGateway = require('../discordBotGateway')
 
 const router = express.Router()
 
@@ -31,11 +32,12 @@ function page (bodyHtml) {
   .card{background:#16161f;border:1px solid #23233a;border-radius:10px;padding:16px;margin-top:16px}
   code{background:#23233a;padding:2px 6px;border-radius:4px}
   ul{padding-left:20px}
+  .muted{color:#8a8aa0}
 </style></head>
 <body><h2>NekoSuneAPPS</h2>${bodyHtml}</body></html>`
 }
 
-router.get('/dashboard', (req, res) => {
+router.get('/dashboard', async (req, res) => {
   const discordUserId = readSession(req)
   if (!discordUserId) {
     return res.send(page(`
@@ -44,13 +46,21 @@ router.get('/dashboard', (req, res) => {
     `))
   }
   const myGuilds = Object.entries(authorizedGuilds.all()).filter(([, v]) => v.authorizedBy === discordUserId)
+  // Live per-guild check — admin rights are a property of the server right
+  // now, not of who happened to authorize it originally. Someone who no
+  // longer has Manage Server there only gets to view, not remove.
+  const rows = await Promise.all(myGuilds.map(async ([id, v]) => {
+    const canManage = await botGateway.hasManagePermission(id, discordUserId)
+    const removeControl = canManage
+      ? `<form style="display:inline" method="POST" action="/dashboard/revoke/${encodeURIComponent(id)}" onsubmit="return confirm('Remove the bot from this server?')"><button class="btn secondary" style="padding:2px 10px;font-size:.8rem;margin-left:8px" type="submit">Remove</button></form>`
+      : '<span class="muted" style="font-size:.8rem;margin-left:8px">(view only — no Manage Server permission here)</span>'
+    return `<li><code>${escapeHtml(id)}</code> — ${escapeHtml(v.at)} ${removeControl}</li>`
+  }))
   res.send(page(`
     <p>Logged in as Discord user <code>${escapeHtml(discordUserId)}</code>.</p>
     <div class="card">
       <h3>Servers you've authorized</h3>
-      ${myGuilds.length
-        ? '<ul>' + myGuilds.map(([id, v]) => `<li><code>${escapeHtml(id)}</code> — ${escapeHtml(v.at)}</li>`).join('') + '</ul>'
-        : '<p>None yet.</p>'}
+      ${rows.length ? '<ul>' + rows.join('') + '</ul>' : '<p>None yet.</p>'}
     </div>
     <a class="btn" href="/oauth2/discord/authorize-bot">Add bot to another server</a>
     <a class="btn secondary" href="/dashboard/logout">Log out</a>
@@ -59,6 +69,19 @@ router.get('/dashboard', (req, res) => {
 
 router.get('/dashboard/logout', (req, res) => {
   res.clearCookie('session')
+  res.redirect('/dashboard')
+})
+
+// Removing the bot from a guild. Re-checks Manage Server live server-side —
+// never trust that the "Remove" button was correctly hidden client-side.
+router.post('/dashboard/revoke/:guildId', express.urlencoded({ extended: false }), async (req, res) => {
+  const discordUserId = readSession(req)
+  if (!discordUserId) return res.redirect('/dashboard')
+  const { guildId } = req.params
+  if (await botGateway.hasManagePermission(guildId, discordUserId)) {
+    authorizedGuilds.revoke(guildId)
+    await botGateway.leaveGuild(guildId)
+  }
   res.redirect('/dashboard')
 })
 
