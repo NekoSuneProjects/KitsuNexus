@@ -153,4 +153,105 @@ function inviteUrl (applicationId) {
 
 function getBotState () { return { ...state } }
 
-module.exports = { startBot, stopBot, setMute, setDeaf, inviteUrl, getBotState }
+// ---------------------------------------------------------------------------
+// Official NekoSuneAPPS bot mode: no token, no per-user bot to create. Instead
+// of running our own discord.js gateway Client, poll the NekoSuneAPPS backend
+// (server/, deployed separately — holds the shared bot's token, never this
+// app) for the logged-in user's own voice state. Produces the identical
+// `state` shape as startBot()/stopBot() above, so renderer.js's `bot:update`
+// listener and everything downstream (OSC push, chatbox tokens) needs no
+// changes to support this mode.
+// ---------------------------------------------------------------------------
+
+let officialTimer = null
+let officialOnUpdate = null
+const officialState = {
+  connected: false, inVoice: false, channelName: '', userCount: 0,
+  selfMute: false, selfDeaf: false, guildId: '', callEvent: '', error: ''
+}
+let officialLastInVoice = false
+
+function emitOfficial () { if (typeof officialOnUpdate === 'function') officialOnUpdate({ ...officialState, at: Date.now() }) }
+
+// The session JWT's payload is signed but not encrypted — decoding it client-side
+// (no signature check) just reads the non-sensitive `sub` (Discord user ID) claim
+// so we know which path to poll. The backend still verifies the signature on
+// every request; nothing here is trusted without that.
+function decodeSessionUserId (sessionToken) {
+  try {
+    const payload = JSON.parse(Buffer.from(sessionToken.split('.')[1], 'base64url').toString('utf8'))
+    return payload.sub || ''
+  } catch (_) { return '' }
+}
+
+async function pollOfficial (backendBaseUrl, sessionToken, discordUserId) {
+  try {
+    const res = await fetch(`${backendBaseUrl}/api/bot/voice/${discordUserId}`, {
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    })
+    if (!res.ok) throw new Error(`Backend returned ${res.status}`)
+    const data = await res.json()
+    Object.assign(officialState, data)
+    officialState.connected = true
+    officialState.error = ''
+    if (officialState.inVoice && !officialLastInVoice) officialState.callEvent = 'started'
+    else if (!officialState.inVoice && officialLastInVoice) officialState.callEvent = 'ended'
+    else officialState.callEvent = ''
+    officialLastInVoice = officialState.inVoice
+  } catch (err) {
+    officialState.connected = false
+    officialState.error = err.message
+  }
+  emitOfficial()
+}
+
+async function startOfficialBot ({ backendBaseUrl, sessionToken } = {}, listener) {
+  officialOnUpdate = listener
+  const discordUserId = decodeSessionUserId(String(sessionToken || ''))
+  if (!backendBaseUrl || !sessionToken || !discordUserId) {
+    officialState.error = 'Log in with Discord first'
+    emitOfficial()
+    return { ok: false, error: officialState.error }
+  }
+  await stopOfficialBot()
+  await pollOfficial(backendBaseUrl, sessionToken, discordUserId)
+  officialTimer = setInterval(() => pollOfficial(backendBaseUrl, sessionToken, discordUserId), 5000)
+  return { ok: true }
+}
+
+async function stopOfficialBot () {
+  if (officialTimer) { clearInterval(officialTimer); officialTimer = null }
+  officialState.connected = false; officialState.inVoice = false; officialLastInVoice = false
+  emitOfficial()
+}
+
+async function setMuteOfficial (backendBaseUrl, sessionToken, mute) {
+  const discordUserId = decodeSessionUserId(String(sessionToken || ''))
+  if (!discordUserId) return { ok: false, error: 'Log in with Discord first' }
+  try {
+    const res = await fetch(`${backendBaseUrl}/api/bot/voice/${discordUserId}/mute`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${sessionToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mute: !!mute })
+    })
+    return await res.json()
+  } catch (err) { return { ok: false, error: err.message } }
+}
+
+async function setDeafOfficial (backendBaseUrl, sessionToken, deaf) {
+  const discordUserId = decodeSessionUserId(String(sessionToken || ''))
+  if (!discordUserId) return { ok: false, error: 'Log in with Discord first' }
+  try {
+    const res = await fetch(`${backendBaseUrl}/api/bot/voice/${discordUserId}/deaf`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${sessionToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deaf: !!deaf })
+    })
+    return await res.json()
+  } catch (err) { return { ok: false, error: err.message } }
+}
+
+module.exports = {
+  startBot, stopBot, setMute, setDeaf, inviteUrl, getBotState,
+  startOfficialBot, stopOfficialBot, setMuteOfficial, setDeafOfficial
+}

@@ -5,6 +5,46 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+- **Discord Activity (live VRChat status panel) + an official shared Discord bot mode**,
+  backed by a new standalone backend service that lives on its own branch in this repo
+  ([`feature/discord-backend-server`](https://github.com/NekoSuneProjects/NekoSuneAPPS/tree/feature/discord-backend-server),
+  its own `package.json`/Docker deployment) rather than as a subfolder of the Electron app —
+  it's never bundled into an installer. This exists because a bot token — and the OAuth client
+  secret needed to identify users — can never be safely shipped inside a distributed Electron
+  app (the asar is trivially unpackable), so both now live only on this backend, which the
+  desktop app talks to over an authenticated HTTP API instead.
+  - The backend runs a persistent `discord.js` gateway connection for the shared bot
+    (`discordBotGateway.js`), a Discord OAuth2 "identify" code exchange that never leaves the
+    server (`auth.js`, `routes/oauth.js`), a live VRChat status feed pushed by each desktop
+    client and re-filtered server-side through the same join/active/ask/busy privacy gate
+    already used for Rich Presence (`statusStore.js`, `routes/status.js`), and a static
+    Discord Activity iframe frontend (`public/activity/`) using `@discord/embedded-app-sdk`.
+  - Electron gained a "Log in with Discord" flow (`modules/oauth/providers/discordIdentity.js`,
+    modeled on the existing Twitch loopback OAuth pattern), a periodic status pusher
+    (`modules/integrations/discord/statusPush.js`, fed by a new `getVrcContextSnapshot()` getter
+    on `discord.js` so it reuses rather than re-derives the existing Rich Presence data), and an
+    "official bot" mode on the Voice Bot card (`discordBot.js`'s new `startOfficialBot`/
+    `stopOfficialBot`/`setMuteOfficial`/`setDeafOfficial`) that polls the backend instead of
+    running a local token-based gateway client, producing the identical state shape so the
+    existing OSC/chatbox pipeline needed no changes.
+  - **Not deployed by this session** — implemented and locally verified in isolation (backend
+    routes exercised directly over HTTP; every changed/new file passed `node --check` and a
+    plain-Node require-resolution check), but end-to-end use requires deploying that branch
+    somewhere real, filling in its `.env` secrets, setting the placeholder
+    `NEKOSUNE_BACKEND_URL` in `main.js`, and one-time Discord Developer Portal setup (OAuth
+    redirect + Activities URL Mapping) documented in that branch's `README.md`.
+
+### Changed
+- **Discord Rich Presence Application ID is now fixed and no longer user-editable.** Previously
+  the "Discord Application (Client) ID" field defaulted to a shipped ID but users could freely
+  edit or clear it. It's now pinned to `1534167604304937142` at every layer — the input in the
+  Discord tab (`index.html`) is disabled/readonly, `renderer.js` forces the saved config and every
+  outgoing `discord:start` payload to this ID regardless of what's stored, and `main.js`'s
+  `discord:start` IPC handler overwrites `clientId` on the way into `startDiscord()` as a final
+  backstop. The Discord Voice Bot's separate "Application ID (for invite)" field is unaffected —
+  that's an optional user-supplied bot app ID, unrelated to Rich Presence.
+
 ## [1.0.65] - 2026-07-28
 
 ### Added

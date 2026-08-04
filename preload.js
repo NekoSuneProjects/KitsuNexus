@@ -180,6 +180,11 @@ window.electronAPI = {
   discordVrc: ctx => ipcRenderer.invoke('discord:vrc', ctx),
   discordLive: ctx => ipcRenderer.invoke('discord:live', ctx),
 
+  // discord identity login (official bot + Activity status push)
+  discordIdentityLogin: () => ipcRenderer.invoke('oauth:discordLogin'),
+  discordIdentityLogout: () => ipcRenderer.invoke('oauth:discordLogout'),
+  discordIdentityStatus: () => ipcRenderer.invoke('oauth:discordLoginStatus'),
+
   // vrchat world
   vrcGet: () => ipcRenderer.invoke('vrc:get'),
 
@@ -290,6 +295,12 @@ window.electronAPI = {
   botSetMute: m => ipcRenderer.invoke('bot:setMute', m),
   botSetDeaf: d => ipcRenderer.invoke('bot:setDeaf', d),
   botInvite: appId => ipcRenderer.invoke('bot:invite', appId),
+
+  // discord bot — official NekoSuneAPPS bot mode (no token, backend-backed)
+  officialBotStart: () => ipcRenderer.invoke('bot:startOfficial'),
+  officialBotStop: () => ipcRenderer.invoke('bot:stopOfficial'),
+  officialBotSetMute: m => ipcRenderer.invoke('bot:setMuteOfficial', m),
+  officialBotSetDeaf: d => ipcRenderer.invoke('bot:setDeafOfficial', d),
 
   // soundpad
   soundpadCmd: (action, index) => ipcRenderer.invoke('soundpad:cmd', { action, index }),

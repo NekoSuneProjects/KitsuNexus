@@ -72,10 +72,14 @@ const $ = id => document.getElementById(id)
   })
 })()
 
-// No credentials are shipped. Users enter their own Client / Application IDs
-// (see Docs / Setup). Never hardcode IDs, secrets, or tokens in the repo.
+// No credentials are shipped except the app's own fixed Discord Rich Presence
+// ID below (owned by NekoSuneAPPS, not user data). Users still enter their own
+// Twitch/bot IDs and secrets (see Docs / Setup) — never hardcode those.
 const DEFAULT_TWITCH_CLIENT_ID = ''
-const DEFAULT_DISCORD_APP_ID = '1513908316324233216'
+// Fixed NekoSuneAPPS Discord Rich Presence Application ID. Intentionally not
+// user-editable (see #discordAppId in index.html) — locked so RP always shows
+// as the official app regardless of what's in a user's saved config.
+const DEFAULT_DISCORD_APP_ID = '1534167604304937142'
 
 let isAnalyzing = false
 let beatState = false
@@ -2408,7 +2412,7 @@ $('vrOverlayToggle').addEventListener('click', async () => {
 let discordAccessToken = ''
 function currentDiscordCfg () {
   return {
-    clientId: $('discordAppId').value,
+    clientId: DEFAULT_DISCORD_APP_ID, // fixed — see DEFAULT_DISCORD_APP_ID comment
     clientSecret: $('discordSecret').value,
     accessToken: discordAccessToken,
     enableRichPresence: $('discordRP').checked,
@@ -3020,15 +3024,49 @@ api.on('weather:update', s => {
 
 /* ---------------- discord voice bot ---------------- */
 function botCfg () { return { token: $('botToken').value.trim(), userId: $('botUserId').value.trim(), appId: $('botAppId').value.trim() } }
+
+function botMode () { return $('botMode').value === 'official' ? 'official' : 'own' }
+function syncBotModeUI () {
+  const official = botMode() === 'official'
+  $('botOwnFields').style.display = official ? 'none' : ''
+  $('botOfficialFields').style.display = official ? '' : 'none'
+}
+$('botMode').addEventListener('change', async () => {
+  await api.saveSetting('discordBotMode', botMode())
+  syncBotModeUI()
+})
+
+async function refreshDiscordIdentityStatus () {
+  const loggedIn = await api.discordIdentityStatus()
+  setText('discordIdentityOut', loggedIn ? 'Logged in with Discord' : 'Not logged in')
+}
+$('discordIdentityLogin').addEventListener('click', async () => {
+  setText('discordIdentityOut', 'Opening Discord login…')
+  const r = await api.discordIdentityLogin()
+  setText('discordIdentityOut', r.ok ? 'Logged in with Discord' : ('Error: ' + (r.error || 'login failed')))
+})
+$('discordIdentityLogout').addEventListener('click', async () => {
+  await api.discordIdentityLogout()
+  setText('discordIdentityOut', 'Not logged in')
+})
+
 $('botStart').addEventListener('click', async () => {
+  setText('botOut', 'Connecting…')
+  if (botMode() === 'official') {
+    const r = await api.officialBotStart()
+    if (!r.ok) setText('botOut', 'Error: ' + (r.error || 'failed'))
+    return
+  }
   const c = botCfg()
   await api.saveSetting('discordBotToken', c.token)
   await api.saveSetting('discordBot', { userId: c.userId, appId: c.appId })
-  setText('botOut', 'Connecting…')
   const r = await api.botStart(c)
   if (!r.ok) setText('botOut', 'Error: ' + (r.error || 'failed'))
 })
-$('botStop').addEventListener('click', async () => { await api.botStop(); setPill('botState', false); setText('botOut', 'Stopped') })
+$('botStop').addEventListener('click', async () => {
+  await (botMode() === 'official' ? api.officialBotStop() : api.botStop())
+  setPill('botState', false); setText('botOut', 'Stopped')
+})
 $('botInvite').addEventListener('click', async () => {
   const url = await api.botInvite($('botAppId').value.trim())
   setText('botOut', url ? ('Invite (copy): ' + url) : 'Connect first, or enter the Application ID for the invite link.')
@@ -3152,8 +3190,10 @@ addOscListener((address, args) => {
     lastVrcoscMediaPlay = playing
   }
   if ($('discordOscEnable') && $('discordOscEnable').checked) {
-    if (address === '/avatar/parameters/VRCOSC/Discord/Mute' || address === '/avatar/parameters/VRCOSC/Discord/Mic') { api.botSetMute(!!val); setText('discordOscOut', `🎙 mute: ${!!val}`) }
-    if (address === '/avatar/parameters/VRCOSC/Discord/Deafen') { api.botSetDeaf(!!val); setText('discordOscOut', `🎙 deafen: ${!!val}`) }
+    const setMute = botMode() === 'official' ? api.officialBotSetMute : api.botSetMute
+    const setDeaf = botMode() === 'official' ? api.officialBotSetDeaf : api.botSetDeaf
+    if (address === '/avatar/parameters/VRCOSC/Discord/Mute' || address === '/avatar/parameters/VRCOSC/Discord/Mic') { setMute(!!val); setText('discordOscOut', `🎙 mute: ${!!val}`) }
+    if (address === '/avatar/parameters/VRCOSC/Discord/Deafen') { setDeaf(!!val); setText('discordOscOut', `🎙 deafen: ${!!val}`) }
   }
 }, getRecvPort())
 
@@ -4841,15 +4881,14 @@ async function init () {
   try { renderHrSessions(await api.hrSessions()) } catch (_) {}
   const dc = await api.getSetting('discord', {})
   discordAccessToken = dc.accessToken || ''
-  // Migrate the old NekoSuneOSC app id to the current NekoSuneAPPS default.
-  const OLD_DISCORD_APP_IDS = ['1513880249409208462']
-  let savedAppId = dc.clientId || ''
-  if (!savedAppId || OLD_DISCORD_APP_IDS.includes(savedAppId)) {
-    savedAppId = DEFAULT_DISCORD_APP_ID
-    dc.clientId = savedAppId
+  // The Discord Application ID is fixed to DEFAULT_DISCORD_APP_ID and not
+  // user-editable — force it every load regardless of what's saved, so old
+  // or tampered config values never take effect.
+  if (dc.clientId !== DEFAULT_DISCORD_APP_ID) {
+    dc.clientId = DEFAULT_DISCORD_APP_ID
     await api.saveSetting('discord', dc) // persist so it sticks + auto-start uses it
   }
-  $('discordAppId').value = savedAppId
+  $('discordAppId').value = DEFAULT_DISCORD_APP_ID
   $('discordSecret').value = dc.clientSecret || ''
   $('discordRP').checked = dc.enableRichPresence !== false
   $('discordVoice').checked = !!dc.enableVoice
@@ -4913,6 +4952,9 @@ async function init () {
   const bcfg = await api.getSetting('discordBot', {})
   $('botUserId').value = bcfg.userId || ''
   $('botAppId').value = bcfg.appId || ''
+  $('botMode').value = await api.getSetting('discordBotMode', 'own')
+  syncBotModeUI()
+  refreshDiscordIdentityStatus()
   $('spotiOscEnable').checked = await api.getSetting('spotiOscEnable', false)
   $('discordOscEnable').checked = await api.getSetting('discordOscEnable', false)
   $('spotiJamUrl').value = await api.getSetting('oscApps.spotiJamUrl', '')

@@ -1166,8 +1166,8 @@
       <section id="discord" class="tabpanel">
         <div class="card">
           <h3>💜 Discord <span class="pill off" id="discordState">off</span></h3>
-          <label>Discord Application (Client) ID</label>
-          <input type="text" id="discordAppId" placeholder="application id" />
+          <label>Discord Application (Client) ID <span class="muted" style="font-size:.72rem">(fixed — the official NekoSuneAPPS app)</span></label>
+          <input type="text" id="discordAppId" placeholder="application id" disabled readonly title="Fixed to the official NekoSuneAPPS Discord Application ID — cannot be changed" />
           <label style="margin-top:8px">Client Secret (only for voice detection)</label>
           <input type="password" id="discordSecret" placeholder="client secret (optional)" />
           <div class="grid cols-2" style="margin-top:8px">
@@ -1205,12 +1205,27 @@
 
         <div class="card">
           <h3>🤖 Discord Voice Bot <span class="pill off" id="botState">off</span></h3>
-          <div class="muted" style="font-size:.75rem;margin-bottom:8px">The no-allowlist alternative to voice scope. Create a bot in the <a href="https://discord.com/developers/applications" target="_blank">Developer Portal</a>, paste its <b>token</b>, invite it to <b>your own private server</b>, and enter your Discord <b>user ID</b>. It stays invisible (appears offline) and reads your voice state + can server-mute/deafen you via OSC.</div>
-          <label>Bot token</label><input type="password" id="botToken" placeholder="bot token" autocomplete="off" />
-          <div class="grid cols-2" style="margin-top:8px">
-            <div><label>Your Discord user ID</label><input type="text" id="botUserId" placeholder="e.g. 123456789012345678" /></div>
-            <div><label>Application ID (for invite)</label><input type="text" id="botAppId" placeholder="application id (optional)" /></div>
+          <label>Mode</label>
+          <select id="botMode">
+            <option value="own">Your own bot (paste a token)</option>
+            <option value="official">NekoSuneAPPS official bot (just log in)</option>
+          </select>
+
+          <div id="botOwnFields">
+            <div class="muted" style="font-size:.75rem;margin:8px 0">The no-allowlist alternative to voice scope. Create a bot in the <a href="https://discord.com/developers/applications" target="_blank">Developer Portal</a>, paste its <b>token</b>, invite it to <b>your own private server</b>, and enter your Discord <b>user ID</b>. It stays invisible (appears offline) and reads your voice state + can server-mute/deafen you via OSC.</div>
+            <label>Bot token</label><input type="password" id="botToken" placeholder="bot token" autocomplete="off" />
+            <div class="grid cols-2" style="margin-top:8px">
+              <div><label>Your Discord user ID</label><input type="text" id="botUserId" placeholder="e.g. 123456789012345678" /></div>
+              <div><label>Application ID (for invite)</label><input type="text" id="botAppId" placeholder="application id (optional)" /></div>
+            </div>
           </div>
+
+          <div id="botOfficialFields" style="display:none">
+            <div class="muted" style="font-size:.75rem;margin:8px 0">No token or bot setup needed — log in with your own Discord account and NekoSuneAPPS's official shared bot reads your voice state (and can server-mute/deafen you) the same way, as long as it's already in the server you're calling from.</div>
+            <div class="row"><button class="btn" id="discordIdentityLogin">Login with Discord</button><button class="btn ghost" id="discordIdentityLogout">Log out</button></div>
+            <div class="muted" id="discordIdentityOut" style="margin-top:8px">Not logged in</div>
+          </div>
+
           <div class="row" style="margin-top:10px"><button class="btn" id="botStart">Connect</button><button class="btn ghost" id="botStop">Stop</button><button class="btn ghost" id="botInvite">Invite link</button></div>
           <div class="muted" id="botOut" style="margin-top:8px">Not connected</div>
         </div>
