@@ -301,6 +301,7 @@ window.electronAPI = {
   officialBotStop: () => ipcRenderer.invoke('bot:stopOfficial'),
   officialBotSetMute: m => ipcRenderer.invoke('bot:setMuteOfficial', m),
   officialBotSetDeaf: d => ipcRenderer.invoke('bot:setDeafOfficial', d),
+  getNekosuneBackendUrl: () => ipcRenderer.invoke('nekosune:getBackendUrl'),
 
   // soundpad
   soundpadCmd: (action, index) => ipcRenderer.invoke('soundpad:cmd', { action, index }),

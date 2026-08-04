@@ -50,7 +50,7 @@ const { startDiscord, stopDiscord, updateActivity, setVrcContext, setExtraOscTar
 const { startStatusPush, stopStatusPush } = require('./modules/integrations/discord/statusPush')
 // Fixed NekoSuneAPPS Discord Rich Presence Application ID — must match
 // DEFAULT_DISCORD_APP_ID in renderer.js. Not user-editable.
-const DISCORD_APP_ID = '1534167604304937142'
+const DISCORD_APP_ID = '1534208250046578790'
 // NekoSuneAPPS backend (feature/discord-backend-server, deployed separately)
 // for the Discord Activity panel + official shared bot — holds the bot
 // token/OAuth secret, never this app. Defaults to the official NekoSuneVR
@@ -1789,6 +1789,9 @@ ipcMain.handle('bot:startOfficial', () => {
 ipcMain.handle('bot:stopOfficial', async () => { await stopOfficialBot(); return true })
 ipcMain.handle('bot:setMuteOfficial', (e, m) => setMuteOfficial(getNekosuneBackendUrl(), settings.get('discordSessionToken', ''), m))
 ipcMain.handle('bot:setDeafOfficial', (e, d) => setDeafOfficial(getNekosuneBackendUrl(), settings.get('discordSessionToken', ''), d))
+// Lets renderer resolve the effective backend URL (default or self-hosted
+// override) without duplicating DEFAULT_NEKOSUNE_BACKEND_URL client-side.
+ipcMain.handle('nekosune:getBackendUrl', () => getNekosuneBackendUrl())
 
 /* ------------------------------------------------------------------ */
 /* Soundpad                                                            */

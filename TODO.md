@@ -33,7 +33,7 @@ Legend: `[x]` done · `[~]` partial · `[ ]` todo · ⚠️ technical blocker.
 - [x] **History (SQLite)**: player join/leave, friend add/remove, world visits
 - [x] **Auto-Greeter** (auto-accept friend requests, all/allow-list)
 - [x] Discord Rich Presence (world + HR + song; buttons auto-drop over IPC)
-- [x] **Pinned Discord Rich Presence Application ID to `1534167604304937142`**, no longer
+- [x] **Pinned Discord Rich Presence Application ID to `1534208250046578790`**, no longer
   user-editable — disabled the Discord Application ID field in the Discord tab and force the
   fixed ID in `renderer.js` and `main.js`'s `discord:start` handler regardless of saved config.
 - [~] **Discord Activity (VRChat status panel) + official shared Discord bot.** New standalone
@@ -50,7 +50,7 @@ Legend: `[x]` done · `[~]` partial · `[ ]` todo · ⚠️ technical blocker.
   this session** — still needed before this works end to end: actually deploy that official
   host, fill in that branch's `.env` (bot token, OAuth client secret, JWT secret), register the
   OAuth redirect + Activities URL Mapping in the Developer Portal for app
-  `1534167604304937142`, and get
+  `1534208250046578790`, and get
   Activities enabled for that app. See that branch's `README.md` for the full one-time setup
   checklist.
 - [x] **Fixed: Discord Rich Presence's elapsed timer reset on every status change** instead of

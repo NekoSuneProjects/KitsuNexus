@@ -44,12 +44,23 @@ This project follows [Semantic Versioning](https://semver.org/).
 ### Changed
 - **Discord Rich Presence Application ID is now fixed and no longer user-editable.** Previously
   the "Discord Application (Client) ID" field defaulted to a shipped ID but users could freely
-  edit or clear it. It's now pinned to `1534167604304937142` at every layer — the input in the
+  edit or clear it. It's now pinned to `1534208250046578790` at every layer — the input in the
   Discord tab (`index.html`) is disabled/readonly, `renderer.js` forces the saved config and every
   outgoing `discord:start` payload to this ID regardless of what's stored, and `main.js`'s
   `discord:start` IPC handler overwrites `clientId` on the way into `startDiscord()` as a final
   backstop. The Discord Voice Bot's separate "Application ID (for invite)" field is unaffected —
   that's an optional user-supplied bot app ID, unrelated to Rich Presence.
+
+### Fixed
+- **"Invite link" on the Voice Bot card always showed "Connect first, or enter the Application
+  ID..." when the official NekoSuneAPPS bot mode was selected**, even though that message only
+  makes sense for the bring-your-own-bot mode. Root cause: the button's click handler always
+  called the own-bot `api.botInvite()` path regardless of which mode was active, and the
+  official bot mode never sets `discordBot.js`'s internal `appId` (that only gets set by a real
+  gateway login, which official mode doesn't do). Fixed by branching on the selected mode: in
+  official mode, the button now opens the backend's web dashboard
+  (`<backend URL>/dashboard`, new `nekosune:getBackendUrl` IPC handler + `api.openExternal`) in
+  the system browser instead, since that's the actual way to add the official bot to a server.
 
 ## [1.0.65] - 2026-07-28
 

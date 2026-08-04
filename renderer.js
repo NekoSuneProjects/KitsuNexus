@@ -79,7 +79,7 @@ const DEFAULT_TWITCH_CLIENT_ID = ''
 // Fixed NekoSuneAPPS Discord Rich Presence Application ID. Intentionally not
 // user-editable (see #discordAppId in index.html) — locked so RP always shows
 // as the official app regardless of what's in a user's saved config.
-const DEFAULT_DISCORD_APP_ID = '1534167604304937142'
+const DEFAULT_DISCORD_APP_ID = '1534208250046578790'
 
 let isAnalyzing = false
 let beatState = false
@@ -3069,6 +3069,16 @@ $('botStop').addEventListener('click', async () => {
   setPill('botState', false); setText('botOut', 'Stopped')
 })
 $('botInvite').addEventListener('click', async () => {
+  if (botMode() === 'official') {
+    // The official bot can't be invited via a raw client-id link — it only
+    // stays in a server added through the backend's own dashboard (see
+    // server/src/authorizedGuilds.js), which also handles the Discord login.
+    const backendUrl = await api.getNekosuneBackendUrl()
+    const dashboardUrl = `${backendUrl}/dashboard`
+    api.openExternal(dashboardUrl)
+    setText('botOut', 'Opened in your browser: ' + dashboardUrl)
+    return
+  }
   const url = await api.botInvite($('botAppId').value.trim())
   setText('botOut', url ? ('Invite (copy): ' + url) : 'Connect first, or enter the Application ID for the invite link.')
 })
