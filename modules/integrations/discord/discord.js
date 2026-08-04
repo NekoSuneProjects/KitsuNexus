@@ -370,4 +370,25 @@ function updateActivity (activity) { setActivity(activity) }
 function getDiscordState () { return { ...state } }
 function setExtraOscTargets (targets = []) { config.extraOscTargets = Array.isArray(targets) ? targets : [] }
 
-module.exports = { startDiscord, stopDiscord, updateActivity, setVrcContext, getDiscordState, setExtraOscTargets }
+// Read-only snapshot of the live VRChat context for statusPush.js to relay to
+// the NekoSuneAPPS backend (Activity panel / official bot) — reuses the exact
+// same data already assembled here for Rich Presence instead of re-deriving it.
+function getVrcContextSnapshot () {
+  return {
+    worldName: vrc.worldName,
+    joinUrl: vrc.joinUrl,
+    worldUrl: vrc.worldUrl,
+    profileUrl: effectiveProfileUrl(),
+    hrBpm: vrc.hrBpm,
+    nowPlaying: vrc.nowPlaying,
+    vrcStatus: config.vrcStatus,
+    showWorld: config.showWorld,
+    showHeartRate: config.showHeartRate,
+    showNowPlaying: config.showNowPlaying
+  }
+}
+
+module.exports = {
+  startDiscord, stopDiscord, updateActivity, setVrcContext, getDiscordState,
+  setExtraOscTargets, getVrcContextSnapshot
+}

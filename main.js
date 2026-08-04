@@ -44,13 +44,32 @@ const { interpretCommand, summarizeSearchResults } = require('./modules/ai/assis
 const { searchWeb } = require('./modules/ai/webSearch')
 const i18n = require('./modules/i18n/i18n')
 const { loginTwitch, TWITCH_REDIRECT } = require('./modules/oauth/providers/twitch')
+const { loginDiscordIdentity } = require('./modules/oauth/providers/discordIdentity')
 const twitchInteractive = require('./modules/live/twitch/interactive')
-const { startDiscord, stopDiscord, updateActivity, setVrcContext, setExtraOscTargets: setDiscordExtraOscTargets } = require('./modules/integrations/discord/discord')
+const { startDiscord, stopDiscord, updateActivity, setVrcContext, setExtraOscTargets: setDiscordExtraOscTargets, getVrcContextSnapshot } = require('./modules/integrations/discord/discord')
+const { startStatusPush, stopStatusPush } = require('./modules/integrations/discord/statusPush')
+// Fixed NekoSuneAPPS Discord Rich Presence Application ID — must match
+// DEFAULT_DISCORD_APP_ID in renderer.js. Not user-editable.
+const DISCORD_APP_ID = '1534208250046578790'
+// NekoSuneAPPS backend (feature/discord-backend-server, deployed separately)
+// for the Discord Activity panel + official shared bot — holds the bot
+// token/OAuth secret, never this app. Defaults to the official NekoSuneVR
+// deployment, but — unlike DISCORD_APP_ID — users may point this at their own
+// self-hosted instance instead (see #nekosuneBackendUrl in index.html), since
+// a self-hoster runs their own backend with their own bot/OAuth app entirely;
+// nothing here needs to match DISCORD_APP_ID for that to work.
+const DEFAULT_NEKOSUNE_BACKEND_URL = 'https://nekosuneappsvrc.nekosunevr.co.uk'
+function getNekosuneBackendUrl () {
+  return String(settings.get('nekosuneBackendUrl', '') || '').trim() || DEFAULT_NEKOSUNE_BACKEND_URL
+}
 const { startVrcWorld, stopVrcWorld, getVrcWorld } = require('./modules/vrchat/world/vrchatWorld')
 const { startVrBattery, stopVrBattery } = require('./modules/vrchat/vr/vrBattery')
 const vrchatApi = require('./modules/vrchat/api/vrchatApi')
 const { startWeather, stopWeather, getWeather } = require('./modules/weather/weatherModule')
-const { startBot, stopBot, setMute: botSetMute, setDeaf: botSetDeaf, inviteUrl } = require('./modules/integrations/discord/discordBot')
+const {
+  startBot, stopBot, setMute: botSetMute, setDeaf: botSetDeaf, inviteUrl,
+  startOfficialBot, stopOfficialBot, setMuteOfficial, setDeafOfficial
+} = require('./modules/integrations/discord/discordBot')
 const soundpad = require('./modules/integrations/media/soundpadModule')
 const { pressMediaKey } = require('./modules/vrchat/osc/mediaKeys')
 const keyHookPs = require('./modules/vrchat/osc/keyHookPs')
@@ -299,6 +318,10 @@ app.whenReady().then(async () => {
   tonManager.init(app.getPath('userData'))
   osc.setExtraOscTargets(settings.get('extraOscTargets', []))
   setDiscordExtraOscTargets(settings.get('extraOscTargets', []))
+  // Resume the Activity status push if the user already logged in with
+  // Discord in a previous session — no need to log in again every launch.
+  const savedDiscordSession = settings.get('discordSessionToken', '')
+  if (savedDiscordSession) startStatusPush(getNekosuneBackendUrl(), savedDiscordSession, getVrcContextSnapshot)
   // Restore the ToN Tablet OSC proxy (sends avatar params on each ToN update).
   if (settings.get('tonOscEnabled', false)) { osc.setOscPort(settings.get('oscPort', 9000)); tonOsc.setEnabled(true) }
   const savedRusk = settings.get('oscApps.ruskLaserdome', {})
@@ -343,7 +366,7 @@ app.on('before-quit', () => {
   if (blePairingCallback) { const callback = blePairingCallback; blePairingCallback = null; callback({ confirmed: false }) }
   stopComponentStats(); stopNetworkStats(); stopPulsoid(); stopHyperate(); stopDeviceBridge(); stopWindowActivity(); stopTon()
   disconnectTikTok(); stopTwitch(); twitchInteractive.stop(false); stopKick(); stopDiscord(); stopVrBattery(); stopVrcWorld(); stopAfk()
-  stopWeather(); stopVrcStatusPoll(); stopBot(); pawprints.tickCommit(); stopFriendDiff(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); vrcTools.stopVideoCacher(); stopTonLog(); ranks.close(); screenshotMetadata.stop()
+  stopWeather(); stopVrcStatusPoll(); stopBot(); stopOfficialBot(); stopStatusPush(); pawprints.tickCommit(); stopFriendDiff(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); vrcTools.stopVideoCacher(); stopTonLog(); ranks.close(); screenshotMetadata.stop()
   ruskLaserdome.stop(false)
   if (unsubHotkeyHold) { unsubHotkeyHold(); unsubHotkeyHold = null }
   stopHotkeyTick()
@@ -1265,7 +1288,9 @@ ipcMain.handle('oauth:twitchLogin', async (e, { clientId, clientSecret, scopes }
 /* ------------------------------------------------------------------ */
 ipcMain.handle('discord:start', async (e, cfg) => {
   const oscPort = settings.get('oscPort', 9000)
-  const r = await startDiscord({ ...(cfg || {}), oscPort, extraOscTargets: settings.get('extraOscTargets', []) }, s => push('discord:update', s))
+  // Discord Application ID is fixed (official NekoSuneAPPS app) — never take
+  // it from renderer input, no matter what cfg claims.
+  const r = await startDiscord({ ...(cfg || {}), clientId: DISCORD_APP_ID, oscPort, extraOscTargets: settings.get('extraOscTargets', []) }, s => push('discord:update', s))
   // Seed the presence with the world we've already detected.
   const w = getVrcWorld()
   setVrcContext({ worldName: w.inWorld ? w.worldName : '', joinUrl: w.joinUrl, worldUrl: w.worldUrl, profileUrl: w.profileUrl })
@@ -1277,6 +1302,27 @@ ipcMain.handle('discord:activity', (e, activity) => { updateActivity(activity); 
 ipcMain.handle('discord:vrc', (e, ctx) => { setVrcContext(ctx || {}); return true })
 ipcMain.handle('discord:live', (e, ctx) => { setVrcContext(ctx || {}); return true }) // { nowPlaying, hrBpm }
 ipcMain.handle('vrc:get', () => getVrcWorld())
+
+/* ------------------------------------------------------------------ */
+/* Discord identity login (official bot + Activity status push)        */
+/* ------------------------------------------------------------------ */
+ipcMain.handle('oauth:discordLogin', async () => {
+  try {
+    const backendUrl = getNekosuneBackendUrl()
+    const { sessionToken } = await loginDiscordIdentity(backendUrl)
+    settings.set('discordSessionToken', sessionToken)
+    startStatusPush(backendUrl, sessionToken, getVrcContextSnapshot)
+    return { ok: true }
+  } catch (err) { return { ok: false, error: err.message } }
+})
+ipcMain.handle('oauth:discordLogout', async () => {
+  settings.set('discordSessionToken', '')
+  stopStatusPush()
+  await stopOfficialBot()
+  return true
+})
+// UI-only status check — never sends the session token itself to the renderer.
+ipcMain.handle('oauth:discordLoginStatus', () => !!settings.get('discordSessionToken', ''))
 
 /* ------------------------------------------------------------------ */
 /* VRChat account — auto status detection                              */
@@ -1732,6 +1778,20 @@ ipcMain.handle('bot:stop', async () => { await stopBot(); return true })
 ipcMain.handle('bot:setMute', (e, m) => botSetMute(m))
 ipcMain.handle('bot:setDeaf', (e, d) => botSetDeaf(d))
 ipcMain.handle('bot:invite', (e, appId) => inviteUrl(appId))
+
+// Official NekoSuneAPPS bot mode — no token, backed by the NekoSuneAPPS backend
+// (server/) instead of a local discord.js gateway client. Requires having
+// logged in via oauth:discordLogin first (session token in settings).
+ipcMain.handle('bot:startOfficial', () => {
+  const sessionToken = settings.get('discordSessionToken', '')
+  return startOfficialBot({ backendBaseUrl: getNekosuneBackendUrl(), sessionToken }, s => push('bot:update', s))
+})
+ipcMain.handle('bot:stopOfficial', async () => { await stopOfficialBot(); return true })
+ipcMain.handle('bot:setMuteOfficial', (e, m) => setMuteOfficial(getNekosuneBackendUrl(), settings.get('discordSessionToken', ''), m))
+ipcMain.handle('bot:setDeafOfficial', (e, d) => setDeafOfficial(getNekosuneBackendUrl(), settings.get('discordSessionToken', ''), d))
+// Lets renderer resolve the effective backend URL (default or self-hosted
+// override) without duplicating DEFAULT_NEKOSUNE_BACKEND_URL client-side.
+ipcMain.handle('nekosune:getBackendUrl', () => getNekosuneBackendUrl())
 
 /* ------------------------------------------------------------------ */
 /* Soundpad                                                            */

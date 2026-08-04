@@ -33,6 +33,26 @@ Legend: `[x]` done · `[~]` partial · `[ ]` todo · ⚠️ technical blocker.
 - [x] **History (SQLite)**: player join/leave, friend add/remove, world visits
 - [x] **Auto-Greeter** (auto-accept friend requests, all/allow-list)
 - [x] Discord Rich Presence (world + HR + song; buttons auto-drop over IPC)
+- [x] **Pinned Discord Rich Presence Application ID to `1534208250046578790`**, no longer
+  user-editable — disabled the Discord Application ID field in the Discord tab and force the
+  fixed ID in `renderer.js` and `main.js`'s `discord:start` handler regardless of saved config.
+- [~] **Discord Activity (VRChat status panel) + official shared Discord bot.** New standalone
+  backend, own package.json/Docker, deployed separately — never bundled into the app — lives on
+  its own branch in this same GitHub repo
+  ([`feature/discord-backend-server`](https://github.com/NekoSuneProjects/NekoSuneAPPS/tree/feature/discord-backend-server)),
+  not as a subfolder here. It holds the shared bot token and OAuth client secret, which can
+  never live in a distributed Electron app. Backend + Electron-side code (identity login,
+  official-bot mode, status push) are implemented and locally verified (curl against the
+  running backend, `node --check`/require-resolution on every changed file). Defaults to the
+  official `https://nekosuneappsvrc.nekosunevr.co.uk` deployment (`DEFAULT_NEKOSUNE_BACKEND_URL`
+  in `main.js`), but self-hosters can override it via the Backend URL field on the Voice Bot
+  card (`nekosuneBackendUrl` setting) to point at their own instance instead. **Not deployed by
+  this session** — still needed before this works end to end: actually deploy that official
+  host, fill in that branch's `.env` (bot token, OAuth client secret, JWT secret), register the
+  OAuth redirect + Activities URL Mapping in the Developer Portal for app
+  `1534208250046578790`, and get
+  Activities enabled for that app. See that branch's `README.md` for the full one-time setup
+  checklist.
 - [x] **Fixed: Discord Rich Presence's elapsed timer reset on every status change** instead of
   showing real uptime. The code read a `startTime` property directly off `discord-rpc`'s
   `Client` object, which doesn't exist at all (confirmed against the library's own source) - so
