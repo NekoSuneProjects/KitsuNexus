@@ -14,9 +14,22 @@ const authorizedGuilds = require('./authorizedGuilds')
 let client = null
 let ready = false
 
+// Guards against a real race: Discord adds the bot to the guild (firing
+// GuildCreate over the gateway) as part of the SAME consent click that then
+// redirects the browser back to /oauth2/discord/callback, which is what
+// actually records the authorization (authorizedGuilds.authorize()). Those
+// two arrive over completely independent channels with no ordering
+// guarantee — the gateway event can and does win the race in practice,
+// which would otherwise kick a guild that's about to be legitimately
+// authorized seconds later. Give the callback a grace window before
+// enforcing on a freshly-joined guild; the retroactive startup sweep below
+// doesn't need one, since there's no in-flight callback to race against
+// for guilds the bot was already sitting in when it started.
+const JOIN_GRACE_MS = 15_000
+
 // Only /oauth2/discord/authorize-bot is allowed to let a guild keep the bot —
-// leave anything else immediately, whether it's a guild added before this
-// whitelist existed or one added via a leaked raw invite link.
+// leave anything else, whether it's a guild added before this whitelist
+// existed or one added via a leaked raw invite link.
 async function enforceWhitelist (guild) {
   if (authorizedGuilds.isAuthorized(guild.id)) return
   console.warn(`[discordBotGateway] leaving unauthorized guild "${guild.name}" (${guild.id}) — never went through /oauth2/discord/authorize-bot`)
@@ -35,8 +48,9 @@ async function start () {
     // already-running bot, or if the authorized-guilds data volume was lost.
     for (const guild of client.guilds.cache.values()) enforceWhitelist(guild)
   })
-  // Fires the moment the bot is added to any guild, authorized or not.
-  client.on(Events.GuildCreate, guild => enforceWhitelist(guild))
+  // Fires the moment the bot is added to any guild, authorized or not —
+  // delayed so /oauth2/discord/authorize-bot's callback has a chance to win.
+  client.on(Events.GuildCreate, guild => setTimeout(() => enforceWhitelist(guild), JOIN_GRACE_MS))
   client.on(Events.Error, err => console.warn('[discordBotGateway] error:', err.message))
   await client.login(discordBotToken)
   return client
