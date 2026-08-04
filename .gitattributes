@@ -1,0 +1,24 @@
+# Normalize line endings
+* text=auto eol=lf
+
+# Windows scripts keep CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Treat these as binary (no diff/merge)
+*.ico binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.mp3 binary
+*.wav binary
+*.zip binary
+*.exe binary
+*.dll binary
+
+# Collapse noisy/generated files in PR diffs
+package-lock.json linguist-generated=true
+dist/** linguist-vendored=true

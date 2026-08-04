@@ -1,0 +1,77 @@
+# NekoSuneAPPS Discord backend
+
+Small backend that holds the two secrets the Electron app (`NODEJS/`) can never hold itself —
+the shared bot's token and the Discord app's OAuth client secret — and exposes an authenticated
+HTTP API on top of them. It serves two features:
+
+1. **Official shared Discord bot** — lets ordinary users read (and, if logged in, control)
+   their own voice state via the app's built-in bot instead of creating their own bot/token.
+2. **Discord Activity** — a live, read-only VRChat status panel that runs as an embedded iframe
+   inside a Discord voice channel (`public/activity/`).
+
+This directory is intentionally separate from the Electron app: its own `package.json`, its own
+`node_modules`, deployed independently (Docker), and excluded from the desktop app's build
+(`!server/**` in the root `package.json`'s `build.files`). It is never bundled into NekoSuneAPPS
+installers.
+
+## Env vars (`.env`, see `.env.example`)
+
+| Var | Purpose |
+|---|---|
+| `DISCORD_CLIENT_ID` | Must match `DEFAULT_DISCORD_APP_ID`/`DISCORD_APP_ID` in the Electron app (`1534167604304937142`) |
+| `DISCORD_CLIENT_SECRET` | Developer Portal → OAuth2 tab. Never put this in the Electron app. |
+| `DISCORD_BOT_TOKEN` | The shared/official bot's token. Never put this in the Electron app. |
+| `DISCORD_REDIRECT_URI` | Must exactly match a redirect registered in the Portal's OAuth2 tab |
+| `JWT_SECRET` | Signs this backend's own session tokens — `openssl rand -hex 32` |
+| `JWT_TTL` | Session token lifetime (default `12h`) |
+| `PORT` | Default `8080` |
+
+## Deploy
+
+```sh
+cp .env.example .env   # fill in real values
+npm install             # generates package-lock.json the first time
+docker compose up -d --build
+```
+
+TLS termination is left to whatever reverse proxy already fronts your other nekosunevr.co.uk
+services — this container serves plain HTTP on `PORT`, put it behind that proxy rather than
+exposing it directly.
+
+## One-time manual setup (Discord Developer Portal, app `1534167604304937142`)
+
+- **OAuth2 → Redirects**: add `https://<your-chosen-host>/oauth2/discord/callback`.
+- **Activities → URL Mappings → Root Mapping**: prefix `/` → target `<your-chosen-host>`.
+  Serving the API and the Activity's static assets from this same backend means one Root
+  Mapping covers both; no separate Proxy Path Mapping is needed as long as the iframe's own
+  fetches stay same-origin-relative.
+- Confirm **Activities** is enabled for this application before testing the iframe — it can't
+  be tested locally or without this.
+- Invite the shared bot (`DISCORD_BOT_TOKEN`'s user) to whichever guilds should support the
+  official-bot mode or the Activity.
+
+## Routes
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET | `/oauth2/discord/authorize` | none | Redirects to Discord's authorize URL (Electron login) |
+| GET | `/oauth2/discord/callback` | none (CSRF state-checked) | Code→token exchange, redirects to Electron's `localhost:3737` loopback with a session JWT |
+| POST | `/api/activity/token` | none | Code→token exchange for the Activity iframe's Embedded App SDK flow |
+| POST | `/api/status` | Bearer session JWT | Electron pushes its own live VRChat status |
+| GET | `/api/channel/:channelId/status` | Bearer session JWT | Activity iframe reads the channel's roster + statuses |
+| GET | `/api/bot/voice/:userId` | Bearer session JWT, self only | Official-bot mode reads your own voice state |
+| POST | `/api/bot/voice/:userId/mute` \| `/deaf` | Bearer session JWT, self only | Official-bot mode server-mute/deafen control |
+| GET | `/healthz` | none | Liveness check |
+
+Session JWTs only prove Discord identity (`identify` scope) — they are never the bot token, and
+`:userId` routes reject any session whose ID doesn't match the URL, so one user's session can
+never query or control another user.
+
+## Known limitations
+
+- Session JWTs are stateless — revoking local storage doesn't invalidate an already-issued token
+  before its `JWT_TTL` expires. Keep the TTL short.
+- If the same user is connected to voice in two different guilds the bot is in, the first match
+  wins (same ambiguity as the Electron app's existing bring-your-own-bot mode).
+- `statusStore` and the bot gateway's caches are in-memory only — a restart clears them; clients
+  simply repopulate on their next push/interval tick.
