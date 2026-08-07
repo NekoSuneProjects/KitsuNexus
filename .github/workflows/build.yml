@@ -16,6 +16,8 @@ jobs:
     # This repo is built on one AMD64 Ubuntu self-hosted node only. Windows
     # artifacts are cross-built on Linux with Wine/NSIS support, and Linux ARM64
     # artifacts are Electron Builder cross-builds from the same x64 host.
+    # Latest Node 24-based official actions require a runner >= 2.327.1; the
+    # provided runner logs show 2.336.0, which satisfies that requirement.
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 75
     strategy:

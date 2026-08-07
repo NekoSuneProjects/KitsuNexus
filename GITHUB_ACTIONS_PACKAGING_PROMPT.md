@@ -21,7 +21,7 @@ Goal:
 - Cross-build Windows from AMD64 Ubuntu when the project supports it.
 - Auto-install build dependencies on Ubuntu, including Wine and NSIS if Windows installers are supported.
 - Cache package-manager downloads and app-builder downloads. For Electron/Electron Builder, cache npm plus `~/.cache/electron` and `~/.cache/electron-builder`.
-- Use the latest stable official GitHub Actions major versions that work with current self-hosted runners. Mention minimum runner version requirements if using Node 24-based actions.
+- Use the latest stable official GitHub Actions major versions that work with current self-hosted runners. Mention minimum runner version requirements if using Node 24-based actions, and add a preflight note/check when possible.
 - Upload all artifacts from every matrix leg.
 
 For Electron Builder projects, configure or preserve these targets when supported:
@@ -54,4 +54,5 @@ Please produce:
 1. A summary of exactly what changed.
 2. A list of commands/tests/checks you ran.
 3. Any limitations, especially cross-build support that depends on the framework.
+4. Self-hosted runner setup notes if logs show runner-listener issues such as repeated AAD/RSA credential messages, slow token requests, Ctrl-C shutdowns, or `TaskCanceledException` during runner polling.
 ```
