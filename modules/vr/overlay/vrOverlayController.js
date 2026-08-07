@@ -25,10 +25,12 @@ function init (mainWindow, statusCb) {
 
 async function captureAndPush () {
   if (!running || busy || !mainWindowRef || mainWindowRef.isDestroyed()) return
+  // Skip capture when the window is hidden/minimised — no useful frame to push
+  if (mainWindowRef.isMinimized && mainWindowRef.isMinimized()) return
   busy = true
   try {
     const image = await mainWindowRef.webContents.capturePage()
-    fs.writeFileSync(framePath, image.toPNG())
+    await fs.promises.writeFile(framePath, image.toPNG())
     overlay.updateFrame(framePath)
   } catch (err) {
     onStatus({ running: true, error: err.message })

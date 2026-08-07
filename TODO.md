@@ -20,6 +20,12 @@ Legend: `[x]` done · `[~]` partial · `[ ]` todo · ⚠️ technical blocker.
   tiered friend cache (offline 5min/online 90s), self cache, world poll 5s, SQLite write
   debounced 8s + events capped 8000, rightbar 120s; **paged lists** (Friend Den, My Groups,
   Mutuals, Blocked, Favs). (rail offline virtualisation still todo)
+  - [x] Added shared `debounce()` utility; applied to audio sliders (300ms), rightbar search
+    (150ms), ToN search (150ms), avatar scaling smoothing (300ms), bg opacity/blur (300ms)
+  - [x] World name resolution parallelised with `Promise.allSettled` instead of sequential IPC
+  - [x] Translator settings cached 5s to avoid per-keystroke IPC; Live Typing debounced 800ms
+  - [x] Hold-status timer visibility-guarded; VR overlay capture async + minimised-window skip
+  - [x] Photo Relay pre-scans existing files on startup to prevent re-upload of old images
 
 ---
 

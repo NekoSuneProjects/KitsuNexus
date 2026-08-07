@@ -53,10 +53,17 @@ function start (opts = {}, listener) {
   if (listener) onEvent = listener
   cfg = { enabled: !!opts.enabled, webhook: String(opts.webhook || '').trim() }
   stop()
+  seen.clear()
   if (!cfg.enabled || !cfg.webhook) return
   const photosDir = resolvePhotosDir()
   if (!fs.existsSync(photosDir)) { if (onEvent) onEvent({ error: 'VRChat photos folder not found' }); return }
   try {
+    // Pre-scan existing files so the watcher doesn't re-upload old images on
+    // startup (fs.watch on Windows can fire spurious events for existing files).
+    try {
+      const existing = fs.readdirSync(photosDir).filter(f => /\.png$/i.test(f))
+      for (const f of existing) seen.add(path.join(photosDir, f))
+    } catch (_) { /* best effort */ }
     watcher = fs.watch(photosDir, { recursive: true }, (evt, fname) => {
       if (fname && /\.png$/i.test(fname)) queue(path.join(photosDir, String(fname)))
     })

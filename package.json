@@ -1,6 +1,6 @@
 {
   "name": "nekosuneapps",
-  "version": "1.0.66",
+  "version": "1.0.67",
   "main": "main.js",
   "bin": "main.js",
   "scripts": {
@@ -73,7 +73,8 @@
     },
     "nsis": {
       "allowToChangeInstallationDirectory": true,
-      "oneClick": false
+      "oneClick": false,
+      "installDir": "${PROGRAMFILES}\\NekoSuneAPPS"
     },
     "linux": {
       "category": "AudioVideo",

@@ -10,6 +10,10 @@
 const { MAX_CHATBOX } = require('./chatboxComposer')
 
 const DEFAULT_INTERVAL_MS = 3000
+// Debounce delay: wait this long after the last keystroke before sending
+// the first tick.  This avoids hammering the translation API while the
+// user is still actively typing.
+const DEBOUNCE_MS = 800
 
 class LiveTypingSender {
   constructor ({ composer, intervalMs, translate }) {
@@ -19,6 +23,7 @@ class LiveTypingSender {
     this.latestText = ''
     this.lastSent = null
     this.timer = null
+    this.debounceTimer = null
     this.onPreview = null // (trimmedText) => void, for the UI preview line
   }
 
@@ -32,10 +37,18 @@ class LiveTypingSender {
   setText (raw) {
     this.latestText = String(raw || '')
     if (typeof this.onPreview === 'function') this.onPreview(LiveTypingSender.trim(this.latestText))
-    if (!this.timer) {
-      this.tick()
-      this.timer = setInterval(() => this.tick(), this.intervalMs)
-    }
+
+    // Debounce: reset the idle timer on every keystroke so we don't fire
+    // translation requests while the user is still typing.
+    if (this.debounceTimer) clearTimeout(this.debounceTimer)
+    this.debounceTimer = setTimeout(() => {
+      this.debounceTimer = null
+      // First tick fires immediately after the debounce settles...
+      if (!this.timer) {
+        this.tick()
+        this.timer = setInterval(() => this.tick(), this.intervalMs)
+      }
+    }, DEBOUNCE_MS)
   }
 
   async tick () {
@@ -59,6 +72,7 @@ class LiveTypingSender {
 
   stop () {
     if (this.timer) { clearInterval(this.timer); this.timer = null }
+    if (this.debounceTimer) { clearTimeout(this.debounceTimer); this.debounceTimer = null }
     this.lastSent = null
     this.composer.clearHold()
   }

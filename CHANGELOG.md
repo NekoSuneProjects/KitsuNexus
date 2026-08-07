@@ -5,6 +5,42 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.67] - 2026-08-06
+
+### Fixed
+- **Updater: fixed "Failed to uninstall old application files" (exit code 2) error.** The NSIS
+  uninstaller was failing because NekoSuneAPPS processes were still holding file locks. The
+  updater now kills running NekoSuneAPPS instances before attempting uninstall, and if the
+  uninstaller still fails (exit code 2), it manually cleans up the install directory so the new
+  installer can proceed. Error messages also now suggest running the installer as Administrator.
+- **Live Typing with Translation no longer lags while typing.** Every keystroke was immediately
+  triggering a translation API call plus a redundant IPC round-trip to fetch translator settings
+  from disk. Added an 800ms debounce so translation only fires after the user pauses typing,
+  and cached translator settings for 5 seconds to eliminate per-keystroke IPC overhead.
+- **Audio slider persistence no longer floods disk with writes.** Dragging the gain/boost sliders
+  (and avatar scaling smoothing, background opacity/blur) was writing the entire electron-store
+  config to disk on every pixel of drag. All slider `input` handlers now debounce their
+  `saveSetting` calls by 300ms.
+- **Rightbar friend search no longer freezes the UI on large friend lists.** `renderRightbar`
+  (which filters the full friend cache, builds HTML for all friends, and assigns `innerHTML`) was
+  firing on every keystroke uncapped. Now debounced at 150ms.
+- **ToN board search debounced at 150ms** to prevent full DOM rebuilds on every keystroke.
+- **World name resolution now runs in parallel** instead of sequential IPC round-trips. N unique
+  world IDs previously made N serial API calls; now uses `Promise.allSettled` for uncached IDs
+  and a single DOM pass to apply results.
+- **VR overlay capture no longer blocks the main process event loop.** Replaced synchronous
+  `writeFileSync` with `await fs.promises.writeFile` and added a minimized-window skip so captures
+  don't run when the app is hidden.
+- **Photo Relay no longer re-uploads old images on startup.** `fs.watch` on Windows can fire
+  spurious events for existing files when the watcher starts, and the `seen` Set was empty on
+  startup, so every existing photo was treated as new. Now pre-scans the photos directory on
+  startup to populate the `seen` Set, and clears it on restart.
+
+### Changed
+- **Default NSIS install directory changed from AppData to Program Files** (`${PROGRAMFILES}\NekoSuneAPPS`).
+  Users can still choose a custom location during install. Existing installs in AppData are not
+  affected — the updater will continue to use whichever directory the previous install used.
+
 ## [1.0.66] - 2026-08-04
 
 ### Added

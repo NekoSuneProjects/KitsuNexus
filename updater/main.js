@@ -122,6 +122,22 @@ function runFile (cmd, cmdArgs, opts) {
 
 // ── Windows-only helpers ──────────────────────────────────────────────────────
 
+// Kills any running NekoSuneAPPS processes so files aren't locked during
+// uninstall/install. This is the most common cause of NSIS exit code 2.
+async function killRunningInstances () {
+  if (process.platform !== 'win32') return
+  try {
+    await new Promise((resolve, reject) =>
+      execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+        "Get-Process -Name 'NekoSuneAPPS','NekoSuneAPPS Updater' -ErrorAction SilentlyContinue |" +
+        " Where-Object { $_.Id -ne $PID } | ForEach-Object { " +
+        "  Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue" +
+        " }; Start-Sleep -Milliseconds 500"
+      ], { timeout: 10000 }, (e) => e ? reject(e) : resolve())
+    )
+  } catch (_) { /* best effort */ }
+}
+
 // Runs an NSIS installer/uninstaller via PowerShell Start-Process -Wait.
 //
 // WHY NOT execFile directly:
@@ -231,13 +247,36 @@ async function applyInstaller (downloadedPath, targetExePath) {
     send('status', { phase: 'step', step: 'uninstall', label: 'Preparing…' })
     const { installDir, uninstallExe } = await findNsisInstallInfo()
 
+    // Kill any running instances so files aren't locked (most common cause of
+    // uninstall failure / NSIS exit code 2).
+    send('status', { phase: 'step', step: 'uninstall', label: 'Closing running instances…' })
+    await killRunningInstances()
+
     // Step 1: clean uninstall of old files
     if (uninstallExe) {
       send('status', { phase: 'step', step: 'uninstall', label: 'Removing old version…' })
       try {
         await runNsisInstaller(uninstallExe, ['/S'])
-      } catch (_) {
-        // Non-fatal: the new installer will overwrite whatever it can.
+      } catch (uninstallErr) {
+        // If the uninstaller fails (exit code 2 = files locked), try to
+        // manually remove the install directory so the new installer can
+        // proceed.  This is the most common path for the "exit code 2" error.
+        if (installDir && fs.existsSync(installDir)) {
+          send('status', { phase: 'step', step: 'uninstall', label: 'Cleaning up leftover files…' })
+          try {
+            // Remove read-only attributes first (NSIS uninstaller sets these)
+            await new Promise((resolve, reject) =>
+              execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+                `Get-ChildItem -Path '${installDir.replace(/'/g, "''")}' -Recurse -Force -ErrorAction SilentlyContinue |` +
+                ' Set-ItemProperty -Name IsReadOnly -Value $false -ErrorAction SilentlyContinue;' +
+                ` Remove-Item -Path '${installDir.replace(/'/g, "''")}' -Recurse -Force -ErrorAction SilentlyContinue`
+              ], { timeout: 30000 }, (e) => e ? reject(e) : resolve())
+            )
+          } catch (_) {
+            // If manual cleanup fails, we'll let the installer try anyway —
+            // it may still succeed in overwriting what it can.
+          }
+        }
       }
     }
 
@@ -255,13 +294,17 @@ async function applyInstaller (downloadedPath, targetExePath) {
         return { relaunch: true }
       } catch (err) {
         lastErr = err
-        if (i < attempts) await new Promise(r => setTimeout(r, 1500))
+        if (i < attempts) {
+          // Wait a bit and kill any lingering processes before retrying
+          await killRunningInstances()
+          await new Promise(r => setTimeout(r, 2000))
+        }
       }
     }
     const detail = lastErr.stderrText
       ? `: ${lastErr.stderrText}`
       : (lastErr.code !== undefined ? ` (exit code ${lastErr.code})` : '')
-    throw new Error(`Installer failed after ${attempts} attempts${detail}`)
+    throw new Error(`Installer failed after ${attempts} attempts${detail}. Try running the installer manually as Administrator.`)
   }
 
   if (process.platform === 'darwin') {

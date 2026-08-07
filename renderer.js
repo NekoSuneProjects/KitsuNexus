@@ -53,6 +53,15 @@ const $ = id => document.getElementById(id)
   })
 })()
 
+// Shared debounce helper — used across the renderer for sliders, searches, etc.
+function debounce (fn, ms) {
+  let t = null
+  return function (...args) {
+    if (t) clearTimeout(t)
+    t = setTimeout(() => { t = null; fn.apply(this, args) }, ms)
+  }
+}
+
 // Custom sidebar icons: for each nav button, try assets/icons/<data-tab>.png (then
 // .svg). If found, swap it in for the emoji; if not, the emoji stays. Lets icons be
 // added one at a time with no code changes.
@@ -352,9 +361,10 @@ $('toggleAudio').addEventListener('click', () => {
 ;['gain', 'lowBoost', 'bassBoost', 'midBoost', 'trebleBoost'].forEach(name => {
   const slider = $(name + 'Slider')
   if (!slider) return
-  slider.addEventListener('input', async e => {
+  const persist = debounce(async v => { await api.saveSetting(name, v) }, 300)
+  slider.addEventListener('input', e => {
     setText(name + 'Value', e.target.value)
-    await api.saveSetting(name, parseFloat(e.target.value))
+    persist(parseFloat(e.target.value))
   })
 })
 $('audioDeviceSelect').addEventListener('change', e => api.saveSetting('selectedAudioDevice', e.target.value))
@@ -584,11 +594,12 @@ $('avatarScalingSaveWorlds').addEventListener('change', async e => {
   ensureAvatarScaling().setSaveScaleBetweenWorlds(e.target.checked)
   await api.saveSetting('avatarScalingSaveWorlds', e.target.checked)
 })
-$('avatarScalingSmoothing').addEventListener('input', async e => {
+const persistAvatarScalingSmoothing = debounce(async v => { await api.saveSetting('avatarScalingSmoothing', v) }, 300)
+$('avatarScalingSmoothing').addEventListener('input', e => {
   const v = parseInt(e.target.value, 10)
   setText('avatarScalingSmoothingVal', v)
   ensureAvatarScaling().setSmoothing(v)
-  await api.saveSetting('avatarScalingSmoothing', v)
+  persistAvatarScalingSmoothing(v)
 })
 
 async function recordAvatarScalingKey (slot) {
@@ -812,6 +823,8 @@ $('chatHistClear').addEventListener('click', () => {
 // Live countdown of the manual-message pin; returns to automated when it ends.
 function updateHoldStatus () {
   const el = $('chatHoldStatus'); if (!el) return
+  // Skip DOM writes when the chatbox tab isn't visible
+  if (el.offsetParent === null) return
   if (composer.holdActive()) {
     const s = composer.holdRemaining()
     const mm = Math.floor(s / 60); const ss = String(s % 60).padStart(2, '0')
@@ -2147,7 +2160,7 @@ document.querySelectorAll('#tonref .tonFilter').forEach(b => b.addEventListener(
   tonFilter = b.dataset.tonfilter
   renderTonBoard()
 }))
-if ($('tonSearch')) $('tonSearch').addEventListener('input', renderTonBoard)
+if ($('tonSearch')) $('tonSearch').addEventListener('input', debounce(renderTonBoard, 150))
 if ($('tonRefresh')) $('tonRefresh').addEventListener('click', async () => {
   setText('tonCacheInfo', 'Updating cached data…')
   try { await api.tonDataRefresh(); await loadTonCache() } catch (_) { setText('tonCacheInfo', 'Update failed (offline?)') }
@@ -3367,15 +3380,28 @@ function fmtLocation (loc) {
   if (String(loc).startsWith('wrld_')) return '🌐 In a world'
   return esc(loc)
 }
-// Fill in world names for any .wn[data-world] spans (memoised; sequential to stay
-// gentle on the API).
+// Fill in world names for any .wn[data-world] spans (memoised; parallel for
+// uncached IDs, then one DOM pass).
 async function resolveWorldNames (root) {
-  const ids = [...new Set([...(root || document).querySelectorAll('.wn[data-world]')].map(s => s.dataset.world))]
-  for (const id of ids) {
-    let name = worldNameCache[id]
-    if (!name) { try { const r = await api.vrchatWorldName(id); name = (r && r.ok && r.name) ? r.name : 'In a world' } catch (_) { name = 'In a world' } worldNameCache[id] = name }
-    document.querySelectorAll(`.wn[data-world="${id}"]`).forEach(s => { s.textContent = name; s.removeAttribute('data-world') })
+  const allSpans = [...(root || document).querySelectorAll('.wn[data-world]')]
+  const ids = [...new Set(allSpans.map(s => s.dataset.world))]
+  // Resolve uncached IDs in parallel instead of sequentially
+  const uncached = ids.filter(id => !worldNameCache[id])
+  if (uncached.length) {
+    const results = await Promise.allSettled(uncached.map(id =>
+      api.vrchatWorldName(id).then(r => ({ id, name: (r && r.ok && r.name) ? r.name : 'In a world' }))
+    ))
+    for (const r of results) {
+      if (r.status === 'fulfilled') worldNameCache[r.value.id] = r.value.name
+      else worldNameCache[uncached[results.indexOf(r)]] = 'In a world'
+    }
   }
+  // One DOM pass to apply all names
+  allSpans.forEach(s => {
+    const name = worldNameCache[s.dataset.world] || 'In a world'
+    s.textContent = name
+    s.removeAttribute('data-world')
+  })
 }
 async function loadFriends () {
   const el = $('friendList'); el.textContent = 'Loading…'
@@ -4106,7 +4132,7 @@ async function loadRightbar () {
   if (all && all.ok) renderRightbar()
   else $('rbFriends').textContent = (all && all.error) || 'Could not load friends.'
 }
-$('rbSearch').addEventListener('input', renderRightbar)
+$('rbSearch').addEventListener('input', debounce(renderRightbar, 150))
 setInterval(loadRightbar, 120000)
 $('rbFriends').addEventListener('click', e => {
   const toggle = e.target.closest('.rb-toggle')
@@ -5129,12 +5155,24 @@ async function saveTranslator () {
     targetLang: $('translatorTarget').value,
     useAiGrammarFix: $('translatorAiGrammarFix').checked
   })
+  // Invalidate cached settings so the next translation uses the new values
+  _translatorCache = null
 }
 // Translate text using the saved Translator settings. Falls back to the
 // original text on any failure (network, missing key, bad endpoint, ...)
 // so a broken translator config never blocks the feature calling this.
+// Settings are cached to avoid an IPC round-trip on every keystroke.
+let _translatorCache = null
+let _translatorCacheTime = 0
+const TRANSLATOR_CACHE_TTL = 5000 // refresh settings at most every 5 s
+
 async function translateWithSettings (text) {
-  const t = await api.getSetting('translator', null)
+  const now = Date.now()
+  if (!_translatorCache || (now - _translatorCacheTime) > TRANSLATOR_CACHE_TTL) {
+    _translatorCache = await api.getSetting('translator', null)
+    _translatorCacheTime = now
+  }
+  const t = _translatorCache
   if (!t || !t.provider) return text
   try {
     const result = await api.translate({
@@ -5798,19 +5836,23 @@ if ($('bgLoadPhotos')) {
   })
 }
 
-// Opacity + blur sliders
+// Opacity + blur sliders — apply visually immediately, persist debounced
 if ($('bgOpacity')) {
+  const persistBgOpacity = debounce(v => { if (_bgCfg.type !== 'none') { const cfg = { ..._bgCfg, opacity: v }; applyBackground(cfg); api.saveSetting('bgConfig', cfg) } }, 300)
   $('bgOpacity').addEventListener('input', e => {
     const v = parseInt(e.target.value, 10)
     setText('bgOpacityVal', v + '%')
-    if (_bgCfg.type !== 'none') saveBgConfig({ ..._bgCfg, opacity: v })
+    if (_bgCfg.type !== 'none') applyBackground({ ..._bgCfg, opacity: v })
+    persistBgOpacity(v)
   })
 }
 if ($('bgBlur')) {
+  const persistBgBlur = debounce(v => { if (_bgCfg.type !== 'none') { const cfg = { ..._bgCfg, blur: v }; applyBackground(cfg); api.saveSetting('bgConfig', cfg) } }, 300)
   $('bgBlur').addEventListener('input', e => {
     const v = parseInt(e.target.value, 10)
     setText('bgBlurVal', v + 'px')
-    if (_bgCfg.type !== 'none') saveBgConfig({ ..._bgCfg, blur: v })
+    if (_bgCfg.type !== 'none') applyBackground({ ..._bgCfg, blur: v })
+    persistBgBlur(v)
   })
 }
 
