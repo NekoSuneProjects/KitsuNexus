@@ -5,6 +5,13 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Changed
+- **Release workflow now cross-builds desktop packages from one AMD64 Ubuntu runner.** The GitHub Actions build matrix now targets Windows x64, Linux x64 and Linux arm64 while running every leg on the Linux X64 self-hosted runner. It installs Ubuntu build dependencies including Wine/NSIS where available, caches npm plus Electron downloads, uploads all generated packages, and keeps the existing tag-based release, VirusTotal and Discord announcement flow with updated artifact labels.
+
+### Added
+- **Reusable GitHub Actions packaging prompt.** Added a Markdown prompt that can be copied into other projects so Claude or another assistant asks for the current workflow first, explains planned changes, researches whether the requested package targets are supported for that project's stack, and then applies the same AMD64 Ubuntu self-hosted packaging approach where possible.
+- **Self-hosted runner troubleshooting notes.** Added guidance for the repeated GitHub runner AAD/RSA credential log messages and the Ctrl-C `TaskCanceledException` shutdown block: those are runner listener/service lifecycle logs, not app packaging failures, and the recommended fix is to run the runner through its service wrapper instead of an interactive terminal.
+
 ## [1.0.68] - 2026-08-07
 
 ### Added
