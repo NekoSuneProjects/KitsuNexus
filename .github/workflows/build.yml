@@ -6,41 +6,88 @@ on:
       - 'v*'
   workflow_dispatch:
 
-# softprops/action-gh-release needs write access to create the release + upload assets.
 permissions:
   contents: write
 
 jobs:
   build:
     name: Build (${{ matrix.artifact }})
-    # This repo is built on one AMD64 Ubuntu self-hosted node only. Windows
-    # artifacts are cross-built on Linux with Wine/NSIS support, and Linux ARM64
-    # artifacts are Electron Builder cross-builds from the same x64 host.
-    # Latest Node 24-based official actions require a runner >= 2.327.1; the
-    # provided runner logs show 2.336.0, which satisfies that requirement.
+
+    # Self-hosted Ubuntu AMD64 runner.
+    # Windows x64 is cross-built using Wine/NSIS.
+    # Linux ARM64 is cross-built by electron-builder.
     runs-on: [self-hosted, Linux, X64]
+
     timeout-minutes: 75
+
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Windows AMD64
           - artifact: win-x64
             os_family: windows
             arch: x64
             builder_args: --win --x64
+
+          # Linux AMD64
           - artifact: linux-x64
             os_family: linux
             arch: x64
             builder_args: --linux --x64
+
+          # Linux ARM64
           - artifact: linux-arm64
             os_family: linux
             arch: arm64
             builder_args: --linux --arm64
 
     steps:
+
+      # ---------------------------------------------------------
+      # Runner information
+      # ---------------------------------------------------------
+      - name: Show runner information
+        run: |
+          echo "========================================"
+          echo "NekoSuneAPPS Build"
+          echo "========================================"
+
+          echo
+          echo "Runner:"
+          echo "  OS: $RUNNER_OS"
+          echo "  Architecture: $RUNNER_ARCH"
+          echo "  Name: $RUNNER_NAME"
+
+          echo
+          echo "System:"
+          uname -a
+
+          echo
+          echo "Machine architecture:"
+          uname -m
+
+          echo
+          echo "Operating system:"
+          cat /etc/os-release
+
+          echo
+          echo "Node:"
+          node --version || true
+
+          echo
+          echo "npm:"
+          npm --version || true
+
+      # ---------------------------------------------------------
+      # Checkout
+      # ---------------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v5
 
+      # ---------------------------------------------------------
+      # Node.js
+      # ---------------------------------------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
@@ -50,20 +97,20 @@ jobs:
             package-lock.json
             updater/package-lock.json
 
-      - name: Cache Electron downloads
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cache/electron
-            ~/.cache/electron-builder
-          key: ${{ runner.os }}-electron-${{ matrix.artifact }}-${{ hashFiles('package-lock.json', 'updater/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-electron-${{ matrix.artifact }}-
-            ${{ runner.os }}-electron-
-
+      # ---------------------------------------------------------
+      # Linux build dependencies
+      # ---------------------------------------------------------
       - name: Install Linux build dependencies
+        shell: bash
         run: |
+          set -e
+
+          echo "Installing build dependencies..."
+
+          sudo dpkg --add-architecture i386 || true
+
           sudo apt-get update
+
           sudo apt-get install -y --no-install-recommends \
             binutils \
             ca-certificates \
@@ -75,60 +122,262 @@ jobs:
             libudev-dev \
             p7zip-full \
             rpm \
+            nsis \
+            wine \
             wine64
 
-      - name: Install NSIS when available
+      # ---------------------------------------------------------
+      # Verify build tools
+      # ---------------------------------------------------------
+      - name: Verify build tools
+        shell: bash
         run: |
-          sudo apt-get install -y --no-install-recommends nsis || \
-            echo "NSIS package was not available from apt; electron-builder will use its downloaded NSIS toolchain if needed."
+          echo "========================================"
+          echo "Build tools"
+          echo "========================================"
 
+          echo
+          echo "Wine:"
+          wine --version || true
+          wine64 --version || true
+
+          echo
+          echo "NSIS:"
+          makensis -VERSION || true
+
+          echo
+          echo "7-Zip:"
+          7z i | head -10 || true
+
+          echo
+          echo "fakeroot:"
+          fakeroot --version || true
+
+          echo
+          echo "dpkg:"
+          dpkg --version | head -1 || true
+
+          echo
+          echo "RPM:"
+          rpmbuild --version || true
+
+      # ---------------------------------------------------------
+      # npm dependencies
+      # ---------------------------------------------------------
       - name: Install dependencies
-        run: npm ci
-
-      # OPTIONAL self-hosted-only patch. Put any machine-specific sed substitution here.
-      - name: Self-hosted patch (sed global)
-        if: runner.environment == 'self-hosted'
+        shell: bash
         run: |
-          echo "Running on the AMD64 Ubuntu self-hosted runner - no patch configured."
-          # TODO: replace with your actual global sed, e.g.:
-          # sed -i 's|OLD|NEW|g' path/to/file
+          set -e
+          npm ci
 
+      # ---------------------------------------------------------
+      # Optional self-hosted patch
+      # ---------------------------------------------------------
+      - name: Self-hosted patch
+        if: runner.environment == 'self-hosted'
+        shell: bash
+        run: |
+          echo "Running on self-hosted runner."
+          echo "No machine-specific patch configured."
+
+          # Put any required sed substitutions here.
+          #
+          # Example:
+          #
+          # sed -i 's|OLD_VALUE|NEW_VALUE|g' path/to/file
+
+      # ---------------------------------------------------------
+      # Updater dependencies
+      # ---------------------------------------------------------
       - name: Install updater dependencies
         working-directory: updater
-        run: npm ci
+        shell: bash
+        run: |
+          set -e
+          npm ci
 
-      - name: Build updater helper (Windows on Linux)
+      # =========================================================
+      # WINDOWS X64
+      # =========================================================
+
+      - name: Build updater helper - Windows x64
         if: matrix.os_family == 'windows'
         working-directory: updater
-        run: |
-          npx electron-builder --win --x64 --publish never
-          cp dist/updater.exe updater.exe
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ELECTRON_CACHE: ~/.cache/electron
           ELECTRON_BUILDER_CACHE: ~/.cache/electron-builder
+          WINEDEBUG: -all
+        run: |
+          set -e
 
-      - name: Build updater helper (Linux)
+          echo "Building Windows x64 updater..."
+
+          npx electron-builder \
+            --win \
+            --x64 \
+            --publish never
+
+          test -f dist/updater.exe
+
+          cp dist/updater.exe updater.exe
+
+          echo "Windows updater built successfully."
+
+      # =========================================================
+      # LINUX X64 / ARM64 UPDATER
+      # =========================================================
+
+      - name: Build updater helper - Linux
         if: matrix.os_family == 'linux'
         working-directory: updater
-        run: |
-          npx electron-builder --linux dir --${{ matrix.arch }} --publish never
-          BIN_DIR=$(find dist -maxdepth 1 -iname '*-unpacked' | head -1)
-          test -n "$BIN_DIR"
-          rm -rf linux-unpacked
-          cp -R "$BIN_DIR" linux-unpacked
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ELECTRON_CACHE: ~/.cache/electron
           ELECTRON_BUILDER_CACHE: ~/.cache/electron-builder
+        run: |
+          set -e
+
+          echo "Building Linux ${{ matrix.arch }} updater..."
+
+          npx electron-builder \
+            --linux dir \
+            --${{ matrix.arch }} \
+            --publish never
+
+          echo "Searching for unpacked application..."
+
+          BIN_DIR=$(find dist \
+            -maxdepth 1 \
+            -type d \
+            -iname '*-unpacked' \
+            | head -1)
+
+          if [ -z "$BIN_DIR" ]; then
+            echo "ERROR: Could not find Linux unpacked directory."
+            echo
+            echo "Contents of dist:"
+            find dist -maxdepth 3 -print || true
+            exit 1
+          fi
+
+          echo "Found: $BIN_DIR"
+
+          rm -rf linux-unpacked
+
+          cp -R "$BIN_DIR" linux-unpacked
+
+          echo "Linux updater built successfully."
+
+      # =========================================================
+      # MAIN ELECTRON APPLICATION
+      # =========================================================
 
       - name: Build app
-        run: npx electron-builder ${{ matrix.builder_args }} --publish never
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ELECTRON_CACHE: ~/.cache/electron
           ELECTRON_BUILDER_CACHE: ~/.cache/electron-builder
+          WINEDEBUG: -all
+        run: |
+          set -e
 
+          echo "========================================"
+          echo "Building NekoSuneAPPS"
+          echo "========================================"
+
+          echo "Artifact: ${{ matrix.artifact }}"
+          echo "OS family: ${{ matrix.os_family }}"
+          echo "Architecture: ${{ matrix.arch }}"
+          echo "Arguments: ${{ matrix.builder_args }}"
+
+          echo
+
+          npx electron-builder \
+            ${{ matrix.builder_args }} \
+            --publish never
+
+          echo
+          echo "Electron Builder completed."
+
+      # ---------------------------------------------------------
+      # Show build output
+      # ---------------------------------------------------------
+      - name: Show build output
+        if: always()
+        shell: bash
+        run: |
+          echo "========================================"
+          echo "Build output"
+          echo "========================================"
+
+          if [ -d dist ]; then
+            find dist -maxdepth 3 -type f -print
+          else
+            echo "dist directory does not exist."
+          fi
+
+      # ---------------------------------------------------------
+      # Verify expected artifacts
+      # ---------------------------------------------------------
+      - name: Verify artifacts
+        shell: bash
+        run: |
+          set -e
+
+          echo "Checking artifacts for ${{ matrix.artifact }}..."
+
+          case "${{ matrix.artifact }}" in
+
+            win-x64)
+              COUNT=$(find dist \
+                -maxdepth 1 \
+                -type f \
+                -name '*.exe' \
+                | wc -l)
+
+              if [ "$COUNT" -eq 0 ]; then
+                echo "ERROR: No Windows .exe files were produced."
+                exit 1
+              fi
+              ;;
+
+            linux-x64)
+              COUNT=$(find dist \
+                -maxdepth 1 \
+                -type f \
+                \( -name '*.AppImage' -o -name '*.tar.gz' \) \
+                | wc -l)
+
+              if [ "$COUNT" -eq 0 ]; then
+                echo "ERROR: No Linux x64 artifacts were produced."
+                exit 1
+              fi
+              ;;
+
+            linux-arm64)
+              COUNT=$(find dist \
+                -maxdepth 1 \
+                -type f \
+                \( -name '*.AppImage' -o -name '*.tar.gz' \) \
+                | wc -l)
+
+              if [ "$COUNT" -eq 0 ]; then
+                echo "ERROR: No Linux ARM64 artifacts were produced."
+                exit 1
+              fi
+              ;;
+
+          esac
+
+          echo "Artifacts verified successfully."
+
+      # ---------------------------------------------------------
+      # Upload artifacts
+      # ---------------------------------------------------------
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
@@ -142,94 +391,263 @@ jobs:
             dist/latest*.yml
           if-no-files-found: error
 
+
+  # =============================================================
+  # RELEASE
+  # =============================================================
+
   release:
     name: Publish release
-    needs: [build]
+
+    needs:
+      - build
+
     if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/') }}
+
     runs-on: [self-hosted, Linux, X64]
+
     timeout-minutes: 60
+
     steps:
+
+      # ---------------------------------------------------------
+      # Checkout
+      # ---------------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v5
 
+      # ---------------------------------------------------------
+      # Download all build artifacts
+      # ---------------------------------------------------------
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
           path: artifacts
 
+      # ---------------------------------------------------------
+      # Show downloaded artifacts
+      # ---------------------------------------------------------
+      - name: Show downloaded artifacts
+        shell: bash
+        run: |
+          echo "========================================"
+          echo "Downloaded artifacts"
+          echo "========================================"
+
+          find artifacts -type f -print
+
+      # ---------------------------------------------------------
+      # Install release dependencies
+      # ---------------------------------------------------------
+      - name: Install release dependencies
+        shell: bash
+        run: |
+          set -e
+
+          sudo apt-get update
+
+          sudo apt-get install -y --no-install-recommends \
+            curl \
+            jq
+
+      # ---------------------------------------------------------
+      # VirusTotal scan
+      # ---------------------------------------------------------
       - name: Scan installers with VirusTotal
         id: vtscan
+        shell: bash
+        continue-on-error: true
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
         run: |
+          set -e
+
           : > vt-notes.md
+
           if [ -z "${VT_API_KEY:-}" ]; then
             echo "No VT_API_KEY secret set - skipping VirusTotal scan."
             exit 0
           fi
+
           echo "## 🛡️ VirusTotal" >> vt-notes.md
+
           shopt -s nullglob
-          files=(artifacts/NekoSuneAPPS-win-x64/*.exe)
+
+          files=(
+            artifacts/NekoSuneAPPS-win-x64/*.exe
+          )
+
           if [ ${#files[@]} -eq 0 ]; then
             echo "No Windows installers found to scan." >> vt-notes.md
             exit 0
           fi
+
           for f in "${files[@]}"; do
+
             name=$(basename "$f")
+
             echo "Scanning $name..."
+
             size=$(stat -c%s "$f")
+
             if [ "$size" -gt 33554432 ]; then
-              upload_url=$(curl -sS -H "x-apikey: $VT_API_KEY" https://www.virustotal.com/api/v3/files/upload_url | jq -r '.data')
+
+              upload_url=$(
+                curl -sS \
+                  -H "x-apikey: $VT_API_KEY" \
+                  https://www.virustotal.com/api/v3/files/upload_url \
+                  | jq -r '.data'
+              )
+
             else
+
               upload_url="https://www.virustotal.com/api/v3/files"
+
             fi
-            resp=$(curl -sS -X POST "$upload_url" -H "x-apikey: $VT_API_KEY" -F "file=@$f")
-            analysis_id=$(echo "$resp" | jq -r '.data.id // empty')
+
+            resp=$(
+              curl -sS \
+                -X POST \
+                "$upload_url" \
+                -H "x-apikey: $VT_API_KEY" \
+                -F "file=@$f"
+            )
+
+            analysis_id=$(
+              echo "$resp" \
+                | jq -r '.data.id // empty'
+            )
+
             if [ -z "$analysis_id" ]; then
               echo "- **$name**: could not submit to VirusTotal" >> vt-notes.md
               continue
             fi
+
             status="queued"
+
             for i in $(seq 1 20); do
+
               sleep 15
-              status_resp=$(curl -sS -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/analyses/$analysis_id")
-              status=$(echo "$status_resp" | jq -r '.data.attributes.status // "unknown"')
-              [ "$status" = "completed" ] && break
+
+              status_resp=$(
+                curl -sS \
+                  -H "x-apikey: $VT_API_KEY" \
+                  "https://www.virustotal.com/api/v3/analyses/$analysis_id"
+              )
+
+              status=$(
+                echo "$status_resp" \
+                  | jq -r '.data.attributes.status // "unknown"'
+              )
+
+              if [ "$status" = "completed" ]; then
+                break
+              fi
+
             done
+
             if [ "$status" != "completed" ]; then
-              echo "- **$name**: scan still in progress — [check status](https://www.virustotal.com/gui/file-analysis/$analysis_id)" >> vt-notes.md
+
+              echo "- **$name**: scan still in progress — [check status](https://www.virustotal.com/gui/file-analysis/$analysis_id)" \
+                >> vt-notes.md
+
               continue
+
             fi
-            malicious=$(echo "$status_resp" | jq -r '.data.attributes.stats.malicious // 0')
-            suspicious=$(echo "$status_resp" | jq -r '.data.attributes.stats.suspicious // 0')
-            harmless=$(echo "$status_resp" | jq -r '.data.attributes.stats.harmless // 0')
-            undetected=$(echo "$status_resp" | jq -r '.data.attributes.stats.undetected // 0')
-            total=$((malicious + suspicious + harmless + undetected))
-            flagged=$((malicious + suspicious))
-            echo "- **$name**: $flagged/$total engines flagged something — [full report](https://www.virustotal.com/gui/file-analysis/$analysis_id)" >> vt-notes.md
+
+            malicious=$(
+              echo "$status_resp" \
+                | jq -r '.data.attributes.stats.malicious // 0'
+            )
+
+            suspicious=$(
+              echo "$status_resp" \
+                | jq -r '.data.attributes.stats.suspicious // 0'
+            )
+
+            harmless=$(
+              echo "$status_resp" \
+                | jq -r '.data.attributes.stats.harmless // 0'
+            )
+
+            undetected=$(
+              echo "$status_resp" \
+                | jq -r '.data.attributes.stats.undetected // 0'
+            )
+
+            total=$(
+              (
+                malicious +
+                suspicious +
+                harmless +
+                undetected
+              )
+            )
+
+            flagged=$(
+              (
+                malicious +
+                suspicious
+              )
+            )
+
+            echo "- **$name**: $flagged/$total engines flagged something — [full report](https://www.virustotal.com/gui/file-analysis/$analysis_id)" \
+              >> vt-notes.md
+
           done
-        env:
-          VT_API_KEY: ${{ secrets.VT_API_KEY }}
-        continue-on-error: true
 
+      # ---------------------------------------------------------
+      # Release notes
+      # ---------------------------------------------------------
       - name: Build release notes from CHANGELOG
+        shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "Extracting CHANGELOG notes for $VERSION"
-          awk -v ver="$VERSION" '
-            $0 ~ ("^## \\[" ver "\\]") { grab=1; next }
-            grab && /^## \[/ { exit }
-            grab { print }
-          ' CHANGELOG.md > NOTES.md
-          if [ ! -s NOTES.md ]; then printf "Release %s of NekoSuneAPPS.\n" "$VERSION" > NOTES.md; fi
-          {
-            printf "\n---\n## 📦 Downloads\n"
-            printf -- "- **Windows x64:** portable \\.exe plus NSIS setup \\.exe when supported by Electron Builder/Wine.\n"
-            printf -- "- **Linux x64:** \\.AppImage and \\.tar.gz.\n"
-            printf -- "- **Linux arm64:** \\.AppImage and \\.tar.gz.\n"
-            printf -- "\n> Installers are unsigned, so Windows SmartScreen may warn on first run — click *More info → Run anyway*.\n"
-            if [ -s vt-notes.md ]; then printf "\n"; cat vt-notes.md; fi
-          } >> NOTES.md
-          echo "----- release notes -----"; cat NOTES.md
+          set -e
 
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          echo "Extracting CHANGELOG notes for $VERSION"
+
+          awk -v ver="$VERSION" '
+            $0 ~ ("^## \\[" ver "\\]") {
+              grab=1
+              next
+            }
+
+            grab && /^## \[/ {
+              exit
+            }
+
+            grab {
+              print
+            }
+          ' CHANGELOG.md > NOTES.md
+
+          if [ ! -s NOTES.md ]; then
+            printf "Release %s of NekoSuneAPPS.\n" "$VERSION" > NOTES.md
+          fi
+
+          {
+            printf "\n---\n"
+            printf "## 📦 Downloads\n"
+            printf -- "- **Windows x64:** portable .exe plus NSIS setup .exe when supported by Electron Builder/Wine.\n"
+            printf -- "- **Linux x64:** .AppImage and .tar.gz.\n"
+            printf -- "- **Linux arm64:** .AppImage and .tar.gz.\n"
+            printf -- "\n> Installers are unsigned, so Windows SmartScreen may warn on first run — click *More info → Run anyway*.\n"
+
+            if [ -s vt-notes.md ]; then
+              printf "\n"
+              cat vt-notes.md
+            fi
+
+          } >> NOTES.md
+
+          echo "----- release notes -----"
+          cat NOTES.md
+
+      # ---------------------------------------------------------
+      # Create GitHub release
+      # ---------------------------------------------------------
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -239,61 +657,117 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # ---------------------------------------------------------
+      # Discord notification
+      # ---------------------------------------------------------
       - name: Notify Discord
+        shell: bash
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -e
+
           if [ -z "${DISCORD_WEBHOOK_URL:-}" ]; then
             echo "No DISCORD_WEBHOOK_URL secret set - skipping Discord notification."
             exit 0
           fi
 
           VERSION="${GITHUB_REF_NAME#v}"
+
           RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}"
+
           ICON_URL="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/assets/logo.png"
 
           DESC=$(cat NOTES.md)
+
           if [ "${#DESC}" -gt 3500 ]; then
             DESC="${DESC:0:3500}"$'\n\n…continued — [see the full release notes]('"$RELEASE_URL"').'
           fi
 
           DOWNLOADS=""
+
           while IFS=$'\t' read -r name url; do
+
             case "$name" in
-              *Setup*x64*.exe)    label="🪟 Windows x64 NSIS installer (.exe)" ;;
-              *x64*.exe)          label="🪟 Windows x64 portable (.exe)" ;;
-              *arm64*.AppImage)   label="🐧 Linux ARM64 (.AppImage)" ;;
-              *arm64*.tar.gz)     label="🐧 Linux ARM64 (.tar.gz)" ;;
-              *x64*.AppImage)     label="🐧 Linux x64 (.AppImage)" ;;
-              *x64*.tar.gz)       label="🐧 Linux x64 (.tar.gz)" ;;
-              *)                  continue ;;
+
+              *Setup*x64*.exe)
+                label="🪟 Windows x64 NSIS installer (.exe)"
+                ;;
+
+              *x64*.exe)
+                label="🪟 Windows x64 portable (.exe)"
+                ;;
+
+              *arm64*.AppImage)
+                label="🐧 Linux ARM64 (.AppImage)"
+                ;;
+
+              *arm64*.tar.gz)
+                label="🐧 Linux ARM64 (.tar.gz)"
+                ;;
+
+              *x64*.AppImage)
+                label="🐧 Linux x64 (.AppImage)"
+                ;;
+
+              *x64*.tar.gz)
+                label="🐧 Linux x64 (.tar.gz)"
+                ;;
+
+              *)
+                continue
+                ;;
+
             esac
+
             DOWNLOADS="${DOWNLOADS}[${label}](${url})"$'\n'
-          done < <(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | [.name, .url] | @tsv')
 
-          if [ -z "$DOWNLOADS" ]; then DOWNLOADS="_No build assets were attached to this release._"; fi
+          done < <(
+            gh release view "$GITHUB_REF_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json assets \
+              --jq '.assets[] | [.name, .url] | @tsv'
+          )
 
-          PAYLOAD=$(jq -n \
-            --arg username "NekoSuneAPPS Release" \
-            --arg avatar "$ICON_URL" \
-            --arg title "NekoSuneAPPS v${VERSION}" \
-            --arg url "$RELEASE_URL" \
-            --arg desc "$DESC" \
-            --arg downloads "$DOWNLOADS" \
-            --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{
-              username: $username,
-              avatar_url: $avatar,
-              embeds: [{
-                title: $title,
-                url: $url,
-                description: $desc,
-                color: 9055202,
-                fields: [{ name: "📦 Downloads", value: $downloads, inline: false }],
-                footer: { text: "NekoSuneAPPS", icon_url: $avatar },
-                timestamp: $ts
-              }]
-            }')
+          if [ -z "$DOWNLOADS" ]; then
+            DOWNLOADS="_No build assets were attached to this release._"
+          fi
 
-          curl -sS -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
+          PAYLOAD=$(
+            jq -n \
+              --arg username "NekoSuneAPPS Release" \
+              --arg avatar "$ICON_URL" \
+              --arg title "NekoSuneAPPS v${VERSION}" \
+              --arg url "$RELEASE_URL" \
+              --arg desc "$DESC" \
+              --arg downloads "$DOWNLOADS" \
+              --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              '{
+                username: $username,
+                avatar_url: $avatar,
+                embeds: [{
+                  title: $title,
+                  url: $url,
+                  description: $desc,
+                  color: 9055202,
+                  fields: [{
+                    name: "📦 Downloads",
+                    value: $downloads,
+                    inline: false
+                  }],
+                  footer: {
+                    text: "NekoSuneAPPS",
+                    icon_url: $avatar
+                  },
+                  timestamp: $ts
+                }]
+              }'
+          )
+
+          curl \
+            -sS \
+            -H "Content-Type: application/json" \
+            -X POST \
+            -d "$PAYLOAD" \
+            "$DISCORD_WEBHOOK_URL"
