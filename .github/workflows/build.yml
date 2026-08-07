@@ -16,8 +16,7 @@ jobs:
     # Self-hosted Ubuntu AMD64 runner.
     # Windows x64 is cross-built using Wine/NSIS.
     # Linux ARM64 is cross-built by electron-builder.
-    runs-on: [self-hosted, Linux, X64]
-
+    runs-on: self-hosted
     timeout-minutes: 75
 
     strategy:
