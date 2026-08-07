@@ -22,9 +22,25 @@
 // environment doesn't have. If something in the overlay-specific calls is
 // wrong, expect to debug it together against a real headset.
 
-const koffi = require('koffi')
+// koffi is loaded LAZILY (see getKoffi below), never at require-time. Merely
+// requiring koffi immediately LoadLibrary's its native koffi.node addon, and
+// this module is required at startup by main.js via vrOverlayController - so
+// a top-level require meant every user did a native addon load on every
+// launch just to have the VR Overlay *available*, even with no headset and
+// no SteamVR. If that native load faults (corrupted/AV-quarantined .node,
+// ABI mismatch, missing from asarUnpack) it takes the whole app down before
+// any window exists, with a bare Windows "0xc0000005" access-violation
+// dialog and no JS stack. Deferring it means a broken koffi can only ever
+// break the VR Overlay feature itself, which already degrades gracefully.
+// Same lazy pattern already used for ffmpeg-static and vrnotications.
 const fs = require('fs')
 const path = require('path')
+
+let koffi = null
+function getKoffi () {
+  if (!koffi) koffi = require('koffi')
+  return koffi
+}
 
 const EVRApplicationType = { Overlay: 2 }
 
@@ -55,7 +71,7 @@ function loadLibrary () {
   if (lib) return lib
   const dllPath = findOpenVrDll()
   if (!dllPath) throw new Error('SteamVR is not installed (openvr_api.dll not found)')
-  lib = koffi.load(dllPath)
+  lib = getKoffi().load(dllPath)
 
   fn.VR_InitInternal = lib.func('intptr_t VR_InitInternal(_Out_ int *peError, int eApplicationType)')
   fn.VR_ShutdownInternal = lib.func('void VR_ShutdownInternal()')
@@ -77,6 +93,7 @@ function loadLibrary () {
 // SetOverlayWidthInMeters, SetOverlayTransformAbsolute, SetOverlayFromFile)
 // get a real typed callback prototype; everything else is an opaque pointer.
 function buildOverlayStructDef () {
+  const koffi = getKoffi()
   const p = 'void *' // opaque function pointer placeholder for methods we never call
   return {
     FindOverlay: p,
@@ -167,6 +184,7 @@ function getOverlayTable () {
   const ptr = fn.VR_GetGenericInterface('IVROverlay_026', errPtr)
   if (!ptr) throw new Error(`Could not get the SteamVR overlay interface (error ${errPtr[0]})`)
   const structDef = buildOverlayStructDef()
+  const koffi = getKoffi()
   const StructType = koffi.struct('VR_IVROverlay_FnTable', structDef)
   const PtrType = koffi.pointer(StructType)
   overlayTable = koffi.decode(ptr, PtrType, '*')

@@ -36,11 +36,9 @@ const $ = id => document.getElementById(id)
 ;(function moveTranslationCards () {
   const target = $('translationCards')
   if (!target) return
-  ;['aiProvider', 'translatorProvider'].forEach(id => {
-    const el = $(id)
-    const card = el && el.closest('.card')
-    if (card) target.appendChild(card)
-  })
+  const el = $('translatorProvider')
+  const card = el && el.closest('.card')
+  if (card) target.appendChild(card)
 })()
 
 ;(function moveTonToolCards () {

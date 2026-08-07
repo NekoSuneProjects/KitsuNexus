@@ -5,6 +5,55 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.68] - 2026-08-07
+
+### Added
+- **New AI tab — AI features now live in one place.** The IntelliChat (AI provider) settings and
+  the Voice Assistant were previously split across two unrelated tabs: IntelliChat was defined in
+  Settings but silently relocated at runtime onto the Translation tab, and the Voice Assistant sat
+  on the Translation tab next to the TTS/STT/OCR cards despite not being a translation feature.
+  Both now live on a dedicated **AI** tab, so configuring the AI provider and the assistant that
+  uses it happens in one spot. Translation keeps TTS, Desktop STT, OCR and the Translator.
+
+### Changed
+- **Sidebar regrouped into meaningful sections.** The nav previously dumped 25 of its buttons
+  under a single "VRChat" heading, with unrelated items ("Social" holding Translation, OAuth) in
+  the wrong group. It's now split into **VRChat**, **Friends & Social**, **Avatars & Media**,
+  **AI & Speech**, **Games**, **Tools**, **Integrations** and **General**, so each feature sits
+  under a heading that describes it. No tabs were removed or renamed — only regrouped and
+  reordered. (Anyone who has drag-reordered their sidebar keeps their saved order; the new AI
+  button appends to the end.)
+- **Tools and Games are now their own sidebar categories.** Tools and Terrors were both sitting in
+  the "General" catch-all next to Settings/Docs/About/OSC Log, which buried them. **Tools** is now
+  its own heading holding Tools, VRChat Tools, OSC Apps and AudioLink — the utility tabs,
+  previously scattered between "General", "Integrations" and "VRChat". **Games** is its own
+  heading for Terrors of Nowhere, so game-specific pages have somewhere to live as more are added.
+- **Heart Rate and Weather moved to Integrations.** Both were listed under "VRChat", but neither
+  is a VRChat feature — they pull from external services (Pulsoid and the weather API) and feed
+  the result into VRChat, which is exactly what the other Integrations tabs do. Integrations now
+  holds Live, Discord, OAuth Accounts, Heart Rate, Weather and the OBS Overlay (the last moved out
+  of "General"), leaving **General** for Stats, Settings, Docs, About and OSC Log, and **VRChat**
+  for the tabs that actually drive VRChat itself.
+
+### Fixed
+- **Possible "Exception Processing Message 0xc0000005" crash dialog on launch.** The VR Overlay's
+  `koffi` FFI binding was imported at the top level of `modules/vr/overlay/openvrOverlay.js`,
+  which is loaded at startup by `main.js` through `vrOverlayController`. Requiring `koffi` itself
+  immediately `LoadLibrary`s its native `koffi.node` addon, so **every** user performed a native
+  addon load on **every** launch just to have the VR Overlay available — with no headset and no
+  SteamVR needed to trigger it. If that native load faulted (a corrupted or antivirus-quarantined
+  `.node`, an ABI mismatch, or the binary missing from the packaged build) it took the whole app
+  down before any window existed, surfacing only as a bare Windows access-violation dialog with
+  no JS stack to diagnose. `koffi` is now loaded lazily on first actual VR Overlay use, matching
+  the existing lazy pattern used for `ffmpeg-static` and `vrnotications`, so a broken `koffi` can
+  now only ever disable the VR Overlay feature itself instead of preventing startup.
+- **Packaging: koffi's native binary is now explicitly unpacked from the asar.** `asarUnpack`
+  listed `node_modules/koffi/**/*`, but koffi 3.x ships its actual native binary in a separate
+  `@koromix/koffi-win32-x64` package, which was only being unpacked by electron-builder's
+  automatic `.node` detection rather than by intent. Added `node_modules/@koromix/**/*` so a
+  future koffi restructure can't silently reintroduce the "can't dlopen from inside app.asar"
+  bug that was already fixed once in 1.0.64.
+
 ## [1.0.67] - 2026-08-06
 
 ### Fixed

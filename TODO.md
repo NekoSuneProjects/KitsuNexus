@@ -5,6 +5,9 @@ Feature-parity checklist toward **VRCX** + **VRCNext**, our own version. Sources
 
 Legend: `[x]` done · `[~]` partial · `[ ]` todo · ⚠️ technical blocker.
 
+VRCNext-specific gaps confirmed from the [VRCNext](https://github.com/shinyflvre/VRCNext) repo
+are tracked in the category sections below, not listed separately.
+
 ## 🚨 ALWAYS: Optimise the app (it's laggy)
 - [~] **Performance pass — top priority.** App feels laggy. Investigate:
   - [x] Virtualise long lists — rail sections now capped at 150 rows (+N more note); paged tabs
@@ -30,505 +33,50 @@ Legend: `[x]` done · `[~]` partial · `[ ]` todo · ⚠️ technical blocker.
 ---
 
 ## ✅ Already done (for reference)
+
+Shipped feature list (compact). Detailed write-ups and fix narratives live under each
+category's section below.
+
+### Friends & social
 - [x] Friend list + right panel (Same World / In-Game / On Web / Offline, collapsible)
 - [x] Friend Den, Event Scout (multi-group), Pawprints (per-world time)
-- [x] Unified **Search** (users/worlds/groups) + **paste ID/URL** loader
 - [x] **Profile modal**: Info (badges), Groups, Mutuals (friends+groups), Content, Favs
 - [x] Social actions: Add Friend↔Unfriend, Invite, Request Invite, **Boop**, Favorite
-- [x] World + Group **detail modals**; clickable cards everywhere
-- [x] **History (SQLite)**: player join/leave, friend add/remove, world visits
 - [x] **Auto-Greeter** (auto-accept friend requests, all/allow-list)
+
+### Search & data
+- [x] Unified **Search** (users/worlds/groups) + **paste ID/URL** loader
+- [x] **History (SQLite)**: player join/leave, friend add/remove, world visits
+
+### Worlds / Avatars / Groups
+- [x] World + Group **detail modals**; clickable cards everywhere
+
+### Discord
 - [x] Discord Rich Presence (world + HR + song; buttons auto-drop over IPC)
 - [x] **Pinned Discord Rich Presence Application ID to `1534208250046578790`**, no longer
   user-editable — disabled the Discord Application ID field in the Discord tab and force the
   fixed ID in `renderer.js` and `main.js`'s `discord:start` handler regardless of saved config.
-- [~] **Discord Activity (VRChat status panel) + official shared Discord bot.** New standalone
-  backend, own package.json/Docker, deployed separately — never bundled into the app — lives on
-  its own branch in this same GitHub repo
-  ([`feature/discord-backend-server`](https://github.com/NekoSuneProjects/NekoSuneAPPS/tree/feature/discord-backend-server)),
-  not as a subfolder here. It holds the shared bot token and OAuth client secret, which can
-  never live in a distributed Electron app. Backend + Electron-side code (identity login,
-  official-bot mode, status push) are implemented and locally verified (curl against the
-  running backend, `node --check`/require-resolution on every changed file). Defaults to the
-  official `https://nekosuneappsvrc.nekosunevr.co.uk` deployment (`DEFAULT_NEKOSUNE_BACKEND_URL`
-  in `main.js`), but self-hosters can override it via the Backend URL field on the Voice Bot
-  card (`nekosuneBackendUrl` setting) to point at their own instance instead. **Not deployed by
-  this session** — still needed before this works end to end: actually deploy that official
-  host, fill in that branch's `.env` (bot token, OAuth client secret, JWT secret), register the
-  OAuth redirect + Activities URL Mapping in the Developer Portal for app
-  `1534208250046578790`, and get
-  Activities enabled for that app. See that branch's `README.md` for the full one-time setup
-  checklist.
-- [x] **Fixed: Discord Rich Presence's elapsed timer reset on every status change** instead of
-  showing real uptime. The code read a `startTime` property directly off `discord-rpc`'s
-  `Client` object, which doesn't exist at all (confirmed against the library's own source) - so
-  the timestamp anchor was always `undefined`, and Discord fell back to its own "time since last
-  update" display, which recalculates on every single presence push. Now anchors to a real
-  `Date.now()` taken once on connect, reused for every update after. Verified with a mocked
-  Discord client: identical timestamp across multiple simulated status changes.
-- [x] **Fixed: Multi-line chatbox's Now Playing line never showed progress/duration**, only the
-  bare song name - even though `{songbar}`/`{songtime}` were already fully working tokens for
-  Status presets. `chatboxComposer.js`'s hardcoded `nowPlaying` line just never referenced them.
-  Now appends the progress bar + elapsed/duration when a source reports one, falls back to just
-  the song name when it doesn't (e.g. some sources don't report duration at all).
+- [x] DiscordOSC, Discord voice bot
+
+### Media
+- [x] Photo Relay (screenshots→Discord), Soundpad
+
+### System & settings
 - [x] VRChat auto-status (login + 2FA), Radar, Weather, VRChat Tools (yt-dlp/cache)
 - [x] Heart rate (Pulsoid + HypeRate) + session analytics
-- [x] Param Lab (OSC), Photo Relay (screenshots→Discord), Soundpad, SpotiOSC, DiscordOSC, Discord voice bot
+- [x] Param Lab (OSC), SpotiOSC
 - [x] Auto-launch / start-minimized / per-feature auto-start
+
+### UI
 - [x] Green UI, icon rail, notifications flyout, auto seasonal themes, hidden scrollbars
 
 ---
 
-## 🔜 Next day — VRCX parity gaps
+## 🤖 AI
 
-### Activity & logging
-- [x] **Video/media link tracking** — video URLs parsed from the log → History
-- [x] **Name-change tracking** — friend renames logged to History (name_change)
-- [x] **Activity heatmap** — day×hour event heatmap on the History page
-- [x] **Instance join/leave history** — enter + leave-with-duration logged to History
-- [x] **GameLog** — join/leave/world (w/ duration)/friend/name-change/video/**portals**/invites/group events
+The voice assistant and its LLM command interpreter. STT/TTS engines it calls live in
+the Speech section below; this section is the AI brain + assistant behaviour.
 
-### Friends & social
-- [x] **VRC Notes editor** — read + write your note on a user (profile Info tab)
-- [x] **Social status presets** — save/apply status + statusDescription combos (Profile Editor)
-- [x] **Last-seen / time-together** — shown on the profile Info tab (from History)
-- [x] **Block / mute** — toggle on profiles + a Blocked/Muted list (Settings) with Remove
-- [x] **Trust/feedback view** — visual trust ladder (Visitor → New User → User → Known User → Trusted User) with current level highlighted, shown in the profile modal info tab
-
-### Search & data
-- [x] **Local quick-search** — instant offline friend search on the Search page
-- [x] **Avatar search** — via the Avatars page (provider-based)
-- [x] **Favorites backup** — export favorite worlds + friends to JSON; import re-adds them via the API (avatar favs not yet included — no dedicated API endpoint)
-- [x] **Data export/import** — settings + history to JSON
-
-### Media
-- [ ] **Screenshot metadata** — embed world/instance/players into the PNG (VRChat picture metadata), and read it back in a gallery
-- [x] **Media Library** — VRChat screenshot gallery (open on click); date/world filters todo
-- [ ] **Avatar/world image upload** management (without Unity) — advanced, optional
-
-### System
-- [x] **VRChat server status** — online-user count in the top bar (poll /visits)
-- [x] **Configured Start** — launch companion apps (+ optional VRChat)
-- [x] **Data export/import** — settings + history to JSON
-- [x] **Crash recovery / auto-rejoin** — opt-in; relaunches last instance if VRChat closes
-- [x] **Fixed: auto-rejoin treated every normal VRChat close as a crash.** It only checked "is
-  VRChat.exe still running", which is equally true after a real crash and after just closing the
-  game normally - so it couldn't actually tell the two apart, and always assumed the worst. Now
-  cross-checks Windows' own crash reporter (WER): a real crash (unhandled exception, access
-  violation, etc.) always logs an "Application Error" event (Application log, Event ID 1000) for
-  the crashing process, a normal quit never does. Cross-checked this against 26 real historical
-  VRChat logs pulled from the user's own backup: **none contained an actual engine/native crash
-  dump** — every "abrupt-looking" ending was just a routine, non-fatal in-world Udon script
-  exception (`NullReferenceException` mid-EXTERN-call, common and harmless) — and VRChat's own
-  clean-quit log marker (`VRCApplication: HandleApplicationQuit`) only appeared in 12 of the 26,
-  confirming that "the log doesn't end cleanly" alone (the other heuristic considered) would have
-  kept false-positiving on more than half of them, reproducing the exact bug reported. Verified
-  both directions with a real, unmocked Windows Event Log query: correctly silent with no crash
-  event present, and correctly fires the rejoin when a matching event is simulated.
-- [x] **Auto-rejoin now uses VRChat's own `vrchat://launch?id=...` protocol handler** (same
-  mechanism VRCX and other community tools use) instead of only the vrchat.com web page, which
-  just prompts the browser to hand off to the client anyway - `vrchat://` launches directly.
-  Confirmed for real against this machine's actual VRChat install:
-  `HKCR\vrchat\shell\open\command` exists and points at VRChat's own `launch.exe`. Falls back to
-  the web link automatically if that registration isn't present. Verified both branches with the
-  real (unmocked) registry check plus mocked process/event state for the crash-detection side.
-- [x] **Custom themes** — `themeSelect` dropdown + `uiTheme` setting; 30-min recheck; `blackgreen` default; seasonal events always win
-- [ ] **Registry tools** — VRChat registry backup/restore (Windows registry under VRChat)
-- [ ] **Multiple dashboards / customizable widgets** (VRCX-style configurable panels)
-
-### Group alerts (requested)
-- [x] **Group alerts** — polls watched groups' posts **and events** → toast + History
-- [x] **Notifications** — rich (invite world+link, boop, requestInvite, group), **cached in SQLite**
-  until accepted/dismissed; top-right flyout + **Notify sidebar tab**; toast on new
-
----
-
-## 👻 Terrors of Nowhere
-
-- [x] **Read ToN directly from the VRChat output log (ToNSaveManager now OPTIONAL).**
-  `modules/integrations/ton/tonLogReader.js` tails the newest `output_log_*.txt` and parses
-  save codes (`[START]…[END]`), round type + map (`This round is taking place at …`),
-  terror IDs (`Killers have been set - …`), deaths (`You died.`), round end
-  (`Verified Round End`), stuns and damage. Runs alongside the WS; drives live state when
-  the WS isn't connected. Captured save codes are auto-decoded to achievements and marked
-  on the board (so achievements stay current without ToNSaveManager).
-- [x] ToN UI: connect card relabelled — ToNSaveManager is **optional**; the log reader is
-  the default.
-- [x] **Terror names from killer IDs** — `tonLogReader.js` now looks up each ID in
-  `tonData.get().terrors` (the roster fetched from terror.moe, ordered by internal ID);
-  falls back to `Terror #N` if the cache is empty or the index is out of range.
-- [ ] **Lifetime stats from the log** — the log only has the *current session*, so
-  all-time rounds/deaths/etc. still need ToNSaveManager or a decoded save code. Session
-  counters work from the log; consider deriving lifetime totals from a decoded save.
-- [ ] **Catch up historical rounds/saves** from the log on first read (currently the
-  initial full-log pass is suppressed to avoid flooding history; consider importing the
-  session's past save codes as backups on startup).
-
-## ℹ️ About page
-
-- [x] About page — app info, NekoSuneVR creator, version, links, update check, contributors
-  auto-detected from the GitHub API.
-- [ ] **Deeper collaborator / collab-code auto-detection** — beyond GitHub contributors:
-  parse `Co-Authored-By:` trailers from git history and any in-source `@author`/credit
-  comment markers, and surface named collaborations on the About page.
-- [x] **Supporters card** — Patreon/Ko-fi supporters shown on the About page with Discord avatar
-  (animated .gif for Nitro users, static .png otherwise, matching Discord's own rules exactly)
-  and name-on-hover, linking out to the general Patreon/Ko-fi pages
-  (`patreon.com/c/nekosunevr`, `ko-fi.com/nekosunevr`), plus a note pointing supporters who
-  haven't linked their Discord to `linkup.nekosunevr.co.uk` yet so they show up too. Fetched from
-  main.js (`app:supporters` IPC) to avoid renderer CORS restrictions, fails soft to "could not
-  load" if the linkup site is unreachable.
-  - **New endpoint on the separate NekoSuneLinkupSite repo**
-    (`D:\DEV\NekoSuneVRAPPS\Websites\NekoSuneLinkupSite\SocialLinkUpOnly\api\publicSupporters.js`,
-    registered as `GET /api/supporters`): public, no API key at all (by design — a key embedded
-    in a shipped desktop app isn't actually secret once someone unpacks it, so a genuinely public
-    read-only endpoint is the correct shape here, not a leakable one). Reuses the site's existing,
-    already-tested supporter-status logic (`services/supporterStatus.js`,
-    `services/discordapi.js`) rather than re-deriving "is this person currently supporting"
-    itself. Returns only `discordId`, `username`, `platform`, `avatarUrl` - no email, no payment
-    amounts/dates, no internal ids, and banned users are excluded.
-  - **Found and fixed a real staleness bug while building this**: the site's existing
-    `loadPatreonSupporterMap()` only writes `LinkedAccount.isSupporting` back to the database for
-    patrons still found in the live Patreon fetch - someone who fully churned (removed from
-    Patreon entirely, not just downgraded) never gets their stale `isSupporting: true` cleared in
-    the DB by that function. The new endpoint doesn't trust that DB flag for its final decision;
-    it uses the freshly-computed status map the function actually returns instead (which does
-    default everyone to inactive first). Verified with a mocked test covering all four cases:
-    active Patreon included, churned-but-DB-stale Patreon excluded, active Ko-fi included,
-    inactive Ko-fi excluded.
-  - **Not deployed by this session** — implemented and tested in isolation (mocked DB/Discord/
-    Patreon calls, since this is a live production site with a real database I don't have local
-    access to), but the linkup site is a separate repo/deployment the user manages; needs their
-    own review + deploy before the About page's supporters card will show real data instead of
-    "could not load supporters."
-- [x] **In-app update installs, via a standalone updater app** — went through a few iterations
-  this session (in-app Electron download → a `/passive` PowerShell+msiexec helper → the final
-  design below) before landing on a fully separate helper app, since the thing doing the
-  replacing can't live inside the files being replaced.
-  - **`updater/`** is its own small, independent Electron app (own `package.json`,
-    `main.js`/`preload.js`/`index.html`/`renderer.js`) with a custom branded, animated UI (a
-    floating/glowing logo, shimmering gradient progress bar) — not the plain default installer
-    UI. "Update available" → "Download & install" now just hands the release asset URL to this
-    helper and quits; the helper does everything else visibly: download with a real progress bar,
-    install, relaunch.
-  - **Packaged as `updater.exe`** on Windows specifically (an electron-builder `portable`
-    target — a genuine single-file standalone executable, not a `.ps1` script), built fresh by CI
-    for each platform and bundled directly into **both** the NSIS `Setup.exe` and the `.msi` via
-    `extraFiles`/`extraResources` (`.github/workflows/build.yml` builds `updater/` before the main
-    app on every OS leg and normalizes its output to a fixed path/name first, so the main build's
-    config doesn't need to know electron-builder's per-arch output folder naming).
-  - **Cross-platform**: Windows runs the `.msi` via `msiexec` (no longer silent - runs the normal
-    installer UI, not `/passive`, so it's clearly visible something is installing); Mac extracts
-    the release `.zip` and swaps it in for the existing `.app` bundle (`ditto`, ditto - macOS
-    built-in, not a bundled tool); Linux replaces an AppImage in place, or opens a `.deb` with the
-    desktop's own installer since that needs root this helper can't safely provide unattended.
-  - **Verified on Windows**: built the actual `updater.exe` via electron-builder, ran it for real
-    against a live download URL and a fake install target, confirmed it downloads a real file
-    with correct progress mechanics, correctly waits out (or skips) the parent PID, and reaches
-    the actual `msiexec` install step. Found and fixed a real bug this way: passing PID `0`
-    (a special "current process group" value to `process.kill`, not a real caller PID) could hang
-    the wait-for-exit loop forever.
-  - **Mac and Linux paths are NOT verified against real hardware** - implemented from documented,
-    standard platform behavior (this dev environment is Windows-only), flagged honestly rather
-    than claimed tested.
-  - Considered and explicitly declined (per discussion): a full Discord/Squirrel-style
-    versioned-folder install architecture (`Update.exe` + `app-X.Y.Z/` folders + a thin launcher
-    stub) — that's a genuinely different packaging pipeline (Squirrel.Windows/electron-winstaller)
-    that would replace the working MSI/NSIS build entirely; kept the existing, proven MSI/NSIS
-    install and added the standalone updater on top of it instead.
-- [x] **Fixed: updater failed with `EPERM` trying to download into the install directory.** It
-  tried the install directory first (e.g. `Program Files\NekoSuneAPPS\`) and only fell back to
-  temp if `fs.accessSync(dir, W_OK)` said that wasn't writable — but that check isn't a reliable
-  predictor of real write access on Windows, confirmed by an actual `EPERM` in the wild despite it
-  passing. Now always downloads to temp, regardless.
-- [x] **Fixed: updater could fail with an opaque, unrecoverable "Command failed: ...Setup-x.x.x.exe
-  /S"** in the wild ("already running" style failure) — it only waited for the old app's PID to
-  disappear plus a flat 500ms delay before running the silent NSIS install once, with no retry
-  and no captured stderr/exit code. Now polls whether the install target file is actually
-  unlockable (not just "the pid is gone"), retries the silent install up to 3× with backoff,
-  surfaces the real exit code/stderr, and the updater window shows **Retry** /
-  **Open download folder** buttons on failure instead of a dead-end static error. The updater
-  helper also has its own single-instance lock so a previously stuck attempt can't block a new one.
-  (Note: the block above documenting "Windows runs the .msi via msiexec" is stale — 1.0.61
-  switched Windows installs to the NSIS `Setup.exe` via `/S`, msiexec/`.msi` is no longer what's
-  actually run; flagging here rather than silently rewriting that history entry.)
-
-## 🥽 VR Overlay (experimental — this session)
-- [x] **Mirrors the app into a floating VR panel via SteamVR** — `modules/vr/overlay/`
-  (`openvrOverlay.js` for the raw OpenVR FFI bindings, `vrOverlayController.js` for the
-  screenshot-and-push loop). Settings → "VR Overlay" card, Windows + SteamVR only. First slice is
-  **view-only** — see the app floating in your headset, not yet clickable — click-through
-  (controller-to-mouse translation) is a planned follow-up once this base mirror is confirmed
-  working on real hardware.
-- [x] **Talks to OpenVR via `koffi` (FFI), not a compiled native addon** — there's no pure-JS way
-  to call a C++ SDK, and koffi needs no build step (lower AV-flag/CI-fragility risk than
-  node-gyp, the same reasoning that ruled out `node-global-key-listener` earlier in this
-  project). Chosen explicitly over the alternative (a small native Node addon) after discussing
-  the tradeoff.
-- [x] **Function signatures and the `VR_IVROverlay_FnTable` struct layout are transcribed
-  directly from Valve's own `openvr_capi.h`** (OpenVR's official C-compatible API surface,
-  published specifically for FFI bindings from other languages) — sourced from a copy bundled
-  inside an old, otherwise-unrelated npm package (`ovrjs`), not guessed or hallucinated. Only the
-  methods actually called (`CreateOverlay`, `DestroyOverlay`, `ShowOverlay`, `HideOverlay`,
-  `SetOverlayWidthInMeters`, `SetOverlayTransformAbsolute`, `SetOverlayFromFile`) get a real typed
-  callback prototype; every other field in the 60+-method struct is an opaque pointer purely to
-  keep the byte offsets correct, since every field is pointer-sized regardless of which function
-  it points to.
-- [x] **Verified live against a real, running SteamVR install on this dev machine**: DLL discovery
-  (via the Steam install path in the registry, with hardcoded fallbacks), `VR_InitInternal`,
-  `VR_GetGenericInterface`, and error-description lookups all behave exactly as documented.
-  Confirmed that `VRApplication_Utility` can initialize without a headset but is explicitly denied
-  the `IVROverlay` interface ("not available to utility applications"), while
-  `VRApplication_Overlay` correctly fails with "Hmd Not Found" when no headset is detected — and
-  that failure surfaces as a clear, actionable error message instead of a crash. Also confirmed
-  the full 64-field `VR_IVROverlay_FnTable` struct definition is valid and correctly sized (512
-  bytes) via koffi.
-- [ ] **UPDATE: confirmed broken on real hardware, and the straightforward fix crashes.** A real
-  headset test (via a partner) hit `"table.CreateOverlay is not a function"` — the
-  `koffi.decode(ptr, PtrType, '*')` call wasn't actually dereferencing the raw OpenVR interface
-  pointer into a usable struct. Reproduced this safely using `IVRSystem` (works without a headset)
-  as a stand-in, and found the correct-looking fix (`koffi.decode(ptr, StructType)` to read the
-  struct, then `koffi.decode(rawFnPtrField, protoType)` to get a callable function from each
-  field) - but **actually calling the resulting function segfaults the whole process**, reproduced
-  three times through slightly different argument-marshaling approaches. This is a real,
-  unresolved problem with calling through a struct-of-raw-function-pointers ("vtable") via koffi,
-  not yet a proven-safe pattern. Left the current safe-but-non-functional error in place rather
-  than ship something that crashes. Needs real investigation (koffi's own examples/issue tracker,
-  or reconsidering the FFI approach) before this feature can actually work.
-- [ ] **Follow-ups, not done this pass**: click-through interactivity (translating controller
-  laser-pointer intersection into real mouse events on the mirrored UI); the long-standing "VR
-  gear battery" placeholder (`modules/vrchat/vr/vrBattery.js`, previously blocked on "no
-  well-maintained pure-Node OpenVR binding") can now likely be wired for real using the same
-  koffi/openvr_capi.h approach and an `IVRSystem` struct, since that blocker no longer applies —
-  once the vtable-calling crash above is actually resolved.
-
-## 📦 Release pipeline
-- [x] **Removed macOS builds** — VRChat doesn't run on Mac, so a Mac build of a VRChat companion
-  app wasn't serving a real purpose. Removed the `macos-latest` matrix leg and its updater-helper
-  build step from `.github/workflows/build.yml`, and the `mac` electron-builder config from both
-  `package.json` and `updater/package.json`. Windows and Linux builds unaffected — verified both
-  still built and released successfully.
-- [x] **VirusTotal scanning in the release pipeline** — CI submits the Windows installers
-  (`.exe`/`.msi`) to VirusTotal after they build and links the scan report in the release notes,
-  so "installers are unsigned, SmartScreen may warn" doesn't have to be taken purely on faith.
-  Handles the large-file upload flow (VirusTotal's direct `/files` endpoint caps at 32MB; the
-  NSIS installer is bigger, so it goes through `/files/upload_url` instead) and polls for the
-  analysis to finish (up to ~5 minutes) before summarizing flagged-engine counts with a link to
-  the full report. Opt-in via a `VT_API_KEY` repo/org secret (a free VirusTotal API key) — skips
-  cleanly with no report section in the notes if that secret isn't reachable by this repo.
-
-## 🥽 Requested big features (next session)
-
-### Avatars (own + others)
-- [x] **Avatar detail** — modal with image, author, platforms, performance, wear/favourite
-- [x] **Switch avatar** — Wear button (`PUT /avatars/{id}/select`)
-- [x] **Delete personal avatar** — Delete with Yes/No confirm
-
-### Worlds — create instance + invites
-- [x] **Create instance** (Public / Friends+ / Friends / Invite+ / Invite) via `POST /instances`
-- [x] **Self-invite** + **Invite friends** (picker) + shareable launch link in world modal
-
-### Groups
-- [x] **Invite people to a group** via friend picker
-- [x] Group detail: members, roles, posts, gallery, your permissions
-
-### Shared UI
-- [x] **Friend-picker modal** (searchable, multi-select)
-- [x] **Confirm (Yes/No) modal**
-
-## 🟣 VRCNext-specific (next session)
-Confirmed from the [VRCNext](https://github.com/shinyflvre/VRCNext) repo — gaps not already listed above.
-- [~] **Profile editor (your own)** — status/status-text/bio/pronouns/bio-links done; pfp &amp; banner upload todo
-- [x] **Messenger / message-slot editor** — edit invite & response message slots (Messenger tab)
-- [x] **Multi-Invite** — friend-picker multi-select invite to instance/group
-- [x] **Inventory** — icons / emoji / stickers / prints (with image proxy for auth-gated images)
-- [x] **Avatar browse** — configurable providers (avtrdb + **custom VRCX-style endpoints**) → wear/favourite
-- [x] **Group posts** + **group image gallery** — shown in the group detail modal
-- [x] **Create group instances** — POST /instances type=group + groupAccessType, with world picker (my worlds + favourites) + access/region selectors in the group modal, auto self-invite
-- [x] **Media Library** — local screenshot gallery (folders/metadata filters todo)
-- [x] **Configured Start** — launch companion apps (SlimeVR, VRCFaceTracking, …) + optional VRChat
-- [x] **VRCVideoCacher** — install/update (official release download) + start/stop the local proxy from the VRChat Tools tab (custom URL via `vvcUrl` setting)
-- [ ] **Design customization** — dashboard welcome-screen background + launcher accent colour
-  (note: we intentionally ship fixed green + seasonal; make this opt-in)
-- [x] **Fast-Fetch cache** — TTL cache + in-flight dedupe for user/world/group/friends
-- [x] **Right panel: Favorites section** — favorited friends shown at top of the rail
-- [x] **Crash detect + auto-rejoin** — see System section above (WER Event ID 1000 + `vrchat://` relaunch)
-
-## Our pending clusters (from the build plan)
-
-### VR / heavy ⚠️ (need native or large deps — can't test in sandbox)
-- [ ] **Neko HUD** (VR overlay) — ⚠️ needs native OpenVR overlay binding (same blocker as VR battery). Ship a small C#/C++ OpenVR helper exe and spawn it.
-- [ ] **Playspace Shift** — ⚠️ needs native VR input (grip/stick) — same OpenVR helper.
-- [ ] **VoxBoard** (voice-triggered soundboard) — needs offline speech model (VOSK ~50 MB); add as optional download.
-- [x] **Avatar Sizer** — done via VRChat's *native* OSC height-scaling API (`/avatar/eyeheight` + `/avatar/eyeheightmin`/`max` + `/avatar/eyeheightscalingallowed`), which works on **any** avatar with no avatar-specific exposed parameters needed. `modules/vrchat/osc/avatarScaling.js` + global hotkeys (Settings → Tools → Avatar Scaling) via a PowerShell `WH_KEYBOARD_LL` hook (`modules/vrchat/osc/keyHookPs.js`), only running while the feature is connected or recording a key.
-- [ ] **VR gear battery** — real OpenVR helper to replace the current stub (`modules/vrchat/vr/vrBattery.js`).
-
----
-
-## 🧹 Polish / known limitations
-- [x] Discord RP **buttons** — implemented ("Join World" + "VRChat Profile"); buttons work over local IPC RPC. Note: you can't see your **own** buttons in Discord, only other people viewing your profile can — this is a Discord client limitation, not a code issue.
-- [ ] **Favorites page** (dedicated sidebar) listing worlds/avatars/friends with inline remove (currently add/remove via modals + Favs tab).
-- [~] Friends panel: avatars for **offline** friends now show with logo.png fallback; group-by-favorite and online count badge todo.
-- [x] Rate-limit guard — 429 backoff interceptor + isRateLimited(); every poller skips while rate-limited; stale-cache fallback.
-- [x] Cache profile/world/group lookups (VRCX "Fast Fetch") to cut API calls.
-- [ ] Verify all VRChat write-actions live (favorite tags, requestInvite slots, invite instanceId format).
-- [x] **Fixed: Home tab's VRChat News card could show "Could not load news." with no way to tell
-  why**, and no fallback even if news had loaded fine moments earlier. Direct testing against
-  the live `hello.vrchat.com` RSS feed this session found no reproducible parse/fetch bug — most
-  likely a transient network blip on affected machines — so hardened rather than "fixed" a
-  specific root cause: one retry on failure, real errors logged to console instead of swallowed,
-  and falls back to the last successfully loaded news (marked "(cached)") instead of blanking
-  the card.
-- [x] **Fixed: Weather never actually showed up in the VRChat chatbox** even after enabling it
-  and adding `{weather}` to a Status preset. It wasn't a fetch/data bug — `{weather}` worked as a
-  token, but it had no dedicated Chatbox-tab source row (unlike Now Playing/Stats/Heart Rate),
-  so it could only ever be typed manually into a preset, silently sharing the single rotation
-  slot with every other preset. Added a proper "Weather" row with its own Off/Own line/Rotate
-  toggle in `modules/vrchat/chatbox/chatboxComposer.js` + `renderer.js`'s source grid, and added
-  the missing `{weather}` entry to the "Show all tokens" list.
-- [x] **Fixed: Linux build could freeze into "Not Responding"** using OSCQR/ShazamOSC's
-  capture-source picker — `desktopCapturer.getSources()` (`main.js`) had no timeout and could
-  hang indefinitely under Wayland with no PipeWire portal available, freezing the whole app
-  rather than just erroring. Added a 6s timeout race on both capture-source call sites, enabled
-  Chromium's PipeWire capturer + Ozone auto-detection on Linux startup, and made the IPC handler
-  resolve with an error field instead of rejecting. Also fixed `crashGuard.js` running
-  Windows-only commands (`tasklist`/`reg query`/PowerShell) unconditionally on every platform
-  every 15s with no guard (now a no-op off Windows), added `koffi`'s native binaries to
-  `asarUnpack` (VR Overlay's OpenVR bindings couldn't `dlopen` from inside app.asar on any
-  platform), and gave the Linux electron-builder target the same explicit `files` whitelist
-  Windows already had (previously inherited the broad top-level glob and shipped extra files).
-  **Not verified on real Linux hardware** — this dev environment is Windows-only, so these are
-  targeted fixes for the specific reported symptoms (the exact "Failed to get sources" error
-  message, an actual freeze/hang, and file-based evidence like the `.mount_nekosu` AppImage path
-  in the reporter's screenshot), not a full Linux QA pass.
-
----
-
-## 🎨 Full layout overhaul (feature request)
-- [x] Rebuild the app's overall layout/theme/navigation to match the look and feel of
-  [VRCNext](https://github.com/shinyflvre/VRCNext) — same *layout style*, not the same
-  internal structure/feature set (ours stays different under the hood). Shipped in 1.0.61: wider
-  sidebar with icon+label nav and section headers, Home tab as the default landing page (replaces
-  Chatbox), VRChat news feed pulled from hello.vrchat.com as the homepage news card, welcome hero,
-  metric tiles, Quick Access shortcuts, Recently Visited Worlds.
-- [x] **VRChat Quick Launch tab** (MVP) — multi-profile simultaneous VRChat launching via
-  VRChat's `--profile=N` flag, matching the multi-account launcher tooling VRCX/VRCNext-adjacent
-  community tools provide. See `modules/vrchat/launcher/quickLaunch.js` + the `#quicklaunch` tab.
-  Covers: profiles (add/remove/VR toggle/description), Debug GUI / SDK log / UDON log / max FPS /
-  free-text custom params, Instance info (Create/Join/Local/None, Create shares one instance
-  across every profile launched together), Launch / Launch-all (2s stagger). Auto-detects the
-  VRChat exe via the registered `vrchat://` protocol handler, with a manual Browse override.
-  - [x] **Per-instance OSC ports** — turned out not to need a proxy at all: VRChat has a real,
-    documented launch flag `--osc=<inPort>:<outIP>:<outPort>` (confirmed against
-    docs.vrchat.com), so each profile N just gets passed `--osc=9000+2N:127.0.0.1:9001+2N`
-    directly (profile 0 = VRChat's own defaults, 9000/9001). `renderer.js`'s `qlSyncOscPorts()`
-    then automatically mirrors every non-default profile's ports into Settings → OSC's existing
-    "extra targets"/"extra receivers" lists (tracked via a `quickLaunchOscManaged` settings key
-    so it only touches entries it added itself, never the user's own manual OSC config) — so
-    Chatbox/AudioLink/avatar-param OSC reaches every launched profile automatically, with no
-    manual port entry needed.
-  - [ ] **Follow-up: MIDI device selection** per profile. Deferred, not started.
-  - [ ] **Follow-up: "Auto-layout"** — automatically tile the launched VRChat windows on screen.
-    Would need raw Win32 window enumeration/positioning (via `koffi`, already a dependency).
-    Deferred, not started.
-
-## 🌍 Localization
-- [x] **i18n foundation** — `modules/i18n/i18n.js` (main) + IPC (`i18n:languages`/`i18n:strings`)
-  + renderer `t()`/`applyLanguage()` sweep (`[data-i18n]` text, `[data-i18n-ph]` placeholders,
-  nav labels via `data-tab`). First-run language picker modal (shown once, if `uiLanguage`
-  setting is unset) + a Settings → Language card for changing it later; switches instantly, no
-  restart. Seeded with **102 languages** (`modules/i18n/locales/*.json`, flat key→string maps,
-  every non-English locale merges over `en.json` so a missing key always falls back to English
-  instead of breaking) — the initial 7 (en, ja, es, ru, pl, nl, de) plus every language
-  requested afterward: ko, zh, fr, ms, no, pt, ar, bn, hi, id, or, qu, sw, ta, ur, vi, wuu, xh,
-  yo, zu, af, sq, am, hy, az, eu, be, bs, bg, my, ca, ceb, ny, co, hr, cs, da, eo, et, fi, fy,
-  ka, el, ha, haw, he, hmn, hu, is, it, jv, kn, kk, km, rw, rn, ky, lo, lv, lt, lb, mk, mg, ml,
-  mt, mi, mr, mn, ne, ps, fa, pa, ro, sr, si, sk, sl, so, su, sv, tl, tg, tt, te, th, bo, ti, to,
-  tr, tk, ug, uk, uz, cy, yi. All 102 files validated for JSON correctness and exact key parity
-  against `en.json` (76 keys each). Several lower-resource languages (Quechua, Oriya, Chichewa,
-  Kirundi, Wu Chinese, Xhosa, Yoruba, Zulu, Hawaiian, Hmong, and a few others) were flagged by
-  the translating passes as worth a native-speaker review — functionally complete but some
-  technical-UI terms are best-effort borrowings rather than fixed conventional terminology.
-- [ ] **Coverage is partial by design** — this pass only tags the sidebar nav, common
-  buttons, and the newly-added Avatar Scaling / Translator / Live Typing / language-picker UI.
-  The rest of the app (300–500+ static strings in `index.html`, 400+ dynamic
-  `setText`/template-literal call sites in `renderer.js`) is still hardcoded English. Sweeping
-  it incrementally (tag more `data-i18n`, wrap more dynamic strings in `t()`) is ongoing work —
-  add more locales here too as requested (a handful more beyond the initial 7 were flagged as
-  wanted).
-
-## 🗣️ Speech / OCR / TTS translation (phase 2 — built this session)
-- [x] **Desktop-audio speech-to-text** — `modules/integrations/osc/stt/desktopSttModule.js`
-  (renderer, reuses the `getDisplayMedia({audio:true})` capture technique from
-  `shazamOscModule.js`) + `modules/ai/speechToText.js` (main). **Both** engines, user-selectable
-  in the Translation tab: cloud (OpenAI/Groq Whisper-compatible `/audio/transcriptions`, sends
-  the raw webm clip directly — no decode needed) and local (`@huggingface/transformers` running
-  a small Whisper model fully offline in WASM, no native binary; renderer decodes the clip to
-  16kHz mono PCM via `OfflineAudioContext` first, since that's the input shape the local model
-  needs). Verified: both npm packages install and load cleanly, tesseract.js's worker + language
-  download works in this environment. **Not verified end-to-end**: the full
-  getDisplayMedia→MediaRecorder→transcribe round-trip needs a real desktop session with actual
-  audio and a live API key — recommend a manual smoke test in the built app.
-- [x] **Bidirectional**: transcribed text runs through the existing Translator
-  (`translateWithSettings`) before being sent to chatbox and/or spoken aloud — same translate
-  step Live Typing uses.
-- [x] **OCR screen-translate** — `modules/integrations/osc/ocr/ocrTranslateModule.js`, same
-  `getDisplayMedia` → canvas capture scaffolding as `oscQrModule.js` with `jsQR` swapped for
-  Tesseract.js `recognize()`. 15 common OCR languages in the picker (English, Japanese, Spanish,
-  Russian, German, French, Chinese, Korean, Arabic, Portuguese, Italian, Dutch, Polish,
-  Ukrainian, Vietnamese) — Tesseract's language codes don't map 1:1 to the app's i18n codes, so
-  this is a separate, smaller list.
-- [x] **Fixed: OCR failed to start with "worker script...must be an absolute path"** in a
-  packaged build. Same root cause as an earlier ffmpeg-static fix this session: tesseract.js
-  computes its worker script path via its own internal `__dirname`, which resolves to a path
-  inside `app.asar`, and `worker_threads` can't load a script from inside an asar archive at all
-  (unlike `require()`/`fs`, which Electron transparently redirects). tesseract.js is already
-  unpacked from the asar (`asarUnpack`); the worker path just needed to actually point there -
-  patched to swap `app.asar` for `app.asar.unpacked` in the computed default. A no-op in dev,
-  where there's no asar at all. Verified by creating and tearing down a real tesseract worker
-  with the fix applied.
-- [x] **TTS output**, `modules/ai/ttsProviders.js`, **15 engines** selectable in the Translation
-  tab, ported from [TTS-Voice-Wizard](https://github.com/VRCWizard/TTS-Voice-Wizard) for feature
-  parity: Windows built-in (SAPI via PowerShell `System.Speech.Synthesis`, text piped over
-  stdin — not interpolated into the command — so spoken text can't break out of the PowerShell
-  command; **verified working**, detected real installed voices and played audio in this
-  environment), TikTok TTS, ElevenLabs, OpenAI TTS, Google Cloud TTS, Azure Cognitive Speech,
-  Amazon Polly (via `@aws-sdk/client-polly` — SigV4 request signing isn't reasonably hand-rolled
-  correctly, so this is the one new npm dependency this pass added), IBM Watson TTS, Deepgram
-  Aura, VoiceForge, UberDuck (multi-step: submit → poll → download), TTS Monster (submit →
-  download), GLaDOS TTS (self-hosted) and Moonbase Voices (self-hosted local app), plus the
-  existing self-hosted Piper/XTTS/other option. All new HTTP-based engines' request shapes were
-  verified against mocked responses matching each vendor's real documented API. **Note**: where
-  the reference project routes an engine through its own paid gateway (Google, IBM Watson,
-  Deepgram all go through a Heroku backend there), this instead calls the real vendor API
-  directly with the user's own credentials — no third-party paywall in between.
-- [x] **Fixed TikTok TTS** — was hardcoded to a single community proxy (`gesserit.co`) which had
-  gone down; now tries a short list of known-working worker proxies in order and checks all the
-  response field names different proxies use (`data`/`audio`/`audioUrl`) instead of just one.
-  Verified live — successfully generated real audio in this environment.
-- [x] **Fixed: TikTok TTS had no voice picker.** The unified TTS card's TikTok engine option
-  had no way to choose a voice at all (always used the hardcoded default). Added a voice select
-  populated from the same list the old standalone TikTok TTS card used, then removed that old
-  standalone card entirely (it was in the Live tab, moved into the Translation tab at runtime,
-  and became fully redundant once the unified card covered the same feature).
-- [x] **TTS output-device picker** — routes `<audio>`-based engines to any enumerated output
-  device via `setSinkId`. Doesn't apply to SAPI/local engines that play through the OS directly.
-- [ ] **Routing TTS into VRChat's mic input** — not solvable in pure software. Windows has no
-  way to expose one app's audio *output* as another app's *microphone input* without some kind
-  of virtual audio device (VB-Cable, Voicemeeter, etc.), which requires installing a driver —
-  there's no way around that one step. If the user installs one themselves, the output-device
-  picker above will route TTS into it, which VRChat can then pick up as a mic.
-- [x] **Fixed packaged-app crash**: "Could not start screen capture — worker script... must be
-  an absolute path" (OCR) and the same class of failure would've hit local Whisper too.
-  `tesseract.js`/`tesseract.js-core` load a `worker_threads` script, and
-  `@huggingface/transformers`'s dependencies (`onnxruntime-node`, `sharp`) load native `.node`
-  binaries — neither can be loaded from inside an asar archive (Node needs a real file on disk
-  for both). Added `build.asarUnpack` in `package.json` for all of these so electron-builder
-  extracts them to `app.asar.unpacked/` instead; Electron then transparently resolves paths into
-  the unpacked location. This only manifests in a **packaged** build, not `npm start` — couldn't
-  be caught by this session's dev-mode smoke tests, only surfaced once actually installed.
-
-## 🤖 Voice assistant (built this session)
 - [x] **Wake-word assistant** — `modules/vrchat/assistant/jarvisAssistant.js` (renderer),
   `modules/ai/assistantBrain.js` (main, LLM-based command interpreter). Listens through an
   actual **microphone** (`getUserMedia`, selectable input device — same enumerateDevices()
@@ -711,7 +259,562 @@ Confirmed from the [VRCNext](https://github.com/shinyflvre/VRCNext) repo — gap
 
 ---
 
+## 🗣️ Speech / STT / OCR / TTS / Translation
+
+Desktop-audio STT, screen OCR, the unified TTS card, and the Translator/Live Typing path they
+all feed into.
+
+- [x] **Desktop-audio speech-to-text** — `modules/integrations/osc/stt/desktopSttModule.js`
+  (renderer, reuses the `getDisplayMedia({audio:true})` capture technique from
+  `shazamOscModule.js`) + `modules/ai/speechToText.js` (main). **Both** engines, user-selectable
+  in the Translation tab: cloud (OpenAI/Groq Whisper-compatible `/audio/transcriptions`, sends
+  the raw webm clip directly — no decode needed) and local (`@huggingface/transformers` running
+  a small Whisper model fully offline in WASM, no native binary; renderer decodes the clip to
+  16kHz mono PCM via `OfflineAudioContext` first, since that's the input shape the local model
+  needs). Verified: both npm packages install and load cleanly, tesseract.js's worker + language
+  download works in this environment. **Not verified end-to-end**: the full
+  getDisplayMedia→MediaRecorder→transcribe round-trip needs a real desktop session with actual
+  audio and a live API key — recommend a manual smoke test in the built app.
+- [x] **Bidirectional**: transcribed text runs through the existing Translator
+  (`translateWithSettings`) before being sent to chatbox and/or spoken aloud — same translate
+  step Live Typing uses.
+- [x] **OCR screen-translate** — `modules/integrations/osc/ocr/ocrTranslateModule.js`, same
+  `getDisplayMedia` → canvas capture scaffolding as `oscQrModule.js` with `jsQR` swapped for
+  Tesseract.js `recognize()`. 15 common OCR languages in the picker (English, Japanese, Spanish,
+  Russian, German, French, Chinese, Korean, Arabic, Portuguese, Italian, Dutch, Polish,
+  Ukrainian, Vietnamese) — Tesseract's language codes don't map 1:1 to the app's i18n codes, so
+  this is a separate, smaller list.
+- [x] **Fixed: OCR failed to start with "worker script...must be an absolute path"** in a
+  packaged build. Same root cause as an earlier ffmpeg-static fix this session: tesseract.js
+  computes its worker script path via its own internal `__dirname`, which resolves to a path
+  inside `app.asar`, and `worker_threads` can't load a script from inside an asar archive at all
+  (unlike `require()`/`fs`, which Electron transparently redirects). tesseract.js is already
+  unpacked from the asar (`asarUnpack`); the worker path just needed to actually point there -
+  patched to swap `app.asar` for `app.asar.unpacked` in the computed default. A no-op in dev,
+  where there's no asar at all. Verified by creating and tearing down a real tesseract worker
+  with the fix applied.
+- [x] **TTS output**, `modules/ai/ttsProviders.js`, **15 engines** selectable in the Translation
+  tab, ported from [TTS-Voice-Wizard](https://github.com/VRCWizard/TTS-Voice-Wizard) for feature
+  parity: Windows built-in (SAPI via PowerShell `System.Speech.Synthesis`, text piped over
+  stdin — not interpolated into the command — so spoken text can't break out of the PowerShell
+  command; **verified working**, detected real installed voices and played audio in this
+  environment), TikTok TTS, ElevenLabs, OpenAI TTS, Google Cloud TTS, Azure Cognitive Speech,
+  Amazon Polly (via `@aws-sdk/client-polly` — SigV4 request signing isn't reasonably hand-rolled
+  correctly, so this is the one new npm dependency this pass added), IBM Watson TTS, Deepgram
+  Aura, VoiceForge, UberDuck (multi-step: submit → poll → download), TTS Monster (submit →
+  download), GLaDOS TTS (self-hosted) and Moonbase Voices (self-hosted local app), plus the
+  existing self-hosted Piper/XTTS/other option. All new HTTP-based engines' request shapes were
+  verified against mocked responses matching each vendor's real documented API. **Note**: where
+  the reference project routes an engine through its own paid gateway (Google, IBM Watson,
+  Deepgram all go through a Heroku backend there), this instead calls the real vendor API
+  directly with the user's own credentials — no third-party paywall in between.
+- [x] **Fixed TikTok TTS** — was hardcoded to a single community proxy (`gesserit.co`) which had
+  gone down; now tries a short list of known-working worker proxies in order and checks all the
+  response field names different proxies use (`data`/`audio`/`audioUrl`) instead of just one.
+  Verified live — successfully generated real audio in this environment.
+- [x] **Fixed: TikTok TTS had no voice picker.** The unified TTS card's TikTok engine option
+  had no way to choose a voice at all (always used the hardcoded default). Added a voice select
+  populated from the same list the old standalone TikTok TTS card used, then removed that old
+  standalone card entirely (it was in the Live tab, moved into the Translation tab at runtime,
+  and became fully redundant once the unified card covered the same feature).
+- [x] **TTS output-device picker** — routes `<audio>`-based engines to any enumerated output
+  device via `setSinkId`. Doesn't apply to SAPI/local engines that play through the OS directly.
+- [ ] **Routing TTS into VRChat's mic input** — not solvable in pure software. Windows has no
+  way to expose one app's audio *output* as another app's *microphone input* without some kind
+  of virtual audio device (VB-Cable, Voicemeeter, etc.), which requires installing a driver —
+  there's no way around that one step. If the user installs one themselves, the output-device
+  picker above will route TTS into it, which VRChat can then pick up as a mic.
+- [x] **Fixed packaged-app crash**: "Could not start screen capture — worker script... must be
+  an absolute path" (OCR) and the same class of failure would've hit local Whisper too.
+  `tesseract.js`/`tesseract.js-core` load a `worker_threads` script, and
+  `@huggingface/transformers`'s dependencies (`onnxruntime-node`, `sharp`) load native `.node`
+  binaries — neither can be loaded from inside an asar archive (Node needs a real file on disk
+  for both). Added `build.asarUnpack` in `package.json` for all of these so electron-builder
+  extracts them to `app.asar.unpacked/` instead; Electron then transparently resolves paths into
+  the unpacked location. This only manifests in a **packaged** build, not `npm start` — couldn't
+  be caught by this session's dev-mode smoke tests, only surfaced once actually installed.
+
+---
+
+## 💬 Chatbox & status
+
+- [x] **Fixed: Multi-line chatbox's Now Playing line never showed progress/duration**, only the
+  bare song name - even though `{songbar}`/`{songtime}` were already fully working tokens for
+  Status presets. `chatboxComposer.js`'s hardcoded `nowPlaying` line just never referenced them.
+  Now appends the progress bar + elapsed/duration when a source reports one, falls back to just
+  the song name when it doesn't (e.g. some sources don't report duration at all).
+- [x] **Fixed: Weather never actually showed up in the VRChat chatbox** even after enabling it
+  and adding `{weather}` to a Status preset. It wasn't a fetch/data bug — `{weather}` worked as a
+  token, but it had no dedicated Chatbox-tab source row (unlike Now Playing/Stats/Heart Rate),
+  so it could only ever be typed manually into a preset, silently sharing the single rotation
+  slot with every other preset. Added a proper "Weather" row with its own Off/Own line/Rotate
+  toggle in `modules/vrchat/chatbox/chatboxComposer.js` + `renderer.js`'s source grid, and added
+  the missing `{weather}` entry to the "Show all tokens" list.
+
+---
+
+## 🎮 Discord
+
+- [~] **Discord Activity (VRChat status panel) + official shared Discord bot.** New standalone
+  backend, own package.json/Docker, deployed separately — never bundled into the app — lives on
+  its own branch in this same GitHub repo
+  ([`feature/discord-backend-server`](https://github.com/NekoSuneProjects/NekoSuneAPPS/tree/feature/discord-backend-server)),
+  not as a subfolder here. It holds the shared bot token and OAuth client secret, which can
+  never live in a distributed Electron app. Backend + Electron-side code (identity login,
+  official-bot mode, status push) are implemented and locally verified (curl against the
+  running backend, `node --check`/require-resolution on every changed file). Defaults to the
+  official `https://nekosuneappsvrc.nekosunevr.co.uk` deployment (`DEFAULT_NEKOSUNE_BACKEND_URL`
+  in `main.js`), but self-hosters can override it via the Backend URL field on the Voice Bot
+  card (`nekosuneBackendUrl` setting) to point at their own instance instead. **Not deployed by
+  this session** — still needed before this works end to end: actually deploy that official
+  host, fill in that branch's `.env` (bot token, OAuth client secret, JWT secret), register the
+  OAuth redirect + Activities URL Mapping in the Developer Portal for app
+  `1534208250046578790`, and get
+  Activities enabled for that app. See that branch's `README.md` for the full one-time setup
+  checklist.
+- [x] **Fixed: Discord Rich Presence's elapsed timer reset on every status change** instead of
+  showing real uptime. The code read a `startTime` property directly off `discord-rpc`'s
+  `Client` object, which doesn't exist at all (confirmed against the library's own source) - so
+  the timestamp anchor was always `undefined`, and Discord fell back to its own "time since last
+  update" display, which recalculates on every single presence push. Now anchors to a real
+  `Date.now()` taken once on connect, reused for every update after. Verified with a mocked
+  Discord client: identical timestamp across multiple simulated status changes.
+- [x] Discord RP **buttons** — implemented ("Join World" + "VRChat Profile"); buttons work over local IPC RPC. Note: you can't see your **own** buttons in Discord, only other people viewing your profile can — this is a Discord client limitation, not a code issue.
+
+---
+
+## 📸 Media
+
+- [ ] **Screenshot metadata** — embed world/instance/players into the PNG (VRChat picture metadata), and read it back in a gallery
+- [x] **Media Library** — VRChat screenshot gallery (open on click); date/world + folders/metadata filters todo
+- [ ] **Avatar/world image upload** management (without Unity) — advanced, optional
+
+---
+
+## 👥 Friends & social
+
+- [x] **VRC Notes editor** — read + write your note on a user (profile Info tab)
+- [x] **Social status presets** — save/apply status + statusDescription combos (Profile Editor)
+- [x] **Last-seen / time-together** — shown on the profile Info tab (from History)
+- [x] **Block / mute** — toggle on profiles + a Blocked/Muted list (Settings) with Remove
+- [x] **Trust/feedback view** — visual trust ladder (Visitor → New User → User → Known User → Trusted User) with current level highlighted, shown in the profile modal info tab
+- [~] **Profile editor (your own)** — status/status-text/bio/pronouns/bio-links done; pfp &amp; banner upload todo
+- [x] **Messenger / message-slot editor** — edit invite & response message slots (Messenger tab)
+- [x] **Multi-Invite** — friend-picker multi-select invite to instance/group
+- [x] **Right panel: Favorites section** — favorited friends shown at top of the rail
+- [ ] **Favorites page** (dedicated sidebar) listing worlds/avatars/friends with inline remove (currently add/remove via modals + Favs tab).
+- [~] Friends panel: avatars for **offline** friends now show with logo.png fallback; group-by-favorite and online count badge todo.
+
+---
+
+## 🌍 Worlds · Avatars · Groups
+
+### Avatars (own + others)
+- [x] **Avatar detail** — modal with image, author, platforms, performance, wear/favourite
+- [x] **Switch avatar** — Wear button (`PUT /avatars/{id}/select`)
+- [x] **Delete personal avatar** — Delete with Yes/No confirm
+- [x] **Avatar browse** — configurable providers (avtrdb + **custom VRCX-style endpoints**) → wear/favourite
+- [x] **Inventory** — icons / emoji / stickers / prints (with image proxy for auth-gated images)
+
+### Worlds — create instance + invites
+- [x] **Create instance** (Public / Friends+ / Friends / Invite+ / Invite) via `POST /instances`
+- [x] **Self-invite** + **Invite friends** (picker) + shareable launch link in world modal
+
+### Groups
+- [x] **Invite people to a group** via friend picker
+- [x] Group detail: members, roles, posts, gallery, your permissions
+- [x] **Group posts** + **group image gallery** — shown in the group detail modal
+- [x] **Create group instances** — POST /instances type=group + groupAccessType, with world picker (my worlds + favourites) + access/region selectors in the group modal, auto self-invite
+- [x] **Group alerts** — polls watched groups' posts **and events** → toast + History
+
+---
+
+## 🔎 Search & data / History
+
+### Search
+- [x] **Local quick-search** — instant offline friend search on the Search page
+- [x] **Avatar search** — via the Avatars page (provider-based)
+- [x] **Favorites backup** — export favorite worlds + friends to JSON; import re-adds them via the API (avatar favs not yet included — no dedicated API endpoint)
+- [x] **Data export/import** — settings + history to JSON
+
+### History / activity logging
+- [x] **Video/media link tracking** — video URLs parsed from the log → History
+- [x] **Name-change tracking** — friend renames logged to History (name_change)
+- [x] **Activity heatmap** — day×hour event heatmap on the History page
+- [x] **Instance join/leave history** — enter + leave-with-duration logged to History
+- [x] **GameLog** — join/leave/world (w/ duration)/friend/name-change/video/**portals**/invites/group events
+
+### API layer
+- [x] **Fast-Fetch cache** — TTL cache + in-flight dedupe for user/world/group/friends
+- [x] Rate-limit guard — 429 backoff interceptor + isRateLimited(); every poller skips while rate-limited; stale-cache fallback.
+- [x] Cache profile/world/group lookups (VRCX "Fast Fetch") to cut API calls.
+- [ ] Verify all VRChat write-actions live (favorite tags, requestInvite slots, invite instanceId format).
+
+---
+
+## 🖥️ System & settings
+
+- [x] **Fixed: possible `0xc0000005` access-violation dialog on launch.** `openvrOverlay.js`
+  required `koffi` at the top level, and that module is pulled in at startup by `main.js` via
+  `vrOverlayController` — so requiring it `LoadLibrary`'d the native `koffi.node` addon on every
+  launch for every user, headset or not. A fault there (corrupt/AV-quarantined `.node`, ABI
+  mismatch, missing from the packaged build) killed the app before any window existed, with no
+  JS stack. Now loaded lazily on first VR Overlay use. Also added `node_modules/@koromix/**/*`
+  to `asarUnpack` — koffi 3.x keeps its real native binary there, and it was only being unpacked
+  by electron-builder's automatic `.node` detection rather than explicitly.
+- [ ] **Audit the remaining eager native/heavy requires at boot.** `tesseract.js` is required at
+  the top of `renderer.js` (line 20, via `ocrTranslateModule`) even when OCR is never used, and
+  `gamelog.init()` loads `sql.js` unconditionally in `main.js`. Neither is a native `.node`
+  addon (both are WASM, so far lower crash risk than koffi was), but both cost startup time for
+  users who never touch those features — worth deferring the same way.
+- [x] **VRChat server status** — online-user count in the top bar (poll /visits)
+- [x] **Configured Start** — launch companion apps (SlimeVR, VRCFaceTracking, …) + optional VRChat
+- [x] **Crash recovery / auto-rejoin** — opt-in; relaunches last instance if VRChat closes
+- [x] **Fixed: auto-rejoin treated every normal VRChat close as a crash.** It only checked "is
+  VRChat.exe still running", which is equally true after a real crash and after just closing the
+  game normally - so it couldn't actually tell the two apart, and always assumed the worst. Now
+  cross-checks Windows' own crash reporter (WER): a real crash (unhandled exception, access
+  violation, etc.) always logs an "Application Error" event (Application log, Event ID 1000) for
+  the crashing process, a normal quit never does. Cross-checked this against 26 real historical
+  VRChat logs pulled from the user's own backup: **none contained an actual engine/native crash
+  dump** — every "abrupt-looking" ending was just a routine, non-fatal in-world Udon script
+  exception (`NullReferenceException` mid-EXTERN-call, common and harmless) — and VRChat's own
+  clean-quit log marker (`VRCApplication: HandleApplicationQuit`) only appeared in 12 of the 26,
+  confirming that "the log doesn't end cleanly" alone (the other heuristic considered) would have
+  kept false-positiving on more than half of them, reproducing the exact bug reported. Verified
+  both directions with a real, unmocked Windows Event Log query: correctly silent with no crash
+  event present, and correctly fires the rejoin when a matching event is simulated.
+- [x] **Auto-rejoin now uses VRChat's own `vrchat://launch?id=...` protocol handler** (same
+  mechanism VRCX and other community tools use) instead of only the vrchat.com web page, which
+  just prompts the browser to hand off to the client anyway - `vrchat://` launches directly.
+  Confirmed for real against this machine's actual VRChat install:
+  `HKCR\vrchat\shell\open\command` exists and points at VRChat's own `launch.exe`. Falls back to
+  the web link automatically if that registration isn't present. Verified both branches with the
+  real (unmocked) registry check plus mocked process/event state for the crash-detection side.
+- [x] **Custom themes** — `themeSelect` dropdown + `uiTheme` setting; 30-min recheck; `blackgreen` default; seasonal events always win
+- [ ] **Registry tools** — VRChat registry backup/restore (Windows registry under VRChat)
+- [ ] **Multiple dashboards / customizable widgets** (VRCX-style configurable panels)
+- [x] **VRCVideoCacher** — install/update (official release download) + start/stop the local proxy from the VRChat Tools tab (custom URL via `vvcUrl` setting)
+- [x] **Notifications** — rich (invite world+link, boop, requestInvite, group), **cached in SQLite**
+  until accepted/dismissed; top-right flyout + **Notify sidebar tab**; toast on new
+- [x] **Fixed: Home tab's VRChat News card could show "Could not load news." with no way to tell
+  why**, and no fallback even if news had loaded fine moments earlier. Direct testing against
+  the live `hello.vrchat.com` RSS feed this session found no reproducible parse/fetch bug — most
+  likely a transient network blip on affected machines — so hardened rather than "fixed" a
+  specific root cause: one retry on failure, real errors logged to console instead of swallowed,
+  and falls back to the last successfully loaded news (marked "(cached)") instead of blanking
+  the card.
+- [x] **Fixed: Linux build could freeze into "Not Responding"** using OSCQR/ShazamOSC's
+  capture-source picker — `desktopCapturer.getSources()` (`main.js`) had no timeout and could
+  hang indefinitely under Wayland with no PipeWire portal available, freezing the whole app
+  rather than just erroring. Added a 6s timeout race on both capture-source call sites, enabled
+  Chromium's PipeWire capturer + Ozone auto-detection on Linux startup, and made the IPC handler
+  resolve with an error field instead of rejecting. Also fixed `crashGuard.js` running
+  Windows-only commands (`tasklist`/`reg query`/PowerShell) unconditionally on every platform
+  every 15s with no guard (now a no-op off Windows), added `koffi`'s native binaries to
+  `asarUnpack` (VR Overlay's OpenVR bindings couldn't `dlopen` from inside app.asar on any
+  platform), and gave the Linux electron-builder target the same explicit `files` whitelist
+  Windows already had (previously inherited the broad top-level glob and shipped extra files).
+  **Not verified on real Linux hardware** — this dev environment is Windows-only, so these are
+  targeted fixes for the specific reported symptoms (the exact "Failed to get sources" error
+  message, an actual freeze/hang, and file-based evidence like the `.mount_nekosu` AppImage path
+  in the reporter's screenshot), not a full Linux QA pass.
+
+---
+
+## 🥽 VR
+
+### VR Overlay (experimental — this session)
+- [x] **Mirrors the app into a floating VR panel via SteamVR** — `modules/vr/overlay/`
+  (`openvrOverlay.js` for the raw OpenVR FFI bindings, `vrOverlayController.js` for the
+  screenshot-and-push loop). Settings → "VR Overlay" card, Windows + SteamVR only. First slice is
+  **view-only** — see the app floating in your headset, not yet clickable — click-through
+  (controller-to-mouse translation) is a planned follow-up once this base mirror is confirmed
+  working on real hardware.
+- [x] **Talks to OpenVR via `koffi` (FFI), not a compiled native addon** — there's no pure-JS way
+  to call a C++ SDK, and koffi needs no build step (lower AV-flag/CI-fragility risk than
+  node-gyp, the same reasoning that ruled out `node-global-key-listener` earlier in this
+  project). Chosen explicitly over the alternative (a small native Node addon) after discussing
+  the tradeoff.
+- [x] **Function signatures and the `VR_IVROverlay_FnTable` struct layout are transcribed
+  directly from Valve's own `openvr_capi.h`** (OpenVR's official C-compatible API surface,
+  published specifically for FFI bindings from other languages) — sourced from a copy bundled
+  inside an old, otherwise-unrelated npm package (`ovrjs`), not guessed or hallucinated. Only the
+  methods actually called (`CreateOverlay`, `DestroyOverlay`, `ShowOverlay`, `HideOverlay`,
+  `SetOverlayWidthInMeters`, `SetOverlayTransformAbsolute`, `SetOverlayFromFile`) get a real typed
+  callback prototype; every other field in the 60+-method struct is an opaque pointer purely to
+  keep the byte offsets correct, since every field is pointer-sized regardless of which function
+  it points to.
+- [x] **Verified live against a real, running SteamVR install on this dev machine**: DLL discovery
+  (via the Steam install path in the registry, with hardcoded fallbacks), `VR_InitInternal`,
+  `VR_GetGenericInterface`, and error-description lookups all behave exactly as documented.
+  Confirmed that `VRApplication_Utility` can initialize without a headset but is explicitly denied
+  the `IVROverlay` interface ("not available to utility applications"), while
+  `VRApplication_Overlay` correctly fails with "Hmd Not Found" when no headset is detected — and
+  that failure surfaces as a clear, actionable error message instead of a crash. Also confirmed
+  the full 64-field `VR_IVROverlay_FnTable` struct definition is valid and correctly sized (512
+  bytes) via koffi.
+- [ ] **UPDATE: confirmed broken on real hardware, and the straightforward fix crashes.** A real
+  headset test (via a partner) hit `"table.CreateOverlay is not a function"` — the
+  `koffi.decode(ptr, PtrType, '*')` call wasn't actually dereferencing the raw OpenVR interface
+  pointer into a usable struct. Reproduced this safely using `IVRSystem` (works without a headset)
+  as a stand-in, and found the correct-looking fix (`koffi.decode(ptr, StructType)` to read the
+  struct, then `koffi.decode(rawFnPtrField, protoType)` to get a callable function from each
+  field) - but **actually calling the resulting function segfaults the whole process**, reproduced
+  three times through slightly different argument-marshaling approaches. This is a real,
+  unresolved problem with calling through a struct-of-raw-function-pointers ("vtable") via koffi,
+  not yet a proven-safe pattern. Left the current safe-but-non-functional error in place rather
+  than ship something that crashes. Needs real investigation (koffi's own examples/issue tracker,
+  or reconsidering the FFI approach) before this feature can actually work.
+- [ ] **Follow-ups, not done this pass**: click-through interactivity (translating controller
+  laser-pointer intersection into real mouse events on the mirrored UI); the long-standing "VR
+  gear battery" placeholder (`modules/vrchat/vr/vrBattery.js`, previously blocked on "no
+  well-maintained pure-Node OpenVR binding") can now likely be wired for real using the same
+  koffi/openvr_capi.h approach and an `IVRSystem` struct, since that blocker no longer applies —
+  once the vtable-calling crash above is actually resolved.
+
+### VR / heavy ⚠️ (need native or large deps — can't test in sandbox)
+- [ ] **Neko HUD** (VR overlay) — ⚠️ needs native OpenVR overlay binding (same blocker as VR battery). Ship a small C#/C++ OpenVR helper exe and spawn it.
+- [ ] **Playspace Shift** — ⚠️ needs native VR input (grip/stick) — same OpenVR helper.
+- [ ] **VoxBoard** (voice-triggered soundboard) — needs offline speech model (VOSK ~50 MB); add as optional download.
+- [x] **Avatar Sizer** — done via VRChat's *native* OSC height-scaling API (`/avatar/eyeheight` + `/avatar/eyeheightmin`/`max` + `/avatar/eyeheightscalingallowed`), which works on **any** avatar with no avatar-specific exposed parameters needed. `modules/vrchat/osc/avatarScaling.js` + global hotkeys (Settings → Tools → Avatar Scaling) via a PowerShell `WH_KEYBOARD_LL` hook (`modules/vrchat/osc/keyHookPs.js`), only running while the feature is connected or recording a key.
+- [ ] **VR gear battery** — real OpenVR helper to replace the current stub (`modules/vrchat/vr/vrBattery.js`).
+
+---
+
+## 👻 Terrors of Nowhere
+
+- [x] **Read ToN directly from the VRChat output log (ToNSaveManager now OPTIONAL).**
+  `modules/integrations/ton/tonLogReader.js` tails the newest `output_log_*.txt` and parses
+  save codes (`[START]…[END]`), round type + map (`This round is taking place at …`),
+  terror IDs (`Killers have been set - …`), deaths (`You died.`), round end
+  (`Verified Round End`), stuns and damage. Runs alongside the WS; drives live state when
+  the WS isn't connected. Captured save codes are auto-decoded to achievements and marked
+  on the board (so achievements stay current without ToNSaveManager).
+- [x] ToN UI: connect card relabelled — ToNSaveManager is **optional**; the log reader is
+  the default.
+- [x] **Terror names from killer IDs** — `tonLogReader.js` now looks up each ID in
+  `tonData.get().terrors` (the roster fetched from terror.moe, ordered by internal ID);
+  falls back to `Terror #N` if the cache is empty or the index is out of range.
+- [ ] **Lifetime stats from the log** — the log only has the *current session*, so
+  all-time rounds/deaths/etc. still need ToNSaveManager or a decoded save code. Session
+  counters work from the log; consider deriving lifetime totals from a decoded save.
+- [ ] **Catch up historical rounds/saves** from the log on first read (currently the
+  initial full-log pass is suppressed to avoid flooding history; consider importing the
+  session's past save codes as backups on startup).
+
+---
+
+## 🎨 UI / layout
+
+### Full layout overhaul (feature request)
+- [x] Rebuild the app's overall layout/theme/navigation to match the look and feel of
+  [VRCNext](https://github.com/shinyflvre/VRCNext) — same *layout style*, not the same
+  internal structure/feature set (ours stays different under the hood). Shipped in 1.0.61: wider
+  sidebar with icon+label nav and section headers, Home tab as the default landing page (replaces
+  Chatbox), VRChat news feed pulled from hello.vrchat.com as the homepage news card, welcome hero,
+  metric tiles, Quick Access shortcuts, Recently Visited Worlds.
+- [x] **VRChat Quick Launch tab** (MVP) — multi-profile simultaneous VRChat launching via
+  VRChat's `--profile=N` flag, matching the multi-account launcher tooling VRCX/VRCNext-adjacent
+  community tools provide. See `modules/vrchat/launcher/quickLaunch.js` + the `#quicklaunch` tab.
+  Covers: profiles (add/remove/VR toggle/description), Debug GUI / SDK log / UDON log / max FPS /
+  free-text custom params, Instance info (Create/Join/Local/None, Create shares one instance
+  across every profile launched together), Launch / Launch-all (2s stagger). Auto-detects the
+  VRChat exe via the registered `vrchat://` protocol handler, with a manual Browse override.
+  - [x] **Per-instance OSC ports** — turned out not to need a proxy at all: VRChat has a real,
+    documented launch flag `--osc=<inPort>:<outIP>:<outPort>` (confirmed against
+    docs.vrchat.com), so each profile N just gets passed `--osc=9000+2N:127.0.0.1:9001+2N`
+    directly (profile 0 = VRChat's own defaults, 9000/9001). `renderer.js`'s `qlSyncOscPorts()`
+    then automatically mirrors every non-default profile's ports into Settings → OSC's existing
+    "extra targets"/"extra receivers" lists (tracked via a `quickLaunchOscManaged` settings key
+    so it only touches entries it added itself, never the user's own manual OSC config) — so
+    Chatbox/AudioLink/avatar-param OSC reaches every launched profile automatically, with no
+    manual port entry needed.
+  - [ ] **Follow-up: MIDI device selection** per profile. Deferred, not started.
+  - [ ] **Follow-up: "Auto-layout"** — automatically tile the launched VRChat windows on screen.
+    Would need raw Win32 window enumeration/positioning (via `koffi`, already a dependency).
+    Deferred, not started.
+- [ ] **Design customization** — dashboard welcome-screen background + launcher accent colour
+  (note: we intentionally ship fixed green + seasonal; make this opt-in)
+
+### Menu / tab organisation
+- [x] **Dedicated AI tab.** IntelliChat (AI provider) was defined in Settings but moved at
+  runtime onto the Translation tab by `moveTranslationCards()`, and the Voice Assistant sat on
+  the Translation tab despite not being a translation feature. Both now live on their own `#ai`
+  tab; Translation keeps TTS / Desktop STT / OCR / Translator.
+- [x] **Sidebar regrouped** from one 25-item "VRChat" dump into VRChat / Friends & Social /
+  Avatars & Media / AI & Speech / Games / Tools / Integrations / General. No tabs renamed or
+  removed.
+- [x] **Tools and Games are their own categories.** Tools and Terrors were buried in the "General"
+  catch-all next to Settings/Docs/About/OSC Log. **Tools** now holds Tools + VRChat Tools + OSC
+  Apps + AudioLink; **Games** holds Terrors (room for more games later).
+- [x] **Heart Rate and Weather moved out of "VRChat" into Integrations** — both pull from an
+  external service (Pulsoid, weather API) and feed VRChat, same as the other Integrations tabs.
+  Integrations is now Live / Discord / OAuth / Heart Rate / Weather / OBS Overlay.
+- [ ] **ToN on/off toggle still lives on the Stats tab.** Now that Terrors has its own Games
+  category, the "👻 Terrors of Nowhere" enable card on `#stats` is in an odd place — enabling the
+  feature and using it are on two different pages. Consider relocating it onto `#tonref` the same
+  way `moveTonToolCards()` already relocates ToN Tablet OSC and ESS.
+- [ ] **Tools tab is still a grab-bag** — Stopwatch, Calculator, Param Lab, Avatar Scaling,
+  ToN Tablet OSC, ESS, Photo Relay, Screenshot Metadata, Soundpad and Auto-AFK all share one
+  tab. Several are VRChat-specific (Param Lab, Avatar Scaling) or ToN-specific (Tablet OSC, ESS)
+  and arguably belong with those features instead. Worth a follow-up pass.
+- [ ] **A saved `sidebarOrder` scrambles the group headings.** The boot restore
+  (`renderer.js:4790`) replaces each navbtn *slot* with a placeholder and refills the slots in the
+  user's saved order, but the `.navlabel` headings keep their original DOM positions — so anyone
+  who has drag-reordered their sidebar now sees buttons sitting under headings that don't describe
+  them. Only affects users who actually dragged (default is `null`, which renders the groups as
+  authored). Fix by storing a layout version alongside the order and resetting to the default when
+  the shipped grouping changes, or by making drag-reorder group-aware.
+- [ ] **Sidebar labels aren't localized.** Every `.navbtn` label is hardcoded English with no
+  `data-i18n` attribute and there are no `nav.*` keys in the locale files, so the sidebar stays
+  English in all 102 locales. Add `data-i18n="nav.<tab>"` + the `nav` key block to `en.json`.
+
+### Shared UI components
+- [x] **Friend-picker modal** (searchable, multi-select)
+- [x] **Confirm (Yes/No) modal**
+
+---
+
+## ℹ️ About page & Updater
+
+- [x] About page — app info, NekoSuneVR creator, version, links, update check, contributors
+  auto-detected from the GitHub API.
+- [ ] **Deeper collaborator / collab-code auto-detection** — beyond GitHub contributors:
+  parse `Co-Authored-By:` trailers from git history and any in-source `@author`/credit
+  comment markers, and surface named collaborations on the About page.
+- [x] **Supporters card** — Patreon/Ko-fi supporters shown on the About page with Discord avatar
+  (animated .gif for Nitro users, static .png otherwise, matching Discord's own rules exactly)
+  and name-on-hover, linking out to the general Patreon/Ko-fi pages
+  (`patreon.com/c/nekosunevr`, `ko-fi.com/nekosunevr`), plus a note pointing supporters who
+  haven't linked their Discord to `linkup.nekosunevr.co.uk` yet so they show up too. Fetched from
+  main.js (`app:supporters` IPC) to avoid renderer CORS restrictions, fails soft to "could not
+  load" if the linkup site is unreachable.
+  - **New endpoint on the separate NekoSuneLinkupSite repo**
+    (`D:\DEV\NekoSuneVRAPPS\Websites\NekoSuneLinkupSite\SocialLinkUpOnly\api\publicSupporters.js`,
+    registered as `GET /api/supporters`): public, no API key at all (by design — a key embedded
+    in a shipped desktop app isn't actually secret once someone unpacks it, so a genuinely public
+    read-only endpoint is the correct shape here, not a leakable one). Reuses the site's existing,
+    already-tested supporter-status logic (`services/supporterStatus.js`,
+    `services/discordapi.js`) rather than re-deriving "is this person currently supporting"
+    itself. Returns only `discordId`, `username`, `platform`, `avatarUrl` - no email, no payment
+    amounts/dates, no internal ids, and banned users are excluded.
+  - **Found and fixed a real staleness bug while building this**: the site's existing
+    `loadPatreonSupporterMap()` only writes `LinkedAccount.isSupporting` back to the database for
+    patrons still found in the live Patreon fetch - someone who fully churned (removed from
+    Patreon entirely, not just downgraded) never gets their stale `isSupporting: true` cleared in
+    the DB by that function. The new endpoint doesn't trust that DB flag for its final decision;
+    it uses the freshly-computed status map the function actually returns instead (which does
+    default everyone to inactive first). Verified with a mocked test covering all four cases:
+    active Patreon included, churned-but-DB-stale Patreon excluded, active Ko-fi included,
+    inactive Ko-fi excluded.
+  - **Not deployed by this session** — implemented and tested in isolation (mocked DB/Discord/
+    Patreon calls, since this is a live production site with a real database I don't have local
+    access to), but the linkup site is a separate repo/deployment the user manages; needs their
+    own review + deploy before the About page's supporters card will show real data instead of
+    "could not load supporters."
+- [x] **In-app update installs, via a standalone updater app** — went through a few iterations
+  this session (in-app Electron download → a `/passive` PowerShell+msiexec helper → the final
+  design below) before landing on a fully separate helper app, since the thing doing the
+  replacing can't live inside the files being replaced.
+  - **`updater/`** is its own small, independent Electron app (own `package.json`,
+    `main.js`/`preload.js`/`index.html`/`renderer.js`) with a custom branded, animated UI (a
+    floating/glowing logo, shimmering gradient progress bar) — not the plain default installer
+    UI. "Update available" → "Download & install" now just hands the release asset URL to this
+    helper and quits; the helper does everything else visibly: download with a real progress bar,
+    install, relaunch.
+  - **Packaged as `updater.exe`** on Windows specifically (an electron-builder `portable`
+    target — a genuine single-file standalone executable, not a `.ps1` script), built fresh by CI
+    for each platform and bundled directly into **both** the NSIS `Setup.exe` and the `.msi` via
+    `extraFiles`/`extraResources` (`.github/workflows/build.yml` builds `updater/` before the main
+    app on every OS leg and normalizes its output to a fixed path/name first, so the main build's
+    config doesn't need to know electron-builder's per-arch output folder naming).
+  - **Cross-platform**: Windows runs the `.msi` via `msiexec` (no longer silent - runs the normal
+    installer UI, not `/passive`, so it's clearly visible something is installing); Mac extracts
+    the release `.zip` and swaps it in for the existing `.app` bundle (`ditto`, ditto - macOS
+    built-in, not a bundled tool); Linux replaces an AppImage in place, or opens a `.deb` with the
+    desktop's own installer since that needs root this helper can't safely provide unattended.
+  - **Verified on Windows**: built the actual `updater.exe` via electron-builder, ran it for real
+    against a live download URL and a fake install target, confirmed it downloads a real file
+    with correct progress mechanics, correctly waits out (or skips) the parent PID, and reaches
+    the actual `msiexec` install step. Found and fixed a real bug this way: passing PID `0`
+    (a special "current process group" value to `process.kill`, not a real caller PID) could hang
+    the wait-for-exit loop forever.
+  - **Mac and Linux paths are NOT verified against real hardware** - implemented from documented,
+    standard platform behavior (this dev environment is Windows-only), flagged honestly rather
+    than claimed tested.
+  - Considered and explicitly declined (per discussion): a full Discord/Squirrel-style
+    versioned-folder install architecture (`Update.exe` + `app-X.Y.Z/` folders + a thin launcher
+    stub) — that's a genuinely different packaging pipeline (Squirrel.Windows/electron-winstaller)
+    that would replace the working MSI/NSIS build entirely; kept the existing, proven MSI/NSIS
+    install and added the standalone updater on top of it instead.
+- [x] **Fixed: updater failed with `EPERM` trying to download into the install directory.** It
+  tried the install directory first (e.g. `Program Files\NekoSuneAPPS\`) and only fell back to
+  temp if `fs.accessSync(dir, W_OK)` said that wasn't writable — but that check isn't a reliable
+  predictor of real write access on Windows, confirmed by an actual `EPERM` in the wild despite it
+  passing. Now always downloads to temp, regardless.
+- [x] **Fixed: updater could fail with an opaque, unrecoverable "Command failed: ...Setup-x.x.x.exe
+  /S"** in the wild ("already running" style failure) — it only waited for the old app's PID to
+  disappear plus a flat 500ms delay before running the silent NSIS install once, with no retry
+  and no captured stderr/exit code. Now polls whether the install target file is actually
+  unlockable (not just "the pid is gone"), retries the silent install up to 3× with backoff,
+  surfaces the real exit code/stderr, and the updater window shows **Retry** /
+  **Open download folder** buttons on failure instead of a dead-end static error. The updater
+  helper also has its own single-instance lock so a previously stuck attempt can't block a new one.
+  (Note: the block above documenting "Windows runs the .msi via msiexec" is stale — 1.0.61
+  switched Windows installs to the NSIS `Setup.exe` via `/S`, msiexec/`.msi` is no longer what's
+  actually run; flagging here rather than silently rewriting that history entry.)
+
+---
+
+## 🌐 Localization
+
+- [x] **i18n foundation** — `modules/i18n/i18n.js` (main) + IPC (`i18n:languages`/`i18n:strings`)
+  + renderer `t()`/`applyLanguage()` sweep (`[data-i18n]` text, `[data-i18n-ph]` placeholders,
+  nav labels via `data-tab`). First-run language picker modal (shown once, if `uiLanguage`
+  setting is unset) + a Settings → Language card for changing it later; switches instantly, no
+  restart. Seeded with **102 languages** (`modules/i18n/locales/*.json`, flat key→string maps,
+  every non-English locale merges over `en.json` so a missing key always falls back to English
+  instead of breaking) — the initial 7 (en, ja, es, ru, pl, nl, de) plus every language
+  requested afterward: ko, zh, fr, ms, no, pt, ar, bn, hi, id, or, qu, sw, ta, ur, vi, wuu, xh,
+  yo, zu, af, sq, am, hy, az, eu, be, bs, bg, my, ca, ceb, ny, co, hr, cs, da, eo, et, fi, fy,
+  ka, el, ha, haw, he, hmn, hu, is, it, jv, kn, kk, km, rw, rn, ky, lo, lv, lt, lb, mk, mg, ml,
+  mt, mi, mr, mn, ne, ps, fa, pa, ro, sr, si, sk, sl, so, su, sv, tl, tg, tt, te, th, bo, ti, to,
+  tr, tk, ug, uk, uz, cy, yi. All 102 files validated for JSON correctness and exact key parity
+  against `en.json` (76 keys each). Several lower-resource languages (Quechua, Oriya, Chichewa,
+  Kirundi, Wu Chinese, Xhosa, Yoruba, Zulu, Hawaiian, Hmong, and a few others) were flagged by
+  the translating passes as worth a native-speaker review — functionally complete but some
+  technical-UI terms are best-effort borrowings rather than fixed conventional terminology.
+- [ ] **Coverage is partial by design** — this pass only tags the sidebar nav, common
+  buttons, and the newly-added Avatar Scaling / Translator / Live Typing / language-picker UI.
+  The rest of the app (300–500+ static strings in `index.html`, 400+ dynamic
+  `setText`/template-literal call sites in `renderer.js`) is still hardcoded English. Sweeping
+  it incrementally (tag more `data-i18n`, wrap more dynamic strings in `t()`) is ongoing work —
+  add more locales here too as requested (a handful more beyond the initial 7 were flagged as
+  wanted).
+
+---
+
+## 📦 Release pipeline
+
+- [x] **Removed macOS builds** — VRChat doesn't run on Mac, so a Mac build of a VRChat companion
+  app wasn't serving a real purpose. Removed the `macos-latest` matrix leg and its updater-helper
+  build step from `.github/workflows/build.yml`, and the `mac` electron-builder config from both
+  `package.json` and `updater/package.json`. Windows and Linux builds unaffected — verified both
+  still built and released successfully.
+- [x] **VirusTotal scanning in the release pipeline** — CI submits the Windows installers
+  (`.exe`/`.msi`) to VirusTotal after they build and links the scan report in the release notes,
+  so "installers are unsigned, SmartScreen may warn" doesn't have to be taken purely on faith.
+  Handles the large-file upload flow (VirusTotal's direct `/files` endpoint caps at 32MB; the
+  NSIS installer is bigger, so it goes through `/files/upload_url` instead) and polls for the
+  analysis to finish (up to ~5 minutes) before summarizing flagged-engine counts with a link to
+  the full report. Opt-in via a `VT_API_KEY` repo/org secret (a free VirusTotal API key) — skips
+  cleanly with no report section in the notes if that secret isn't reachable by this repo.
+
+---
+
 ## 💾 Settings-persistence audit (this session)
+
 Prompted by Avatar Scaling's scale always resetting to 1.00m on restart. Cross-referenced every
 `<input>`/`<select>`/`<textarea>` with an `id` in `index.html` (249 total) against what
 `renderer.js` actually saves/restores, then manually verified every candidate (the mechanical
@@ -753,6 +856,7 @@ e.g. the TTS engine fields, which already save correctly through `TTS_ALL_FIELD_
 ---
 
 ## ⚙️ Setup reminders
+
 - Run **`npm install`** (adds `discord.js`, `sql.js`).
 - VRChat-API features need login on the **VRChat** tab (cookies stored locally; password never stored).
 - History DB: `nekosuneapps-history.sqlite` in the app's user-data folder.

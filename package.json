@@ -1,6 +1,6 @@
 {
   "name": "nekosuneapps",
-  "version": "1.0.67",
+  "version": "1.0.68",
   "main": "main.js",
   "bin": "main.js",
   "scripts": {
@@ -41,7 +41,8 @@
       "node_modules/sharp/**/*",
       "node_modules/@img/**/*",
       "node_modules/ffmpeg-static/**/*",
-      "node_modules/koffi/**/*"
+      "node_modules/koffi/**/*",
+      "node_modules/@koromix/**/*"
     ],
     "win": {
       "artifactName": "${productName}-Setup-${version}.${ext}",
