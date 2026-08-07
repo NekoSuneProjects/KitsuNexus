@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 # softprops/action-gh-release needs write access to create the release + upload assets.
 permissions:
@@ -32,6 +33,15 @@ jobs:
     # call the org runners API. If the secret is missing or the call fails,
     # this falls back to GitHub-hosted runners across the board rather than
     # failing the whole release.
+    #
+    # IMPORTANT - runner group access: this job queries the org runners API
+    # and considers a runner "usable" if its status is "online". But runner
+    # group access is a separate gate: if the runner's group doesn't grant
+    # access to this repo, the build job will be queued and wait forever even
+    # though detect-runners resolved it to a self-hosted label. Fix:
+    # org Settings → Actions → Runner groups → find the group → Repository
+    # access → add this repo (or set "All repositories"). The timeout-minutes
+    # on the build job below will catch it if this ever happens again.
     runs-on: ubuntu-latest
     outputs:
       x64_runner: ${{ steps.pick.outputs.x64_runner }}
@@ -86,6 +96,10 @@ jobs:
     # detect-runners (self-hosted if a matching box is online, else the
     # GitHub-hosted fallback).
     runs-on: ${{ fromJson(matrix.runner) }}
+    # Covers queue time as well as the build itself. If an online runner is
+    # visible to the org API but its runner group cannot access this repo, the
+    # job must fail rather than leave the release queued indefinitely.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -194,6 +208,10 @@ jobs:
     # GitHub-hosted ubuntu, but make sure they're installed on the self-hosted
     # X64 box too, or the VirusTotal/Discord/changelog steps will fail there.
     runs-on: ${{ fromJson(needs.detect-runners.outputs.x64_runner) }}
+    # Same timeout guard as the build job: if the resolved runner is online
+    # in the org API but can't actually pick up jobs from this repo, fail
+    # instead of queuing forever.
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
