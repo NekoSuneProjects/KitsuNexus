@@ -21,7 +21,7 @@ which is MIT licensed. Its license is preserved in
 
 ## OSC Realistic Leash
 
-Native compatibility for YimuQr's paid BOOTH avatar system. NekoSuneAPPS does not include
+Native compatibility for YimuQr's paid BOOTH avatar system. NekoSuneAPPSVRC does not include
 or redistribute the product. It responds to `MOF`, `MOB`, `MOL`, `MOR`, `MOFL`, `MOFR`,
 `MOBL`, `MOBR`, `STOP`, `Jump`, `JumpS`, `JumpA`, and optionally `JumpQ`. `JumpQ` is
 ignored by default because its intended action is undocumented and the avatar also exposes
@@ -48,7 +48,7 @@ Media controls accept both the original `VRCOSC/Spotify/*` paths and VRCOSC's
 `VRCOSC/Discord/Mic` and `Mute`, plus `Deafen`, and publishes
 `VRCOSC/Metadata/Modules/YUCP.VIRA.yeusepesmodules.discordosc` while enabled.
 
-These are original NekoSuneAPPS implementations. No source files from the GPL-3.0
+These are original NekoSuneAPPSVRC implementations. No source files from the GPL-3.0
 Yeusepe module pack are bundled. SpotiOSC uses Windows media sessions/media keys and
 publishes playback state; Jam links are opened in Spotify's own UI. DiscordOSC uses the
 existing user-configured Discord Voice Bot and publishes its voice state.

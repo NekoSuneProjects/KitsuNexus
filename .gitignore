@@ -11,7 +11,7 @@ build/
 # bundles it in (see .github/workflows/build.yml); not meant to be committed.
 updater/updater.exe
 updater/linux-unpacked/
-updater/NekoSuneAPPS Updater.app/
+updater/NekoSuneAPPSVRC Updater.app/
 
 # Tesseract.js downloads its OCR language models into the cwd by default
 *.traineddata

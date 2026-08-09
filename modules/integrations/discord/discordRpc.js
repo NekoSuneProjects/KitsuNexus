@@ -1,5 +1,5 @@
 // modules/integrations/discord/discordRpc.js
-// Discord Rich Presence - shows "Playing NekoSuneAPPS" with live details on your
+// Discord Rich Presence - shows "Playing NekoSuneAPPSVRC" with live details on your
 // Discord profile. Create an app at https://discord.com/developers/applications
 // and paste its Application (Client) ID. Runs in the MAIN process.
 
@@ -27,7 +27,7 @@ async function startDiscordRpc (appClientId) {
 
   client.on('ready', () => {
     connected = true
-    setActivity({ state: 'In VRChat', details: 'NekoSuneAPPS running' })
+    setActivity({ state: 'In VRChat', details: 'NekoSuneAPPSVRC running' })
   })
 
   await client.login({ clientId })
@@ -37,11 +37,11 @@ async function startDiscordRpc (appClientId) {
 function setActivity ({ state, details } = {}) {
   if (!client || !connected) return
   client.setActivity({
-    details: (details || 'NekoSuneAPPS').slice(0, 128),
+    details: (details || 'NekoSuneAPPSVRC').slice(0, 128),
     state: (state || '').slice(0, 128),
     startTimestamp,
     largeImageKey: 'logo',
-    largeImageText: 'NekoSuneAPPS',
+    largeImageText: 'NekoSuneAPPSVRC',
     instance: false
   }).catch(err => console.warn('Discord setActivity error:', err.message))
 }

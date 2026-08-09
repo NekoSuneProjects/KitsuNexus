@@ -1,4 +1,4 @@
-name: Build NekoSuneAPPS
+name: Build NekoSuneAPPSVRC
 
 on:
   push:
@@ -174,11 +174,12 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: NekoSuneAPPS-${{ matrix.artifact }}
+          name: NekoSuneAPPSVRC-${{ matrix.artifact }}
           retention-days: 14
           path: |
             dist/*.exe
             dist/*.msi
+            dist/*.zip
             dist/*.AppImage
             dist/*.deb
           if-no-files-found: ignore
@@ -218,7 +219,7 @@ jobs:
           fi
           echo "## 🛡️ VirusTotal" >> vt-notes.md
           shopt -s nullglob
-          files=(artifacts/NekoSuneAPPS-windows/*.exe artifacts/NekoSuneAPPS-windows/*.msi)
+          files=(artifacts/NekoSuneAPPSVRC-windows/*.exe artifacts/NekoSuneAPPSVRC-windows/*.msi artifacts/NekoSuneAPPSVRC-windows/*.zip)
           if [ ${#files[@]} -eq 0 ]; then
             echo "No Windows installers found to scan." >> vt-notes.md
             exit 0
@@ -272,10 +273,10 @@ jobs:
             grab && /^## \[/ { exit }
             grab { print }
           ' CHANGELOG.md > NOTES.md
-          if [ ! -s NOTES.md ]; then printf "Release %s of NekoSuneAPPS.\n" "$VERSION" > NOTES.md; fi
+          if [ ! -s NOTES.md ]; then printf "Release %s of NekoSuneAPPSVRC.\n" "$VERSION" > NOTES.md; fi
           {
             printf "\n---\n## 📦 Downloads\n"
-            printf -- "- **Windows:** \`NekoSuneAPPS-Setup-%s.exe\` (installer) or \`.msi\`\n" "$VERSION"
+            printf -- "- **Windows:** \`NekoSuneAPPSVRC-Setup-%s.exe\` (installer), \`NekoSuneAPPSVRC-Portable-%s.exe\`, or \`.zip\`\n" "$VERSION" "$VERSION"
             printf -- "- **Linux (x64):** \`.AppImage\` / \`.deb\`\n"
             printf -- "- **Linux (arm64):** \`.AppImage\` / \`.deb\`\n"
             printf -- "\n> Installers are unsigned, so Windows SmartScreen may warn on first run — click *More info → Run anyway*.\n"
@@ -324,6 +325,7 @@ jobs:
             case "$name" in
               *.exe)              label="🪟 Windows Installer (.exe)" ;;
               *.msi)              label="🪟 Windows Installer (.msi)" ;;
+              *.zip)              label="🪟 Windows App ZIP" ;;
               *arm64*.AppImage)   label="🐧 Linux ARM64 (.AppImage)" ;;
               *aarch64*.AppImage) label="🐧 Linux ARM64 (.AppImage)" ;;
               *arm64*.deb)        label="🐧 Linux ARM64 (.deb)" ;;
@@ -337,9 +339,9 @@ jobs:
           if [ -z "$DOWNLOADS" ]; then DOWNLOADS="_No build assets were attached to this release._"; fi
 
           PAYLOAD=$(jq -n \
-            --arg username "NekoSuneAPPS Release" \
+            --arg username "NekoSuneAPPSVRC Release" \
             --arg avatar "$ICON_URL" \
-            --arg title "NekoSuneAPPS v${VERSION}" \
+            --arg title "NekoSuneAPPSVRC v${VERSION}" \
             --arg url "$RELEASE_URL" \
             --arg desc "$DESC" \
             --arg downloads "$DOWNLOADS" \
@@ -353,7 +355,7 @@ jobs:
                 description: $desc,
                 color: 9055202,
                 fields: [{ name: "📦 Downloads", value: $downloads, inline: false }],
-                footer: { text: "NekoSuneAPPS", icon_url: $avatar },
+                footer: { text: "NekoSuneAPPSVRC", icon_url: $avatar },
                 timestamp: $ts
               }]
             }')

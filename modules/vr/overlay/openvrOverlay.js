@@ -201,7 +201,7 @@ function identityMatrixAt (x, y, z) {
   ])
 }
 
-async function start ({ overlayKey = 'nekosuneapps.mirror', overlayName = 'NekoSuneAPPS', widthMeters = 1.4 } = {}) {
+async function start ({ overlayKey = 'nekosuneappsvrc.mirror', overlayName = 'NekoSuneAPPSVRC', widthMeters = 1.4 } = {}) {
   ensureInit()
   const table = getOverlayTable()
 

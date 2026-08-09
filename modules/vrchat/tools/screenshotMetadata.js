@@ -98,7 +98,7 @@ function buildMetadata () {
   const w = getVrcWorld()
   const instanceId = (w.worldId && w.instanceId) ? `${w.worldId}:${w.instanceId}` : ''
   return {
-    application: 'NekoSuneAPPS',
+    application: 'NekoSuneAPPSVRC',
     version: 1,
     author: { id: w.userId || '', displayName: w.userDisplayName || '' },
     world: { name: w.worldName || '', id: w.worldId || '', instanceId },

@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a reproducible problem with NekoSuneAPPS.
+description: Report a reproducible problem with NekoSuneAPPSVRC.
 title: "[Bug]: "
 labels: ["bug"]
 body:
@@ -46,7 +46,7 @@ body:
     id: version
     attributes:
       label: App version
-      description: Which NekoSuneAPPS version or commit are you using?
+      description: Which NekoSuneAPPSVRC version or commit are you using?
       placeholder: e.g. v1.0.7 or commit hash
   - type: dropdown
     id: operating-system

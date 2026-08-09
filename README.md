@@ -1,8 +1,8 @@
-![NekoSuneAPPS](assets/readme-banner/nekosuneapps-cute-banner.png)
+![NekoSuneAPPSVRC](assets/readme-banner/nekosuneapps-cute-banner.png)
 
-# NekoSuneAPPS 🦊💬
+# NekoSuneAPPSVRC 🦊💬
 
-[![All Contributors](https://img.shields.io/github/all-contributors/NekoSuneProjects/NekoSuneAPPS?color=ee8449&style=flat-square)](#contributors)
+[![All Contributors](https://img.shields.io/github/all-contributors/NekoSuneProjects/NekoSuneAPPSVRC?color=ee8449&style=flat-square)](#contributors)
 
 A standalone **VRChat OSC companion** by **NekoSuneVR** — chatbox, heart rate, now
 playing, Discord, world radar & more, in one polished themed app.
@@ -63,7 +63,7 @@ npm install
 npm start
 ```
 
-In VRChat, enable **OSC** (Action Menu → Options → OSC → Enabled). NekoSuneAPPS sends
+In VRChat, enable **OSC** (Action Menu → Options → OSC → Enabled). NekoSuneAPPSVRC sends
 to `127.0.0.1:9000` and can receive on `9001` (configurable in **Settings** — receive
 must be **on** for KAT, SpotiOSC and DiscordOSC).
 
@@ -107,7 +107,7 @@ The sidebar is grouped into **VRChat**, **Tools**, and **General**.
   `data:heart_rate:write` if you want the same readings available in Pulsoid.
 - **Bluetooth LE devices**: under **Other device / local bridge**, use **Scan nearby**
   to discover watches and monitors or **Paired / remembered** to reload devices
-  previously granted to NekoSuneAPPS. Devices implementing the standard BLE Heart
+  previously granted to NekoSuneAPPSVRC. Devices implementing the standard BLE Heart
   Rate Service connect directly. **GMANS WATCH** is also supported through its built-in
   proprietary protocol adapter; other proprietary watches require their own adapter.
   The last watch is cached in AppData and automatically reconnects while the app is on
@@ -136,7 +136,7 @@ The sidebar is grouped into **VRChat**, **Tools**, and **General**.
   audio source you explicitly share, then a short clip is sent to the selected provider.
   ACRCloud is also available with a project host, access key and access secret. Automatic
   mode tries configured providers in order; optional GPL `node-shazam` is detected but
-  never bundled by NekoSuneAPPS.
+  never bundled by NekoSuneAPPSVRC.
 - **TikTok**: enter the creator's `@username` while they are **live** (add a free
   [Euler Stream](https://www.eulerstream.com) key if you hit `SignatureError`).
 - **Twitch**: Client ID from the [Twitch Dev Console](https://dev.twitch.tv/console), then
@@ -173,7 +173,7 @@ OSCQR, SpotiOSC, and ShazamOSC publish equivalent lowercase module metadata flag
 ## 🏗 Architecture
 
 ```
-NekoSuneAPPS/
+NekoSuneAPPSVRC/
 ├─ main.js            # Electron main — owns all network/native modules + IPC
 ├─ preload.js         # IPC bridge (window.electronAPI)
 ├─ renderer.js        # UI logic, chatbox composer wiring

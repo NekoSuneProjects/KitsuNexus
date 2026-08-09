@@ -1,10 +1,10 @@
 // modules/ranks/rankEngine.js
-// NekoSuneAPPS Community Ranks — pure scoring engine.
+// NekoSuneAPPSVRC Community Ranks — pure scoring engine.
 // Implements the 0–1000 weighted model from docs/community-ranks-spec.md.
 // NO side effects, NO I/O: takes a plain `stats` object and returns a breakdown.
 // This is the single source of truth for the numbers; the DB/collector just feed it.
 //
-// IMPORTANT: these are *NekoSuneAPPS Community Ranks*, an independent community
+// IMPORTANT: these are *NekoSuneAPPSVRC Community Ranks*, an independent community
 // reputation system. They are NOT official VRChat ranks and do not read VRChat's
 // internal trust score.
 
@@ -191,7 +191,7 @@ function resolveRank (score, stats, opts = {}) {
   const next = RANKS.find(r => r.tier === display.tier + 1)
   return {
     key: display.key,
-    label: 'NekoSuneAPPS Community Rank: ' + display.label,
+    label: 'NekoSuneAPPSVRC Community Rank: ' + display.label,
     shortLabel: display.label,
     tier: display.tier,
     color: display.color,
@@ -258,7 +258,7 @@ function estimateFromTags (tags, opts = {}) {
   return {
     key: r.key,
     shortLabel: r.label,
-    label: 'NekoSuneAPPS Community Rank: ' + r.label,
+    label: 'NekoSuneAPPSVRC Community Rank: ' + r.label,
     tier: r.tier,
     color: r.color,
     accent: r.accent,

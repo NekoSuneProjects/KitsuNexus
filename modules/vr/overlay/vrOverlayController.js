@@ -43,8 +43,8 @@ async function start ({ intervalMs = 500 } = {}) {
   if (running) return
   if (!overlay.isAvailable()) throw new Error('SteamVR does not appear to be installed.')
 
-  await overlay.start({ overlayKey: 'nekosuneapps.mirror', overlayName: 'NekoSuneAPPS' })
-  framePath = path.join(os.tmpdir(), 'nekosuneapps-vr-frame.png')
+  await overlay.start({ overlayKey: 'nekosuneappsvrc.mirror', overlayName: 'NekoSuneAPPSVRC' })
+  framePath = path.join(os.tmpdir(), 'nekosuneappsvrc-vr-frame.png')
   running = true
   onStatus({ running: true })
 

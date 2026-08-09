@@ -1,11 +1,11 @@
 // modules/integrations/maintenance/updater.js
-// Update checker + installer launcher for NekoSuneAPPS - asks the GitHub
+// Update checker + installer launcher for NekoSuneAPPSVRC - asks the GitHub
 // Releases API for the latest release and compares it to the running
 // version. The actual update is handled by a fully separate helper app
 // (updater/ - its own little Electron app, packaged as updater.exe on
 // Windows / bundled inside the .app on Mac / alongside the binary on Linux)
 // with its own branded window: it downloads the release asset with a real
-// progress bar, installs it, and relaunches NekoSuneAPPS - all of it has to
+// progress bar, installs it, and relaunches NekoSuneAPPSVRC - all of it has to
 // live outside this app's own files, since it's the thing replacing them.
 // This module's only job is finding that helper and handing off to it.
 // Runs in the MAIN process.
@@ -15,7 +15,7 @@ const path = require('path')
 const fs = require('fs')
 const { spawn } = require('child_process')
 
-const REPO = 'NekoSuneProjects/NekoSuneAPPS'
+const REPO = 'NekoSuneProjects/NekoSuneAPPSVRC'
 const API = `https://api.github.com/repos/${REPO}/releases/latest`
 const RELEASES_PAGE = `https://github.com/${REPO}/releases`
 
@@ -49,7 +49,7 @@ async function check (currentVersion) {
   try {
     const { data } = await axios.get(API, {
       timeout: 12000,
-      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'NekoSuneAPPS-Updater' }
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'NekoSuneAPPSVRC-Updater' }
     })
     const latest = String(data.tag_name || data.name || '').replace(/^v/i, '')
     if (!latest) return { ok: true, available: false, current: currentVersion }
@@ -82,7 +82,7 @@ function localAppDataRoot () {
 
 function externalUpdaterPath () {
   if (process.platform !== 'win32') return null
-  return path.join(localAppDataRoot(), 'NekoSuneAPPS', 'Update.exe')
+  return path.join(localAppDataRoot(), 'NekoSuneAPPSVRC', 'Update.exe')
 }
 
 function bundledUpdaterPath () {
@@ -121,10 +121,10 @@ function resolveUpdaterLaunch (appRootDir, isPackaged) {
   }
   if (process.platform === 'darwin') {
     const resourcesPath = process.resourcesPath
-    return { cmd: path.join(resourcesPath, 'NekoSuneAPPS Updater.app', 'Contents', 'MacOS', 'NekoSuneAPPS Updater'), args: [] }
+    return { cmd: path.join(resourcesPath, 'NekoSuneAPPSVRC Updater.app', 'Contents', 'MacOS', 'NekoSuneAPPSVRC Updater'), args: [] }
   }
   if (process.platform === 'linux') {
-    return { cmd: path.join(process.resourcesPath, 'updater', 'nekosuneapps-updater'), args: [] }
+    return { cmd: path.join(process.resourcesPath, 'updater', 'nekosuneappsvrc-updater'), args: [] }
   }
   return null
 }
@@ -143,7 +143,7 @@ function startUpdate ({ url, name, version, appRootDir, isPackaged, execPath, pi
     ...launch.args,
     `--url=${url}`,
     `--exe=${execPath}`,
-    `--name=${name || 'NekoSuneAPPS-Update'}`,
+    `--name=${name || 'NekoSuneAPPSVRC-Update'}`,
     `--version=${version || ''}`,
     `--pid=${pid}`
   ]
@@ -162,7 +162,7 @@ const STATIC_COLLABORATORS = [
 async function contributors () {
   try {
     const { data } = await axios.get(`https://api.github.com/repos/${REPO}/contributors?per_page=30`, {
-      timeout: 12000, headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'NekoSuneAPPS-About' }
+      timeout: 12000, headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'NekoSuneAPPSVRC-About' }
     })
     if (!Array.isArray(data)) return { ok: true, contributors: STATIC_COLLABORATORS }
     const fromApi = data
