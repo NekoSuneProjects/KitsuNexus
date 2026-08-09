@@ -1,4 +1,4 @@
-# NekoSuneAPPS Discord backend
+# KitsuNexus Discord backend
 
 Small backend that holds the two secrets the Electron app (`NODEJS/`) can never hold itself —
 the shared bot's token and the Discord app's OAuth client secret — and exposes an authenticated
@@ -15,10 +15,10 @@ HTTP API on top of them. It serves two features:
 
 This is a fully separate service from the Electron app — its own repo branch
 (`feature/discord-backend-server`, never merged into `main`), its own `package.json`/
-`node_modules`, deployed independently via Docker. It is never bundled into NekoSuneAPPS
+`node_modules`, deployed independently via Docker. It is never bundled into KitsuNexus
 installers.
 
-The official deployment lives at `https://nekosuneappsvrc.nekosunevr.co.uk` — that's the default
+The official deployment lives at `https://kitsunexus.nekosunevr.co.uk` — that's the default
 the Electron app uses (`DEFAULT_NEKOSUNE_BACKEND_URL` in `main.js`). Self-hosters can run their
 own copy of this service and point the Electron app at it instead via the "Backend URL" field on
 the Voice Bot card — see the `DISCORD_CLIENT_ID` row below for what else that entails.
@@ -30,7 +30,7 @@ the Voice Bot card — see the `DISCORD_CLIENT_ID` row below for what else that 
 | `DISCORD_CLIENT_ID` | The official deployment uses the same app as the locked Rich Presence ID (`1534208250046578790`), since Activities are configured per-application. Self-hosters: use your own Discord application instead — nothing requires matching the official one — but also update `CLIENT_ID` in `public/activity/app.js` to match if you use the Activity. |
 | `DISCORD_CLIENT_SECRET` | Developer Portal → OAuth2 tab, for whichever application ID you used above. Never put this in the Electron app. |
 | `DISCORD_BOT_TOKEN` | The shared/official bot's token. Never put this in the Electron app. |
-| `DISCORD_REDIRECT_URI` | Must exactly match a redirect registered in the Portal's OAuth2 tab. The official deployment uses `https://nekosuneappsvrc.nekosunevr.co.uk/oauth2/discord/callback`. |
+| `DISCORD_REDIRECT_URI` | Must exactly match a redirect registered in the Portal's OAuth2 tab. The official deployment uses `https://kitsunexus.nekosunevr.co.uk/oauth2/discord/callback`. |
 | `JWT_SECRET` | Signs this backend's own session tokens — `openssl rand -hex 32` |
 | `JWT_TTL` | Session token lifetime (default `12h`) |
 | `PORT` | Default `8080` |
@@ -56,10 +56,10 @@ every push to `feature/discord-backend-server` (and via manual "Run workflow"), 
 `GITHUB_TOKEN`. Pull it instead of building locally:
 
 ```sh
-docker pull ghcr.io/nekosuneprojects/nekosuneapps/discord-backend:latest
+docker pull ghcr.io/nekosuneprojects/kitsunexus/discord-backend:latest
 ```
 
-The `ghcr.io/nekosuneprojects/nekosuneapps` package may need to be set to Public once (or your
+The `ghcr.io/nekosuneprojects/kitsunexus` package may need to be set to Public once (or your
 deploy host given read access) under the package's own Settings on GitHub — new GitHub Container
 Registry packages default to private.
 
@@ -73,7 +73,7 @@ Registry packages default to private.
 - **Installation → Installation Contexts**: keep **Guild Install** checked (required to add the
   bot to any server at all). **User Install** isn't used by anything here — leave it checked or
   not, it makes no difference.
-- **OAuth2 → Redirects**: add `https://nekosuneappsvrc.nekosunevr.co.uk/oauth2/discord/callback`
+- **OAuth2 → Redirects**: add `https://kitsunexus.nekosunevr.co.uk/oauth2/discord/callback`
   (or your own domain, for self-hosted deployments).
 - **Activities → URL Mappings → Root Mapping**: prefix `/` → target your chosen host.
   Serving the API and the Activity's static assets from this same backend means one Root
@@ -143,7 +143,7 @@ re-checks the same permission server-side regardless of what the UI shows.
 - `robots.txt` disallows all crawling.
 - `/api/status` and the bot-control routes are rate-limited per authenticated Discord user
   (`express-rate-limit`) — this API is public-facing and fed by every install of the app, unlike
-  everything else in NekoSuneAPPS, which is local-loopback only.
+  everything else in KitsuNexus, which is local-loopback only.
 
 ## Known limitations
 

@@ -56,7 +56,7 @@ function render (data) {
   const app = document.getElementById('app')
   const visible = data.members.filter(m => m.visible)
   if (!visible.length) {
-    app.innerHTML = '<p id="loading">No one here has NekoSuneAPPS open right now (or their status is hidden).</p>'
+    app.innerHTML = '<p id="loading">No one here has KitsuNexus open right now (or their status is hidden).</p>'
     return
   }
   app.innerHTML = visible.map(m => `

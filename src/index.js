@@ -25,7 +25,7 @@ function main () {
   app.get('/robots.txt', (req, res) => res.type('text/plain').send('User-agent: *\nDisallow: /\n'))
   app.get('/', (req, res) => {
     if (discordInviteUrl) return res.redirect(discordInviteUrl)
-    res.type('text/plain').send('NekoSuneAPPS backend.')
+    res.type('text/plain').send('KitsuNexus backend.')
   })
 
   app.get('/healthz', (req, res) => res.json({ ok: true, botReady: botGateway.isReady() }))
@@ -34,13 +34,13 @@ function main () {
   app.use(dashboardRoutes)
   app.use('/activity', express.static('public/activity'))
 
-  app.listen(port, () => console.log(`[nekosuneapps-discord-backend] listening on :${port}`))
+  app.listen(port, () => console.log(`[kitsunexus-discord-backend] listening on :${port}`))
 
   // Non-blocking: OAuth/status routes should stay up even if the bot token is
   // bad or Discord is briefly unreachable — a login retry shouldn't take the
   // whole API down with it.
   botGateway.start().catch(err => {
-    console.error('[nekosuneapps-discord-backend] bot gateway failed to start (will not retry automatically):', err.message)
+    console.error('[kitsunexus-discord-backend] bot gateway failed to start (will not retry automatically):', err.message)
   })
 }
 

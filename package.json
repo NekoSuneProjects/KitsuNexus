@@ -1,8 +1,8 @@
 {
-  "name": "nekosuneapps-discord-backend",
-  "version": "1.0.0",
+  "name": "kitsunexus-discord-backend",
+  "version": "1.0.1",
   "private": true,
-  "description": "Backend for NekoSuneAPPS's Discord Activity + official shared bot. Holds the bot token and OAuth client secret server-side — never bundled into the Electron app.",
+  "description": "Backend for KitsuNexus's Discord Activity + official shared bot. Holds the bot token and OAuth client secret server-side — never bundled into the Electron app.",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js"

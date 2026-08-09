@@ -6,7 +6,7 @@ const botGateway = require('../discordBotGateway')
 
 const router = express.Router()
 
-// Public-facing (unlike everything else in the NekoSuneAPPS app, which is
+// Public-facing (unlike everything else in the KitsuNexus app, which is
 // local-loopback only) and fed by every installed copy of the app — keyed per
 // authenticated Discord user so one client can't crowd out another.
 const perUserLimiter = rateLimit({

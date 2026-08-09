@@ -1,4 +1,4 @@
-// Persistent gateway connection for the shared/official NekoSuneAPPS Discord bot.
+// Persistent gateway connection for the shared/official KitsuNexus Discord bot.
 // Server-side twin of modules/integrations/discord/discordBot.js in the Electron
 // app, generalized from "watch one user" to "answer lookups for any user/channel"
 // since this backend serves every installed copy of the app.
@@ -133,7 +133,7 @@ async function setMute (guildId, userId, mute) {
   const member = guild && guild.members.cache.get(userId)
   if (!member) return { ok: false, error: 'Member not found' }
   try {
-    await member.voice.setMute(!!mute, 'NekoSuneAPPS official bot')
+    await member.voice.setMute(!!mute, 'KitsuNexus official bot')
     return { ok: true }
   } catch (err) { return { ok: false, error: err.message } }
 }
@@ -143,7 +143,7 @@ async function setDeaf (guildId, userId, deaf) {
   const member = guild && guild.members.cache.get(userId)
   if (!member) return { ok: false, error: 'Member not found' }
   try {
-    await member.voice.setDeaf(!!deaf, 'NekoSuneAPPS official bot')
+    await member.voice.setDeaf(!!deaf, 'KitsuNexus official bot')
     return { ok: true }
   } catch (err) { return { ok: false, error: err.message } }
 }

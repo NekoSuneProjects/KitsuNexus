@@ -23,7 +23,7 @@ function escapeHtml (s) {
 
 function page (bodyHtml) {
   return `<!doctype html>
-<html><head><meta charset="utf-8"><title>NekoSuneAPPS</title>
+<html><head><meta charset="utf-8"><title>KitsuNexus</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   body{background:#0b0b14;color:#e8e8f0;font:15px/1.5 system-ui,sans-serif;max-width:640px;margin:48px auto;padding:0 16px}
@@ -34,7 +34,7 @@ function page (bodyHtml) {
   ul{padding-left:20px}
   .muted{color:#8a8aa0}
 </style></head>
-<body><h2>NekoSuneAPPS</h2>${bodyHtml}</body></html>`
+<body><h2>KitsuNexus</h2>${bodyHtml}</body></html>`
 }
 
 router.get('/dashboard', async (req, res) => {

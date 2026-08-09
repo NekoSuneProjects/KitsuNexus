@@ -18,6 +18,6 @@ module.exports = {
   // link). Left blank, / just serves a minimal placeholder page.
   discordInviteUrl: process.env.DISCORD_INVITE_URL || '',
   // Electron's local OAuth loopback — fixed, matches modules/oauth/providers/twitch.js's
-  // established port convention in the NekoSuneAPPS desktop app.
+  // established port convention in the KitsuNexus desktop app.
   electronLoopbackRedirect: 'http://localhost:3737/oauth2/discord/callback'
 }
