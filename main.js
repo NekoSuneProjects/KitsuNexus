@@ -106,6 +106,19 @@ process.on('unhandledRejection', err => console.error('[unhandledRejection]', er
 // "GPU Very high" usage to near zero. Must be called before app is ready.
 app.disableHardwareAcceleration()
 
+function configurePortableMode () {
+  const portableRoot = process.env.NEKOSUNE_PORTABLE_DIR ||
+    (app.isPackaged ? path.dirname(process.execPath) : '')
+  if (!portableRoot) return
+  const marker = path.join(portableRoot, 'portable')
+  const dataDir = path.join(portableRoot, 'Data')
+  if (!fs.existsSync(marker) && !fs.existsSync(dataDir)) return
+  fs.mkdirSync(dataDir, { recursive: true })
+  app.setPath('userData', dataDir)
+}
+
+configurePortableMode()
+
 // Linux desktops (GNOME/KDE) default to Wayland now, where Chromium's screen/
 // window capture (desktopCapturer, used by OSCQR/ShazamOSC/VRChat-window
 // capture below) needs PipeWire explicitly enabled - without it, capture can
@@ -297,6 +310,7 @@ async function configureOverlayServer () {
 }
 
 app.whenReady().then(async () => {
+  try { updater.ensureExternalUpdater() } catch (err) { console.warn('updater bootstrap:', err.message) }
   // Downloaded Whisper models land under userData (always writable without
   // elevation), not @huggingface/transformers's own node_modules-relative
   // default - see speechToText.js for why that default broke on a

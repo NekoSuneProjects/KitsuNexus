@@ -31,14 +31,15 @@ function cmp (a, b) {
 }
 
 // The asset the standalone updater actually installs, one per platform.
-// Windows: prefer the NSIS .exe Setup installer (runs with /S for a silent
-// in-place upgrade to the same directory the user originally chose).
+// Windows: prefer the app zip when published, then the NSIS .exe Setup
+// installer (runs with /S for a silent in-place upgrade to the same directory
+// the user originally chose). The portable .exe is a manual fallback only.
 // MSI is intentionally avoided here — msiexec installs to its own default
 // path and won't update an existing NSIS install, so the relaunch would
 // re-open the old binary instead of the new one.
 function pickUpdateAsset (assets) {
   const pick = re => assets.find(a => re.test(a.name || ''))
-  if (process.platform === 'win32') return pick(/Setup.*\.exe$/i) || pick(/\.exe$/i) || pick(/\.msi$/i)
+  if (process.platform === 'win32') return pick(/\.zip$/i) || pick(/Setup.*\.exe$/i) || pick(/\.exe$/i) || pick(/\.msi$/i)
   if (process.platform === 'darwin') return pick(/\.zip$/i)
   if (process.platform === 'linux') return pick(/\.appimage$/i) || pick(/\.deb$/i)
   return null
@@ -75,6 +76,39 @@ async function check (currentVersion) {
   }
 }
 
+function localAppDataRoot () {
+  return process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || process.env.HOME || path.dirname(process.execPath), 'AppData', 'Local')
+}
+
+function externalUpdaterPath () {
+  if (process.platform !== 'win32') return null
+  return path.join(localAppDataRoot(), 'NekoSuneAPPS', 'Update.exe')
+}
+
+function bundledUpdaterPath () {
+  if (process.platform !== 'win32') return null
+  const candidates = [
+    path.join(process.resourcesPath || '', 'updater', 'updater.exe'),
+    path.join(path.dirname(process.execPath), 'updater.exe')
+  ]
+  return candidates.find(p => p && fs.existsSync(p)) || null
+}
+
+// Install the updater outside the app install directory (Discord-style under
+// %LOCALAPPDATA%) so normal app updates can replace Program Files/app-* content
+// without touching the running helper. Once present, do not overwrite it during
+// app updates; ship an explicit updater release when the helper itself changes.
+function ensureExternalUpdater () {
+  if (process.platform !== 'win32') return null
+  const target = externalUpdaterPath()
+  if (target && fs.existsSync(target)) return target
+  const source = bundledUpdaterPath()
+  if (!target || !source) return null
+  fs.mkdirSync(path.dirname(target), { recursive: true })
+  fs.copyFileSync(source, target)
+  return target
+}
+
 // Where the standalone updater helper lives, per platform/build state. Dev
 // (unpackaged) runs use the local electron binary pointed at the updater's
 // own main.js directly, since there's no built updater.exe yet in that case.
@@ -83,7 +117,7 @@ function resolveUpdaterLaunch (appRootDir, isPackaged) {
     return { cmd: process.execPath, args: [path.join(appRootDir, 'updater', 'main.js')] }
   }
   if (process.platform === 'win32') {
-    return { cmd: path.join(path.dirname(process.execPath), 'updater.exe'), args: [] }
+    return { cmd: externalUpdaterPath(), args: [] }
   }
   if (process.platform === 'darwin') {
     const resourcesPath = process.resourcesPath
@@ -100,8 +134,9 @@ function resolveUpdaterLaunch (appRootDir, isPackaged) {
 function startUpdate ({ url, name, version, appRootDir, isPackaged, execPath, pid }, quitApp) {
   const launch = resolveUpdaterLaunch(appRootDir, isPackaged)
   if (!launch) throw new Error(`No update helper available for platform "${process.platform}"`)
+  if (isPackaged && process.platform === 'win32') ensureExternalUpdater()
   if (isPackaged && !fs.existsSync(launch.cmd)) {
-    throw new Error('Update helper is missing from this install (updater.exe not found)')
+    throw new Error('Update helper is missing from this install (Update.exe not found in LocalAppData)')
   }
 
   const cliArgs = [
@@ -143,4 +178,4 @@ async function contributors () {
   }
 }
 
-module.exports = { check, cmp, contributors, startUpdate, resolveUpdaterLaunch, RELEASES_PAGE }
+module.exports = { check, cmp, contributors, startUpdate, resolveUpdaterLaunch, ensureExternalUpdater, externalUpdaterPath, RELEASES_PAGE }

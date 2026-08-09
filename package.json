@@ -58,6 +58,12 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.ico",
@@ -75,10 +81,13 @@
         "package.json",
         "node_modules/**/*"
       ],
-      "extraFiles": [
+      "extraResources": [
         {
           "from": "updater/updater.exe",
-          "to": "updater.exe"
+          "to": "updater/updater.exe",
+          "filter": [
+            "**/*"
+          ]
         }
       ]
     },
@@ -129,6 +138,9 @@
         }
       ],
       "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
     }
   },
   "keywords": [

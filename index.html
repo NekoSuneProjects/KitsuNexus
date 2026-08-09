@@ -83,6 +83,7 @@
     /* User profile modal */
     .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); backdrop-filter:blur(3px); z-index:200; display:flex; align-items:center; justify-content:center; padding:24px; }
     .modal-card { width:720px; max-width:96vw; max-height:92vh; overflow:auto; background:var(--panel); border:1px solid var(--border); border-radius:18px; position:relative; box-shadow:0 30px 80px -20px #000; }
+    .language-picker-card { width:420px; max-width:calc(100vw - 32px); padding:22px 24px 20px; overflow:visible; }
     .mgroup { font-size:.7rem; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); font-weight:700; cursor:pointer; user-select:none; padding:8px 2px 4px; }
     .mgroup:hover { color:var(--text); }
     .modal-banner { height:150px; background:linear-gradient(135deg,var(--panel2),var(--bg2)); background-size:cover; background-position:center; }
@@ -2219,12 +2220,12 @@
 
   <!-- User profile modal -->
   <div id="languagePickerModal" class="modal-overlay" style="display:none">
-    <div class="modal-card" style="max-width:420px">
+    <div class="modal-card language-picker-card">
       <h3 data-i18n="languagePicker.title">Choose your language</h3>
       <p class="muted" data-i18n="languagePicker.subtitle">You can change this later in Settings.</p>
       <select id="languagePickerSelect" style="margin-top:10px"></select>
       <div class="row" style="margin-top:14px;justify-content:flex-end">
-        <button class="btn" id="languagePickerContinue" data-i18n="languagePicker.continue">Continue</button>
+        <button class="btn" id="languagePickerContinue" type="button" data-i18n="languagePicker.continue">Continue</button>
       </div>
     </div>
   </div>

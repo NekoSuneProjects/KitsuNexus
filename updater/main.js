@@ -243,6 +243,33 @@ function findAppBundle (fromPath) {
 
 async function applyInstaller (downloadedPath, targetExePath) {
   if (process.platform === 'win32') {
+    if (/\.zip$/i.test(downloadedPath)) {
+      const installDir = path.dirname(targetExePath)
+      const extractDir = path.join(os.tmpdir(), `nekosune-update-${Date.now()}`)
+      send('status', { phase: 'step', step: 'uninstall', label: 'Closing running instances…' })
+      await killRunningInstances()
+      send('status', { phase: 'step', step: 'install', label: 'Extracting app package…' })
+      fs.mkdirSync(extractDir, { recursive: true })
+      await new Promise((resolve, reject) =>
+        execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+          `Expand-Archive -LiteralPath '${downloadedPath.replace(/'/g, "''")}' -DestinationPath '${extractDir.replace(/'/g, "''")}' -Force`
+        ], { timeout: 120000 }, (e) => e ? reject(e) : resolve())
+      )
+      send('status', { phase: 'step', step: 'install', label: 'Copying app files…' })
+      await new Promise((resolve, reject) =>
+        execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+          `$src='${extractDir.replace(/'/g, "''")}'; $dst='${installDir.replace(/'/g, "''")}'; ` +
+          'Get-ChildItem -Path $src -Recurse -Force -ErrorAction SilentlyContinue | ' +
+          "Where-Object { $_.Name -notin @('updater.exe','Update.exe') } | ForEach-Object { " +
+          '$rel=$_.FullName.Substring($src.Length).TrimStart("\\"); $to=Join-Path $dst $rel; ' +
+          'if ($_.PSIsContainer) { New-Item -ItemType Directory -Path $to -Force | Out-Null } ' +
+          'else { New-Item -ItemType Directory -Path (Split-Path $to) -Force | Out-Null; Copy-Item -LiteralPath $_.FullName -Destination $to -Force } }'
+        ], { timeout: 120000 }, (e) => e ? reject(e) : resolve())
+      )
+      try { fs.rmSync(extractDir, { recursive: true, force: true }) } catch (_) {}
+      return { relaunch: true }
+    }
+
     // Read registry info BEFORE uninstalling — the uninstaller removes those keys.
     send('status', { phase: 'step', step: 'uninstall', label: 'Preparing…' })
     const { installDir, uninstallExe } = await findNsisInstallInfo()

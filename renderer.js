@@ -273,12 +273,19 @@ async function initLanguage () {
   $('languageSelect').value = saved
   await applyLanguage(saved)
 }
-$('languagePickerContinue').addEventListener('click', async () => {
+async function finishLanguagePicker () {
   const lang = $('languagePickerSelect').value
   await api.saveSetting('uiLanguage', lang)
   $('languageSelect').value = lang
   await applyLanguage(lang)
   $('languagePickerModal').style.display = 'none'
+}
+$('languagePickerContinue').addEventListener('click', finishLanguagePicker)
+$('languagePickerModal').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    finishLanguagePicker()
+  }
 })
 $('languageSelect').addEventListener('change', async e => {
   await api.saveSetting('uiLanguage', e.target.value)
