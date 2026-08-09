@@ -122,15 +122,33 @@ function runFile (cmd, cmdArgs, opts) {
 
 // ── Windows-only helpers ──────────────────────────────────────────────────────
 
-// Kills any running KitsuNexus processes so files aren't locked during
-// uninstall/install. This is the most common cause of NSIS exit code 2.
-async function killRunningInstances () {
+// Returns only main-app process names. The standalone updater is deliberately
+// excluded: it must stay alive after KitsuNexus exits so it can perform the
+// download/install/relaunch flow.
+function mainAppProcessNames (targetExePath) {
+  const names = new Set(['NekoSuneAPPS', 'KitsuNexus'])
+  const targetName = path.basename(targetExePath || '', path.extname(targetExePath || ''))
+  if (targetName && !/updat(?:e|er)/i.test(targetName) && !/^electron$/i.test(targetName)) {
+    names.add(targetName)
+  }
+  return [...names]
+}
+
+// Kills any running KitsuNexus main-app processes so files aren't locked
+// during uninstall/install. This is the most common cause of NSIS exit code 2.
+// PowerShell's $PID is the PowerShell child, not this Electron updater, so the
+// real updater PID is embedded explicitly as an additional safety guard.
+async function killRunningInstances (targetExePath = exePath) {
   if (process.platform !== 'win32') return
   try {
+    const processNames = mainAppProcessNames(targetExePath)
+      .map(name => `'${name.replace(/'/g, "''")}'`)
+      .join(',')
+    const updaterPid = process.pid
     await new Promise((resolve, reject) =>
       execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-        "Get-Process -Name 'NekoSuneAPPS','NekoSuneAPPS Updater','KitsuNexus','KitsuNexus Updater' -ErrorAction SilentlyContinue |" +
-        " Where-Object { $_.Id -ne $PID } | ForEach-Object { " +
+        `$updaterPid=${updaterPid}; Get-Process -Name ${processNames} -ErrorAction SilentlyContinue |` +
+        ' Where-Object { $_.Id -ne $updaterPid } | ForEach-Object { ' +
         "  Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue" +
         " }; Start-Sleep -Milliseconds 500"
       ], { timeout: 10000 }, (e) => e ? reject(e) : resolve())
@@ -249,7 +267,7 @@ async function applyInstaller (downloadedPath, targetExePath) {
       const installDir = path.dirname(targetExePath)
       const extractDir = path.join(os.tmpdir(), `nekosune-update-${Date.now()}`)
       send('status', { phase: 'step', step: 'uninstall', label: 'Closing running instances…' })
-      await killRunningInstances()
+      await killRunningInstances(targetExePath)
       send('status', { phase: 'step', step: 'install', label: 'Extracting app package…' })
       fs.mkdirSync(extractDir, { recursive: true })
       await new Promise((resolve, reject) =>
@@ -279,7 +297,7 @@ async function applyInstaller (downloadedPath, targetExePath) {
     // Kill any running instances so files aren't locked (most common cause of
     // uninstall failure / NSIS exit code 2).
     send('status', { phase: 'step', step: 'uninstall', label: 'Closing running instances…' })
-    await killRunningInstances()
+    await killRunningInstances(targetExePath)
 
     // Step 1: clean uninstall of old files
     if (uninstallExe) {
@@ -325,7 +343,7 @@ async function applyInstaller (downloadedPath, targetExePath) {
         lastErr = err
         if (i < attempts) {
           // Wait a bit and kill any lingering processes before retrying
-          await killRunningInstances()
+          await killRunningInstances(targetExePath)
           await new Promise(r => setTimeout(r, 2000))
         }
       }

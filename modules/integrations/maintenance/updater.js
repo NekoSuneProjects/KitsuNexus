@@ -18,6 +18,7 @@ const { spawn } = require('child_process')
 const REPO = 'NekoSuneProjects/KitsuNexus'
 const API = `https://api.github.com/repos/${REPO}/releases/latest`
 const RELEASES_PAGE = `https://github.com/${REPO}/releases`
+const EXTERNAL_UPDATER_VERSION = '1.0.1'
 
 // Compare dotted versions; returns >0 if a>b, <0 if a<b, 0 if equal.
 function cmp (a, b) {
@@ -96,16 +97,25 @@ function bundledUpdaterPath () {
 
 // Install the updater outside the app install directory (Discord-style under
 // %LOCALAPPDATA%) so normal app updates can replace Program Files/app-* content
-// without touching the running helper. Once present, do not overwrite it during
-// app updates; ship an explicit updater release when the helper itself changes.
+// without touching the running helper. A sidecar version marker lets a newly
+// installed KitsuNexus build refresh an older external helper before launching
+// it. If the helper is still running, the copy fails safely and is retried the
+// next time an update starts.
 function ensureExternalUpdater () {
   if (process.platform !== 'win32') return null
   const target = externalUpdaterPath()
-  if (target && fs.existsSync(target)) return target
   const source = bundledUpdaterPath()
-  if (!target || !source) return null
+  if (!target) return null
+  if (!source) return fs.existsSync(target) ? target : null
+
+  const versionMarker = `${target}.version`
+  let installedVersion = ''
+  try { installedVersion = fs.readFileSync(versionMarker, 'utf8').trim() } catch (_) {}
+  if (fs.existsSync(target) && installedVersion === EXTERNAL_UPDATER_VERSION) return target
+
   fs.mkdirSync(path.dirname(target), { recursive: true })
   fs.copyFileSync(source, target)
+  fs.writeFileSync(versionMarker, `${EXTERNAL_UPDATER_VERSION}\n`, 'utf8')
   return target
 }
 
@@ -147,9 +157,20 @@ function startUpdate ({ url, name, version, appRootDir, isPackaged, execPath, pi
     `--version=${version || ''}`,
     `--pid=${pid}`
   ]
-  const child = spawn(launch.cmd, cliArgs, { detached: true, stdio: 'ignore' })
-  child.unref()
-  quitApp()
+  return new Promise((resolve, reject) => {
+    const child = spawn(launch.cmd, cliArgs, { detached: true, stdio: 'ignore' })
+    let launched = false
+    child.once('error', err => {
+      if (!launched) reject(err)
+      else console.warn('Updater process error after launch:', err.message)
+    })
+    child.once('spawn', () => {
+      launched = true
+      child.unref()
+      resolve(child.pid)
+      quitApp()
+    })
+  })
 }
 
 // Static collaborators who may not yet appear in GitHub's contributor API
@@ -178,4 +199,4 @@ async function contributors () {
   }
 }
 
-module.exports = { check, cmp, contributors, startUpdate, resolveUpdaterLaunch, ensureExternalUpdater, externalUpdaterPath, RELEASES_PAGE }
+module.exports = { check, cmp, contributors, startUpdate, resolveUpdaterLaunch, ensureExternalUpdater, externalUpdaterPath, EXTERNAL_UPDATER_VERSION, RELEASES_PAGE }

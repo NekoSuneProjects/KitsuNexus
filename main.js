@@ -804,10 +804,10 @@ ipcMain.handle('app:supporters', async () => {
 // download + install + relaunch flow from here, since it has to run outside
 // this app's own files to be able to replace them. See updater.js for how
 // it's located per platform / dev vs packaged.
-ipcMain.handle('update:startUpdate', (e, { url, name, version } = {}) => {
+ipcMain.handle('update:startUpdate', async (e, { url, name, version } = {}) => {
   if (!url) throw new Error('No update file to download')
   try {
-    updater.startUpdate({
+    await updater.startUpdate({
       url, name, version,
       appRootDir: __dirname,
       isPackaged: app.isPackaged,

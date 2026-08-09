@@ -5,6 +5,16 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.71] - 2026-08-09
+
+### Fixed
+- **The separate Windows updater no longer terminates itself while closing KitsuNexus.** Process
+  cleanup now targets only main-app executable names and protects the updater's real Electron PID
+  instead of PowerShell's own `$PID`. External `%LOCALAPPDATA%\KitsuNexus\Update.exe` copies now
+  carry a helper-version marker so installed apps refresh older updater binaries before launching
+  them. The main app also waits for the separate updater's successful spawn event before quitting,
+  so a launch failure leaves KitsuNexus open and reports the error.
+
 ## [1.0.70] - 2026-08-09
 
 ### Changed
