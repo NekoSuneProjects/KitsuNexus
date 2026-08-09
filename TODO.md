@@ -53,7 +53,7 @@ category's section below.
 
 ### Discord
 - [x] Discord Rich Presence (world + HR + song; buttons auto-drop over IPC)
-- [x] **Pinned Discord Rich Presence Application ID to `1534208250046578790`**, no longer
+- [x] **Pinned Discord Rich Presence Application ID to `1536095795667795998`**, no longer
   user-editable — disabled the Discord Application ID field in the Discord tab and force the
   fixed ID in `renderer.js` and `main.js`'s `discord:start` handler regardless of saved config.
 - [x] DiscordOSC, Discord voice bot
@@ -369,7 +369,7 @@ all feed into.
   this session** — still needed before this works end to end: actually deploy that official
   host, fill in that branch's `.env` (bot token, OAuth client secret, JWT secret), register the
   OAuth redirect + Activities URL Mapping in the Developer Portal for app
-  `1534208250046578790`, and get
+  `1536095795667795998`, and get
   Activities enabled for that app. See that branch's `README.md` for the full one-time setup
   checklist.
 - [x] **Fixed: Discord Rich Presence's elapsed timer reset on every status change** instead of

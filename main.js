@@ -51,7 +51,7 @@ const { startDiscord, stopDiscord, updateActivity, setVrcContext, setExtraOscTar
 const { startStatusPush, stopStatusPush } = require('./modules/integrations/discord/statusPush')
 // Fixed KitsuNexus Discord Rich Presence Application ID — must match
 // DEFAULT_DISCORD_APP_ID in renderer.js. Not user-editable.
-const DISCORD_APP_ID = '1534208250046578790'
+const DISCORD_APP_ID = '1536095795667795998'
 // KitsuNexus backend (feature/discord-backend-server, deployed separately)
 // for the Discord Activity panel + official shared bot — holds the bot
 // token/OAuth secret, never this app. Defaults to the official NekoSuneVR

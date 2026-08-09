@@ -86,7 +86,7 @@ const DEFAULT_TWITCH_CLIENT_ID = ''
 // Fixed KitsuNexus Discord Rich Presence Application ID. Intentionally not
 // user-editable (see #discordAppId in index.html) — locked so RP always shows
 // as the official app regardless of what's in a user's saved config.
-const DEFAULT_DISCORD_APP_ID = '1534208250046578790'
+const DEFAULT_DISCORD_APP_ID = '1536095795667795998'
 
 let isAnalyzing = false
 let beatState = false

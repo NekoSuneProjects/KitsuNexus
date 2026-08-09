@@ -5,6 +5,13 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.70] - 2026-08-09
+
+### Changed
+- **Updated the official Discord Rich Presence/RPC Application ID.** KitsuNexus now pins
+  `1536095795667795998` in both the Electron main process and renderer. Related setup and
+  allowlist documentation now references the new application.
+
 ## [1.0.69] - 2026-08-09
 
 ### Added
@@ -170,7 +177,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 ### Changed
 - **Discord Rich Presence Application ID is now fixed and no longer user-editable.** Previously
   the "Discord Application (Client) ID" field defaulted to a shipped ID but users could freely
-  edit or clear it. It's now pinned to `1534208250046578790` at every layer — the input in the
+  edit or clear it. It's now pinned to `1536095795667795998` at every layer — the input in the
   Discord tab (`index.html`) is disabled/readonly, `renderer.js` forces the saved config and every
   outgoing `discord:start` payload to this ID regardless of what's stored, and `main.js`'s
   `discord:start` IPC handler overwrites `clientId` on the way into `startDiscord()` as a final
