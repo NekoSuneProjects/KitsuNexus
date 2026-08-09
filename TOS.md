@@ -1,14 +1,14 @@
 # Terms of Service
 
 **Effective date:** 2026-06-09
-**Software:** NekoSuneAPPS ("the App")
+**Software:** NekoSuneAPPSVRC ("the App")
 **Owner:** NekoSuneVR ("we", "us")
 
 By installing or using the App you agree to these Terms. If you do not agree, do
 not use the App.
 
 ## 1. Description
-NekoSuneAPPS is a desktop companion that sends data to VRChat over the OSC protocol
+NekoSuneAPPSVRC is a desktop companion that sends data to VRChat over the OSC protocol
 (chatbox, status, system stats, heart rate, media, and follower counts) and
 optionally connects to third-party services you configure (Discord, Twitch, TikTok,
 Kick, Pulsoid, HypeRate, the VRChat API, Spotify via media keys, Leppsoft Soundpad,
@@ -36,7 +36,7 @@ and for any credentials you provide.
 ## 5. Rate limits & account risk
 Some platforms rate-limit or prohibit automated access. **Sending too many requests
 is at your own risk** and may result in rate-limiting, suspension, or banning of
-your account by that platform. **NekoSuneAPPS is not responsible for any bans,
+your account by that platform. **NekoSuneAPPSVRC is not responsible for any bans,
 suspensions, or other account actions.** Because the App does not inject code into or
 modify VRChat (or any other software), it does not itself breach those platforms —
 how you use third-party APIs is your responsibility.

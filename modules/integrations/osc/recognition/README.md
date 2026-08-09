@@ -9,7 +9,7 @@ Provider modes:
 1. **AudD** — official `@audd/sdk`, MIT, requires an AudD token.
 2. **ACRCloud** — `acrcloud`, MIT, requires host, access key and access secret.
 3. **node-shazam** — optional external fallback. It is GPL-2.0 and is intentionally not
-   installed or bundled by NekoSuneAPPS. The adapter activates only when the package is
+   installed or bundled by NekoSuneAPPSVRC. The adapter activates only when the package is
    separately available at runtime.
 4. **Automatic fallback** — tries only configured providers, in the order above.
 
@@ -21,7 +21,7 @@ Developers who intentionally accept node-shazam's GPL-2.0 terms can keep it outs
 project with:
 
 ```powershell
-npm install --prefix "$env:APPDATA\NekoSuneAPPS\optional-providers" node-shazam
+npm install --prefix "$env:APPDATA\NekoSuneAPPSVRC\optional-providers" node-shazam
 ```
 
 Alternatively set `NEKOSUNE_NODE_SHAZAM_PATH` to an external package folder. Do not add it

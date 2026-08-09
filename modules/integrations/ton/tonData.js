@@ -17,7 +17,7 @@ const axios = require('axios')
 const BASE = 'https://terror.moe'
 const TRACK = 'https://tontrack.me/js/script.js'
 const MAX_AGE_MS = 24 * 60 * 60 * 1000
-const UA = { 'User-Agent': 'Mozilla/5.0 (NekoSuneAPPS ToN cache)' }
+const UA = { 'User-Agent': 'Mozilla/5.0 (NekoSuneAPPSVRC ToN cache)' }
 
 let cachePath = ''
 let iconDir = ''

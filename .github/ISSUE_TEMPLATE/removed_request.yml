@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Use this template to request removing something from NekoSuneAPPS. Please explain the impact and reason clearly.
+        Use this template to request removing something from NekoSuneAPPSVRC. Please explain the impact and reason clearly.
   - type: textarea
     id: item
     attributes:

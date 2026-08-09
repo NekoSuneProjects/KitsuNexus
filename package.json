@@ -1,5 +1,5 @@
 {
-  "name": "nekosuneapps",
+  "name": "nekosuneappsvrc",
   "version": "1.0.68",
   "main": "main.js",
   "bin": "main.js",
@@ -11,14 +11,14 @@
   },
   "build": {
     "copyright": "Copyright © 2024-2026 NekoSuneVR",
-    "appId": "com.nekosunevr.nekosuneapps",
-    "productName": "NekoSuneAPPS",
+    "appId": "com.nekosunevr.nekosuneappsvrc",
+    "productName": "NekoSuneAPPSVRC",
     "appx": {
       "backgroundColor": "#0b0b14",
-      "displayName": "NekoSuneAPPS",
+      "displayName": "NekoSuneAPPSVRC",
       "publisher": "CN=NekoSuneVR",
       "publisherDisplayName": "NekoSuneVR",
-      "identityName": "com.nekosunevr.nekosuneapps"
+      "identityName": "com.nekosunevr.nekosuneappsvrc"
     },
     "directories": {
       "output": "dist",
@@ -58,6 +58,12 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.ico",
@@ -75,10 +81,13 @@
         "package.json",
         "node_modules/**/*"
       ],
-      "extraFiles": [
+      "extraResources": [
         {
           "from": "updater/updater.exe",
-          "to": "updater.exe"
+          "to": "updater/updater.exe",
+          "filter": [
+            "**/*"
+          ]
         }
       ]
     },
@@ -129,6 +138,9 @@
         }
       ],
       "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
     }
   },
   "keywords": [
@@ -144,7 +156,7 @@
   },
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
-  "description": "NekoSuneAPPS - a VRChat OSC companion: chatbox, status, social suite, component stats, heart rate, TikTok & Twitch follower counters, AudioLink and Now Playing with KAT support.",
+  "description": "NekoSuneAPPSVRC - a VRChat OSC companion: chatbox, status, social suite, component stats, heart rate, TikTok & Twitch follower counters, AudioLink and Now Playing with KAT support.",
   "dependencies": {
     "@audd/sdk": "^1.5.11",
     "@aws-sdk/client-polly": "^3.1081.0",

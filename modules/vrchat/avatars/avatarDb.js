@@ -6,7 +6,7 @@
 
 const axios = require('axios')
 
-const REQ = { validateStatus: () => true, timeout: 15000, headers: { 'User-Agent': 'NekoSuneAPPS/1.0.0' } }
+const REQ = { validateStatus: () => true, timeout: 15000, headers: { 'User-Agent': 'NekoSuneAPPSVRC/1.0.0' } }
 
 // Built-in default. Users can add their own in Settings → Avatar providers.
 const DEFAULT_PROVIDERS = [

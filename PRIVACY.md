@@ -1,15 +1,15 @@
 # Privacy Policy
 
 **Effective date:** 2026-06-09
-**Software:** NekoSuneAPPS ("the App")
+**Software:** NekoSuneAPPSVRC ("the App")
 **Owner:** NekoSuneVR
 
 Your privacy matters. This policy explains what the App does and does not do with
-your data. **Short version: NekoSuneAPPS runs entirely on your own computer. We do
+your data. **Short version: NekoSuneAPPSVRC runs entirely on your own computer. We do
 not operate any servers and we do not collect, transmit, share, or sell your data.**
 
 ## 1. We collect nothing
-NekoSuneAPPS has no backend, no analytics, no telemetry, and no accounts. We, the
+NekoSuneAPPSVRC has no backend, no analytics, no telemetry, and no accounts. We, the
 developers, never receive any information from your use of the App.
 
 ## 2. Local-only settings

@@ -1,4 +1,4 @@
-NekoSuneAPPS Source-Available Contribution License
+NekoSuneAPPSVRC Source-Available Contribution License
 Copyright (c) 2024-2026 NekoSuneVR. All Rights Reserved.
 
 This software, source code, assets, comments, and documentation (collectively,
@@ -8,7 +8,7 @@ Software, you agree to the terms below.
 
 1. OFFICIAL PROJECT
    The official repository for the Software is:
-   https://github.com/NekoSuneProjects/NekoSuneAPPS
+   https://github.com/NekoSuneProjects/NekoSuneAPPSVRC
 
    Copies, forks, builds, releases, or mirrors outside the official repository are
    not official unless NekoSuneVR expressly says so in writing.
@@ -85,7 +85,7 @@ Software, you agree to the terms below.
 7. THIRD-PARTY COMPONENTS
    The Software may depend on third-party packages, apps, ideas, protocols, or
    integrations, each governed by its own terms. Those terms apply only to their
-   respective components. They do not grant rights to the NekoSuneAPPS source
+   respective components. They do not grant rights to the NekoSuneAPPSVRC source
    code, assets, documentation, or project-specific modifications, which remain
    governed by this License.
 

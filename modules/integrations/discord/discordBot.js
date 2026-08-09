@@ -128,7 +128,7 @@ async function setMute (mute) {
     const guild = client.guilds.cache.get(state.guildId)
     const member = guild && guild.members.cache.get(targetUserId)
     if (!member) return { ok: false, error: 'Member not found' }
-    await member.voice.setMute(!!mute, 'NekoSuneAPPS DiscordOSC')
+    await member.voice.setMute(!!mute, 'NekoSuneAPPSVRC DiscordOSC')
     return { ok: true }
   } catch (err) { return { ok: false, error: err.message } }
 }
@@ -138,7 +138,7 @@ async function setDeaf (deaf) {
     const guild = client.guilds.cache.get(state.guildId)
     const member = guild && guild.members.cache.get(targetUserId)
     if (!member) return { ok: false, error: 'Member not found' }
-    await member.voice.setDeaf(!!deaf, 'NekoSuneAPPS DiscordOSC')
+    await member.voice.setDeaf(!!deaf, 'NekoSuneAPPSVRC DiscordOSC')
     return { ok: true }
   } catch (err) { return { ok: false, error: err.message } }
 }
@@ -154,8 +154,8 @@ function inviteUrl (applicationId) {
 function getBotState () { return { ...state } }
 
 // ---------------------------------------------------------------------------
-// Official NekoSuneAPPS bot mode: no token, no per-user bot to create. Instead
-// of running our own discord.js gateway Client, poll the NekoSuneAPPS backend
+// Official NekoSuneAPPSVRC bot mode: no token, no per-user bot to create. Instead
+// of running our own discord.js gateway Client, poll the NekoSuneAPPSVRC backend
 // (server/, deployed separately — holds the shared bot's token, never this
 // app) for the logged-in user's own voice state. Produces the identical
 // `state` shape as startBot()/stopBot() above, so renderer.js's `bot:update`

@@ -1,12 +1,12 @@
 name: Help Desk
-description: Request support with setup, configuration, or using NekoSuneAPPS.
+description: Request support with setup, configuration, or using NekoSuneAPPSVRC.
 title: "[Help]: "
 labels: ["help wanted", "support"]
 body:
   - type: markdown
     attributes:
       value: |
-        Need help using NekoSuneAPPS? Please provide details about your setup and the assistance you need.
+        Need help using NekoSuneAPPSVRC? Please provide details about your setup and the assistance you need.
   - type: textarea
     id: help-needed
     attributes:

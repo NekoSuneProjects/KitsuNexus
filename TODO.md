@@ -1,4 +1,4 @@
-# NekoSuneAPPS — TODO / Roadmap
+# NekoSuneAPPSVRC — TODO / Roadmap
 
 Feature-parity checklist toward **VRCX** + **VRCNext**, our own version. Sources:
 [VRCX](https://github.com/vrcx-team/VRCX), [VRCNext](https://github.com/shinyflvre/VRCNext).
@@ -123,7 +123,7 @@ the Speech section below; this section is the AI brain + assistant behaviour.
   the UI; **never** auto-triggered. On trigger: invites everyone in a configured trusted-friends
   list (by display name, matched against your live friends list) to your current instance,
   **saves** the rolling instant-replay clip (last 1/5/10 min of shared desktop video+audio,
-  configurable) to `Videos/NekoSuneAPPS/` (created automatically if missing), and additionally
+  configurable) to `Videos/NekoSuneAPPSVRC/` (created automatically if missing), and additionally
   uploads it to a configured Discord webhook if set, so those friends can see what happened
   before they arrive. Saving locally always happens, independent of whether a webhook is
   configured, so the clip is never lost to a failed/missing upload.
@@ -176,7 +176,7 @@ the Speech section below; this section is the AI brain + assistant behaviour.
 - [x] **Clips are now real, playable .mp4 files (were .webm).** The main process now stitches the
   kept segments together with a bundled `ffmpeg-static` binary (`concat` demuxer + transcode to
   H.264/AAC, `+faststart`) instead of a raw byte-concatenation, producing one proper seekable
-  `sos-clip-*.mp4` in `Videos/NekoSuneAPPS/`. The same finished .mp4 (not the raw segments) is
+  `sos-clip-*.mp4` in `Videos/NekoSuneAPPSVRC/`. The same finished .mp4 (not the raw segments) is
   what gets uploaded to a configured Discord webhook, so the webhook attachment can't hit the
   same corruption issue either. `ffmpeg-static`'s binary is unpacked from the asar (like
   `sharp`/`onnxruntime`) since it can't be executed from inside the archive.
@@ -250,7 +250,7 @@ the Speech section below; this section is the AI brain + assistant behaviour.
   (`.../node_modules/@huggingface/transformers/dist/.cache/`), which on a per-machine Windows
   install is under Program Files — not writable by a normal, non-elevated user. Models now
   download to `<userData>/models/whisper/<repo>/<model-name>/...` instead (e.g.
-  `%AppData%/nekosuneapps/models/whisper/onnx-community/whisper-tiny.en/`), always writable and
+  `%AppData%/nekosuneappsvrc/models/whisper/onnx-community/whisper-tiny.en/`), always writable and
   easy to find/inspect. Verified live: files land in exactly that structure, and — since
   `@huggingface/transformers`'s file cache only ever exposes a file at its final path once fully
   downloaded (downloads land in a `.tmp.<pid>.<random>` file first, renamed into place only on
@@ -358,7 +358,7 @@ all feed into.
 - [~] **Discord Activity (VRChat status panel) + official shared Discord bot.** New standalone
   backend, own package.json/Docker, deployed separately — never bundled into the app — lives on
   its own branch in this same GitHub repo
-  ([`feature/discord-backend-server`](https://github.com/NekoSuneProjects/NekoSuneAPPS/tree/feature/discord-backend-server)),
+  ([`feature/discord-backend-server`](https://github.com/NekoSuneProjects/NekoSuneAPPSVRC/tree/feature/discord-backend-server)),
   not as a subfolder here. It holds the shared bot token and OAuth client secret, which can
   never live in a distributed Electron app. Backend + Electron-side code (identity login,
   official-bot mode, status push) are implemented and locally verified (curl against the
@@ -749,7 +749,7 @@ all feed into.
     that would replace the working MSI/NSIS build entirely; kept the existing, proven MSI/NSIS
     install and added the standalone updater on top of it instead.
 - [x] **Fixed: updater failed with `EPERM` trying to download into the install directory.** It
-  tried the install directory first (e.g. `Program Files\NekoSuneAPPS\`) and only fell back to
+  tried the install directory first (e.g. `Program Files\NekoSuneAPPSVRC\`) and only fell back to
   temp if `fs.accessSync(dir, W_OK)` said that wasn't writable — but that check isn't a reliable
   predictor of real write access on Windows, confirmed by an actual `EPERM` in the wild despite it
   passing. Now always downloads to temp, regardless.
@@ -859,7 +859,7 @@ e.g. the TTS engine fields, which already save correctly through `TTS_ALL_FIELD_
 
 - Run **`npm install`** (adds `discord.js`, `sql.js`).
 - VRChat-API features need login on the **VRChat** tab (cookies stored locally; password never stored).
-- History DB: `nekosuneapps-history.sqlite` in the app's user-data folder.
+- History DB: `nekosuneappsvrc-history.sqlite` in the app's user-data folder.
 - New this session: **Avatar Scaling**, **Translator**, **Live Typing** chatbox, and the
   **i18n foundation** (see sections above). No new npm dependencies were added — the
   global-hotkey approach was switched from a third-party key-listener package (flagged by

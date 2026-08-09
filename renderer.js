@@ -1,4 +1,4 @@
-/* NekoSuneAPPS renderer - wires the themed UI to the OSC layer and all modules. */
+/* NekoSuneAPPSVRC renderer - wires the themed UI to the OSC layer and all modules. */
 const { loadAudioDevices, setupAudioAnalysis, stopAudioAnalysis } = require('./modules/vrchat/audio/audioModule')
 const {
   setOscPort, setOscReceiverPort, sendOsc, sendParam, sendBeat, sendChatboxMessage,
@@ -80,10 +80,10 @@ function debounce (fn, ms) {
 })()
 
 // No credentials are shipped except the app's own fixed Discord Rich Presence
-// ID below (owned by NekoSuneAPPS, not user data). Users still enter their own
+// ID below (owned by NekoSuneAPPSVRC, not user data). Users still enter their own
 // Twitch/bot IDs and secrets (see Docs / Setup) — never hardcode those.
 const DEFAULT_TWITCH_CLIENT_ID = ''
-// Fixed NekoSuneAPPS Discord Rich Presence Application ID. Intentionally not
+// Fixed NekoSuneAPPSVRC Discord Rich Presence Application ID. Intentionally not
 // user-editable (see #discordAppId in index.html) — locked so RP always shows
 // as the official app regardless of what's in a user's saved config.
 const DEFAULT_DISCORD_APP_ID = '1534208250046578790'
@@ -273,12 +273,19 @@ async function initLanguage () {
   $('languageSelect').value = saved
   await applyLanguage(saved)
 }
-$('languagePickerContinue').addEventListener('click', async () => {
+async function finishLanguagePicker () {
   const lang = $('languagePickerSelect').value
   await api.saveSetting('uiLanguage', lang)
   $('languageSelect').value = lang
   await applyLanguage(lang)
   $('languagePickerModal').style.display = 'none'
+}
+$('languagePickerContinue').addEventListener('click', finishLanguagePicker)
+$('languagePickerModal').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    finishLanguagePicker()
+  }
 })
 $('languageSelect').addEventListener('change', async e => {
   await api.saveSetting('uiLanguage', e.target.value)
@@ -3435,7 +3442,7 @@ $('friendRefresh').addEventListener('click', loadFriends)
 $('friendAuto').addEventListener('change', () => { api.saveSetting('friendAuto', $('friendAuto').checked); syncFriendAuto() })
 document.querySelector('[data-tab="friendden"]').addEventListener('click', loadFriends)
 
-/* ---------------- Community Ranks (NekoSuneAPPS OG ranks) ---------------- */
+/* ---------------- Community Ranks (NekoSuneAPPSVRC OG ranks) ---------------- */
 const RANK_BAR = [ // factor key -> label, for the breakdown bars
   ['joinAge', 'VRChat join age'], ['yearsActive', 'Years active'], ['accountAge', 'App account age'],
   ['worldUploads', 'World uploads'], ['avatarUploads', 'Avatar uploads'], ['creatorActivity', 'Creator activity'],
@@ -4194,7 +4201,7 @@ async function openUserModal (id) {
   $('umBanner').style.backgroundImage = bannerUrl ? `url("${bannerUrl}")` : ''
   const tr = trustRank(u.tags)
   const chips = [`<span class="tagchip" style="border-color:${tr.color};color:${tr.color}">${tr.label}</span>`]
-  // NekoSuneAPPS Community Rank, estimated from VRChat trust (shows Veteran/Legend
+  // NekoSuneAPPSVRC Community Rank, estimated from VRChat trust (shows Veteran/Legend
   // when earned). Only when the feature is enabled.
   if (ranksUi.enabled) {
     try {
@@ -4481,7 +4488,7 @@ if ($('updateInstall')) $('updateInstall').addEventListener('click', async () =>
   btn.disabled = true
   if (laterBtn) laterBtn.disabled = true
   if ($('updateProgressWrap')) $('updateProgressWrap').style.display = 'block'
-  setText('updateProgressText', 'Opening the updater — NekoSuneAPPS will close, and a separate updater window will show download and install progress…')
+  setText('updateProgressText', 'Opening the updater — NekoSuneAPPSVRC will close, and a separate updater window will show download and install progress…')
   try {
     // The standalone updater window takes it from here (download progress,
     // installing, relaunching) - this app quits itself right after this
@@ -5525,7 +5532,7 @@ setupOcrTranslate()
 // ── FumikoEcho easter egg ─────────────────────────────────────────────────────
 ;(function () {
   console.log(
-    '%c  🦊 NekoSuneAPPS  ',
+    '%c  🦊 NekoSuneAPPSVRC  ',
     'background:#1a0033;color:#c084fc;font-size:16px;font-weight:bold;padding:6px 14px;border-radius:8px;border:2px solid #7c3aed'
   )
   console.log(
@@ -5631,7 +5638,7 @@ async function loadHome () {
     const me = await api.vrchatStatus()
     if (me && me.ok && me.user) {
       const u = me.user
-      setText('homeName', u.displayName || 'NekoSuneAPPS')
+      setText('homeName', u.displayName || 'NekoSuneAPPSVRC')
       const st = [u.status, u.statusDescription].filter(Boolean).join(' · ')
       setText('homeStatusLine', st || 'Online in VRChat')
       const ava = $('homeAvatar')

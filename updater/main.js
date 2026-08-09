@@ -39,7 +39,7 @@ function parseArgs (argv) {
 }
 
 const args = parseArgs(process.argv.slice(app.isPackaged ? 1 : 2))
-const { url, exe: exePath, name: fileName = 'NekoSuneAPPS-Update.exe', version = '', pid } = args
+const { url, exe: exePath, name: fileName = 'NekoSuneAPPSVRC-Update.exe', version = '', pid } = args
 
 let mainWindow = null
 
@@ -122,14 +122,14 @@ function runFile (cmd, cmdArgs, opts) {
 
 // ── Windows-only helpers ──────────────────────────────────────────────────────
 
-// Kills any running NekoSuneAPPS processes so files aren't locked during
+// Kills any running NekoSuneAPPSVRC processes so files aren't locked during
 // uninstall/install. This is the most common cause of NSIS exit code 2.
 async function killRunningInstances () {
   if (process.platform !== 'win32') return
   try {
     await new Promise((resolve, reject) =>
       execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-        "Get-Process -Name 'NekoSuneAPPS','NekoSuneAPPS Updater' -ErrorAction SilentlyContinue |" +
+        "Get-Process -Name 'NekoSuneAPPS','NekoSuneAPPS Updater','NekoSuneAPPSVRC','NekoSuneAPPSVRC Updater' -ErrorAction SilentlyContinue |" +
         " Where-Object { $_.Id -ne $PID } | ForEach-Object { " +
         "  Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue" +
         " }; Start-Sleep -Milliseconds 500"
@@ -185,7 +185,7 @@ async function findNsisInstallInfo () {
         "  \"$_:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*\"," +
         "  \"$_:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*\"" +
         "  -ErrorAction SilentlyContinue" +
-        "} | Where-Object { $_.DisplayName -like '*NekoSuneAPPS*' }" +
+        "} | Where-Object { $_.DisplayName -like '*NekoSuneAPPS*' -or $_.DisplayName -like '*NekoSuneAPPSVRC*' }" +
         " | Select-Object -First 1 -Property InstallLocation,UninstallString" +
         " | ConvertTo-Json -Compress"
       ], { timeout: 15000 }, (e, out) => e ? reject(e) : resolve({ stdout: out }))
@@ -215,14 +215,16 @@ async function findRelaunchExe (originalExePath) {
         "  \"$_:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*\"," +
         "  \"$_:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*\"" +
         "  -ErrorAction SilentlyContinue" +
-        "} | Where-Object { $_.DisplayName -like '*NekoSuneAPPS*' }" +
+        "} | Where-Object { $_.DisplayName -like '*NekoSuneAPPS*' -or $_.DisplayName -like '*NekoSuneAPPSVRC*' }" +
         " | Select-Object -ExpandProperty InstallLocation -First 1"
       ], { timeout: 15000 }, (e, out) => e ? reject(e) : resolve({ stdout: out }))
     )
     const dir = stdout.trim()
     if (dir) {
-      const candidate = path.join(dir, 'NekoSuneAPPS.exe')
+      const candidate = path.join(dir, 'NekoSuneAPPSVRC.exe')
       if (fs.existsSync(candidate)) return candidate
+      const oldCandidate = path.join(dir, 'NekoSuneAPPS.exe')
+      if (fs.existsSync(oldCandidate)) return oldCandidate
     }
   } catch (_) {}
   return null
@@ -243,6 +245,33 @@ function findAppBundle (fromPath) {
 
 async function applyInstaller (downloadedPath, targetExePath) {
   if (process.platform === 'win32') {
+    if (/\.zip$/i.test(downloadedPath)) {
+      const installDir = path.dirname(targetExePath)
+      const extractDir = path.join(os.tmpdir(), `nekosune-update-${Date.now()}`)
+      send('status', { phase: 'step', step: 'uninstall', label: 'Closing running instances…' })
+      await killRunningInstances()
+      send('status', { phase: 'step', step: 'install', label: 'Extracting app package…' })
+      fs.mkdirSync(extractDir, { recursive: true })
+      await new Promise((resolve, reject) =>
+        execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+          `Expand-Archive -LiteralPath '${downloadedPath.replace(/'/g, "''")}' -DestinationPath '${extractDir.replace(/'/g, "''")}' -Force`
+        ], { timeout: 120000 }, (e) => e ? reject(e) : resolve())
+      )
+      send('status', { phase: 'step', step: 'install', label: 'Copying app files…' })
+      await new Promise((resolve, reject) =>
+        execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+          `$src='${extractDir.replace(/'/g, "''")}'; $dst='${installDir.replace(/'/g, "''")}'; ` +
+          'Get-ChildItem -Path $src -Recurse -Force -ErrorAction SilentlyContinue | ' +
+          "Where-Object { $_.Name -notin @('updater.exe','Update.exe') } | ForEach-Object { " +
+          '$rel=$_.FullName.Substring($src.Length).TrimStart("\\"); $to=Join-Path $dst $rel; ' +
+          'if ($_.PSIsContainer) { New-Item -ItemType Directory -Path $to -Force | Out-Null } ' +
+          'else { New-Item -ItemType Directory -Path (Split-Path $to) -Force | Out-Null; Copy-Item -LiteralPath $_.FullName -Destination $to -Force } }'
+        ], { timeout: 120000 }, (e) => e ? reject(e) : resolve())
+      )
+      try { fs.rmSync(extractDir, { recursive: true, force: true }) } catch (_) {}
+      return { relaunch: true }
+    }
+
     // Read registry info BEFORE uninstalling — the uninstaller removes those keys.
     send('status', { phase: 'step', step: 'uninstall', label: 'Preparing…' })
     const { installDir, uninstallExe } = await findNsisInstallInfo()
@@ -327,7 +356,7 @@ async function applyInstaller (downloadedPath, targetExePath) {
       return { relaunch: true }
     }
     await runFile('xdg-open', [downloadedPath])
-    return { relaunch: false, message: 'Finish the install in the window that just opened, then start NekoSuneAPPS again.' }
+    return { relaunch: false, message: 'Finish the install in the window that just opened, then start NekoSuneAPPSVRC again.' }
   }
 
   throw new Error(`Unsupported platform: ${process.platform}`)
@@ -411,7 +440,7 @@ app.whenReady().then(() => {
     resizable: false,
     minimizable: false,
     maximizable: false,
-    title: 'NekoSuneAPPS Updater',
+    title: 'NekoSuneAPPSVRC Updater',
     icon: path.join(__dirname, 'assets', 'icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

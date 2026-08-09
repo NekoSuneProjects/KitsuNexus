@@ -296,7 +296,7 @@ window.electronAPI = {
   botSetDeaf: d => ipcRenderer.invoke('bot:setDeaf', d),
   botInvite: appId => ipcRenderer.invoke('bot:invite', appId),
 
-  // discord bot — official NekoSuneAPPS bot mode (no token, backend-backed)
+  // discord bot — official NekoSuneAPPSVRC bot mode (no token, backend-backed)
   officialBotStart: () => ipcRenderer.invoke('bot:startOfficial'),
   officialBotStop: () => ipcRenderer.invoke('bot:stopOfficial'),
   officialBotSetMute: m => ipcRenderer.invoke('bot:setMuteOfficial', m),
@@ -332,7 +332,7 @@ window.electronAPI = {
   vrStart: () => ipcRenderer.invoke('vr:start'),
   vrStop: () => ipcRenderer.invoke('vr:stop'),
 
-  // community ranks (NekoSuneAPPS OG ranks — Veteran/Legend, opt-in)
+  // community ranks (NekoSuneAPPSVRC OG ranks — Veteran/Legend, opt-in)
   ranksConfig: () => ipcRenderer.invoke('ranks:config'),
   ranksEstimate: (tags, dateJoined) => ipcRenderer.invoke('ranks:estimate', { tags, dateJoined }),
   ranksSetConfig: cfg => ipcRenderer.invoke('ranks:setConfig', cfg),

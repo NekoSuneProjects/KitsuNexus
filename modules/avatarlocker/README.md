@@ -1,10 +1,10 @@
 # NekoAvatarLocker integration
 
 This module ports the desktop features from the sibling `NekoAvatarLocker` project into
-NekoSuneAPPS:
+NekoSuneAPPSVRC:
 
 - Ed25519 verification of signed `.nalown` ownership packages;
-- an encrypted vault stored in NekoSuneAPPS AppData;
+- an encrypted vault stored in NekoSuneAPPSVRC AppData;
 - Locked, Partial, and Unlocked OSC states plus per-group parameters;
 - ownership import/export and creator template signing;
 - optional migration of the original desktop app's encrypted vault.
