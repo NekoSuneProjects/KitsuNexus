@@ -5,7 +5,7 @@ Pulsoid, HypeRate, standard BLE, Goodmans watches, or the local HTTP bridge.
 
 ## Beko Smooth Heartbeat Gimmick 3.x / VRC Heart Rate
 
-The current asset consumes `VRCOSC/Heartrate/Value`. NekoSuneAPPSVRC also emits the related
+The current asset consumes `VRCOSC/Heartrate/Value`. KitsuNexus also emits the related
 `Connected`, `Average`, `Enabled`, `Beat`, `Normalised`, `Units`, `Tens`, and `Hundreds`
 parameters. These follow VRCOSC's default 240 BPM normalization and digit/10 behavior.
 

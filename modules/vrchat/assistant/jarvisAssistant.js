@@ -517,7 +517,7 @@ class JarvisAssistant {
       if (!clip) clipNote = "The instant-replay buffer hasn't captured any footage yet - no clip available."
     }
 
-    // Always save the clip to disk (Videos/NekoSuneAPPSVRC) regardless of
+    // Always save the clip to disk (Videos/KitsuNexus) regardless of
     // whether a Discord webhook is configured, so it isn't lost if the
     // upload fails or no webhook is set. The main process just stitches the
     // segments together - if they're already mp4/h264 (the normal case,

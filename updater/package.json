@@ -1,8 +1,8 @@
 {
-  "name": "nekosuneappsvrc-updater",
+  "name": "kitsunexus-updater",
   "version": "1.0.0",
   "private": true,
-  "description": "Standalone update helper for NekoSuneAPPSVRC - downloads and installs a new version while the main app is closed, then relaunches it.",
+  "description": "Standalone update helper for KitsuNexus - downloads and installs a new version while the main app is closed, then relaunches it.",
   "main": "main.js",
   "scripts": {
     "build": "electron-builder"
@@ -12,8 +12,8 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "com.nekosunevr.nekosuneappsvrc.updater",
-    "productName": "NekoSuneAPPSVRC Updater",
+    "appId": "com.nekosunevr.kitsunexus.updater",
+    "productName": "KitsuNexus Updater",
     "directories": {
       "output": "dist"
     },

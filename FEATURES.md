@@ -1,8 +1,8 @@
-<p align="center"><img src="assets/logo.png" width="120" alt="NekoSuneAPPSVRC" /></p>
+<p align="center"><img src="assets/logo.png" width="120" alt="KitsuNexus" /></p>
 
-# NekoSuneAPPSVRC — Features & Safety
+# KitsuNexus — Features & Safety
 
-A complete list of what **NekoSuneAPPSVRC** does, how your data is handled, and the
+A complete list of what **KitsuNexus** does, how your data is handled, and the
 important "use at your own risk" notes. **Short version: everything runs on your own
 PC, we collect nothing, and the app never injects code into VRChat or any other
 program.**
@@ -84,7 +84,7 @@ program.**
 
 ## 🔊 AudioLink avatar parameters
 
-NekoSuneAPPSVRC analyzes your audio output into 4 bands and sends them to VRChat over OSC
+KitsuNexus analyzes your audio output into 4 bands and sends them to VRChat over OSC
 (`127.0.0.1:9000`) every audio frame as **custom avatar parameters**. To react to them,
 add each one to your avatar's **Expression Parameters** and **Animator Controller**. The
 avatar parameter name is the part after `/avatar/parameters/`.
@@ -117,7 +117,7 @@ Notes:
 ## 🔒 How safe is it?
 
 ### We collect nothing
-NekoSuneAPPSVRC has **no backend, no analytics, no telemetry, and no accounts**. The
+KitsuNexus has **no backend, no analytics, no telemetry, and no accounts**. The
 developers never receive any information about you or your usage. There is nothing to
 sell or share — and we don't.
 
@@ -132,7 +132,7 @@ When you use VRChat auto-status, the app logs in once and keeps only the **sessi
 cookie** VRChat returns. Your password is **not** saved.
 
 ### No code injection, no game modification
-**NekoSuneAPPSVRC does not modify, inject code into, hook, patch, or tamper with VRChat or
+**KitsuNexus does not modify, inject code into, hook, patch, or tamper with VRChat or
 any other application or software.** It only uses official, supported interfaces:
 
 - VRChat's own **OSC** protocol (local UDP),
@@ -149,7 +149,7 @@ client itself.
 
 - Some platforms **rate-limit or prohibit automated access**. **Sending too many requests
   is at your own risk** and could lead to rate-limiting or account action.
-- **NekoSuneAPPSVRC is not responsible for any account bans, suspensions, or data loss.**
+- **KitsuNexus is not responsible for any account bans, suspensions, or data loss.**
   Because the app does not inject code or modify VRChat (or any other app/software), it
   does not itself break those platforms — but how *you* use third-party APIs is your
   responsibility.
@@ -169,6 +169,6 @@ full text.
 Want a feature added? **Open an issue** on the project's GitHub Issues page:
 <https://github.com/NekoSuneProjects/NekoSuneOSC/issues>
 
-NekoSuneAPPSVRC is an independent project and is **not affiliated with** VRChat, Discord,
+KitsuNexus is an independent project and is **not affiliated with** VRChat, Discord,
 Spotify, Leppsoft, Pulsoid, HypeRate, or any other third party. All trademarks belong to
 their respective owners.

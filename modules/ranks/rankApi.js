@@ -1,5 +1,5 @@
 // modules/ranks/rankApi.js
-// NekoSuneAPPSVRC Community Ranks — optional REST surface (Express router).
+// KitsuNexus Community Ranks — optional REST surface (Express router).
 // Implements docs/community-ranks-spec.md §8. Mount with:
 //     app.use('/api/v1', require('./modules/ranks/rankApi').router(ranks, opts))
 // Returns null when the feature is disabled so the host can skip mounting.
@@ -42,7 +42,7 @@ function router (ranks, opts = {}) {
   // GET /leaderboard?limit=...
   r.get('/leaderboard', requireReady, (req, res) => {
     res.json({
-      rankSystem: 'NekoSuneAPPSVRC Community Ranks',
+      rankSystem: 'KitsuNexus Community Ranks',
       generatedAt: Math.floor(Date.now() / 1000),
       entries: ranks.leaderboard(req.query.limit)
     })

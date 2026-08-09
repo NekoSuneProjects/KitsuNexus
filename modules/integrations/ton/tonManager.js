@@ -1,5 +1,5 @@
 // modules/integrations/ton/tonManager.js
-// Manage the external ToNSaveManager app from inside NekoSuneAPPSVRC — the same job
+// Manage the external ToNSaveManager app from inside KitsuNexus — the same job
 // as ChrisFeline's update.bat, but built in: download the latest release zip,
 // extract it, run the exe in the background, stop it, and update it. We connect to
 // it over its local WebSocket API (see tonModule.js); we do not modify the exe.
@@ -63,7 +63,7 @@ async function install (url) {
     await killAll()
     await wait(800)
     fs.mkdirSync(baseDir, { recursive: true })
-    const res = await axios.get(url || DOWNLOAD_URL, { responseType: 'arraybuffer', timeout: 600000, maxRedirects: 5, headers: { 'User-Agent': 'NekoSuneAPPSVRC' } })
+    const res = await axios.get(url || DOWNLOAD_URL, { responseType: 'arraybuffer', timeout: 600000, maxRedirects: 5, headers: { 'User-Agent': 'KitsuNexus' } })
     const zipPath = path.join(baseDir, ZIP)
     fs.writeFileSync(zipPath, Buffer.from(res.data))
     await extract(zipPath, baseDir)

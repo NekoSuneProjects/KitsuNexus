@@ -18,7 +18,7 @@ async function init (userDataDir) {
   try { initSqlJs = require('sql.js') } catch (err) { console.warn('sql.js not installed:', err.message); return false }
   const wasmDir = path.dirname(require.resolve('sql.js/dist/sql-wasm.js'))
   SQL = await initSqlJs({ locateFile: f => path.join(wasmDir, f) })
-  dbPath = path.join(userDataDir || os.tmpdir(), 'nekosuneappsvrc-history.sqlite')
+  dbPath = path.join(userDataDir || os.tmpdir(), 'KitsuNexus-history.sqlite')
   try {
     db = new SQL.Database(fs.existsSync(dbPath) ? fs.readFileSync(dbPath) : undefined)
   } catch (_) { db = new SQL.Database() }

@@ -12,7 +12,7 @@ function optionalNodeShazamCandidates () {
   const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming')
   return [
     clean(process.env.NEKOSUNE_NODE_SHAZAM_PATH),
-    path.join(appData, 'NekoSuneAPPSVRC', 'optional-providers', 'node_modules', 'node-shazam'),
+    path.join(appData, 'KitsuNexus', 'optional-providers', 'node_modules', 'node-shazam'),
     'node-shazam'
   ].filter(Boolean)
 }
@@ -118,7 +118,7 @@ function normalizeNodeShazam (payload) {
 async function recognizeWithNodeShazam (audio) {
   const optional = loadOptionalNodeShazam()
   if (!optional) {
-    throw new Error('node-shazam is not installed. It is an optional GPL-2.0 external fallback and is not bundled with NekoSuneAPPSVRC.')
+    throw new Error('node-shazam is not installed. It is an optional GPL-2.0 external fallback and is not bundled with KitsuNexus.')
   }
   const { Shazam } = optional.module
   const client = new Shazam()

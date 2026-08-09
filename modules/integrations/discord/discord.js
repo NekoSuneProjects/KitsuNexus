@@ -62,7 +62,7 @@ const config = {
   extraOscTargets: [],
   enableRichPresence: true,
   rpDetails: 'In VRChat',
-  rpState: 'via NekoSuneAPPSVRC',
+  rpState: 'via KitsuNexus',
   enableVoice: false,
   sendVoiceStateOsc: true,
   sendMuteDeafenOsc: true,
@@ -165,7 +165,7 @@ function _pushActivity ({ details, state: st } = {}) {
 
   // Minimal, always-valid presence (text only) + the optional extras.
   const minimal = { details: detailsLine.slice(0, 128), state: stateLine.slice(0, 128), startTimestamp, instance: false }
-  const art = { largeImageKey: 'logo', largeImageText: 'NekoSuneAPPSVRC', smallImageKey: 'vrchat', smallImageText: 'VRChat' }
+  const art = { largeImageKey: 'logo', largeImageText: 'KitsuNexus', smallImageKey: 'vrchat', smallImageText: 'VRChat' }
 
   // Compose the presence for a given rung of the ladder.
   const build = level => {
@@ -371,7 +371,7 @@ function getDiscordState () { return { ...state } }
 function setExtraOscTargets (targets = []) { config.extraOscTargets = Array.isArray(targets) ? targets : [] }
 
 // Read-only snapshot of the live VRChat context for statusPush.js to relay to
-// the NekoSuneAPPSVRC backend (Activity panel / official bot) — reuses the exact
+// the KitsuNexus backend (Activity panel / official bot) — reuses the exact
 // same data already assembled here for Rich Presence instead of re-deriving it.
 function getVrcContextSnapshot () {
   return {

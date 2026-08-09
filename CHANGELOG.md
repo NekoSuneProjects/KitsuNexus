@@ -1,16 +1,48 @@
 # Changelog
 
-All notable changes to **NekoSuneAPPSVRC** are documented here.
+All notable changes to **KitsuNexus** are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-### Changed
-- **Release workflow now cross-builds desktop packages from one AMD64 Ubuntu runner.** The GitHub Actions build matrix now targets Windows x64, Linux x64 and Linux arm64 while running every leg on the Linux X64 self-hosted runner. It installs Ubuntu build dependencies including Wine/NSIS where available, caches npm plus Electron downloads, uploads all generated packages, and keeps the existing tag-based release, VirusTotal and Discord announcement flow with updated artifact labels.
+## [1.0.69] - 2026-08-09
 
 ### Added
-- **Reusable GitHub Actions packaging prompt.** Added a Markdown prompt that can be copied into other projects so Claude or another assistant asks for the current workflow first, explains planned changes, researches whether the requested package targets are supported for that project's stack, and then applies the same AMD64 Ubuntu self-hosted packaging approach where possible.
-- **Self-hosted runner troubleshooting notes.** Added guidance for the repeated GitHub runner AAD/RSA credential log messages and the Ctrl-C `TaskCanceledException` shutdown block: those are runner listener/service lifecycle logs, not app packaging failures, and the recommended fix is to run the runner through its service wrapper instead of an interactive terminal.
+- **Project support and donation information.** The README now documents ways to support
+  NekoSuneProjects, including hosting and maintenance goals, cryptocurrency options, GitHub
+  Sponsors, network-safety guidance, and thanks for financial and community contributions.
+- **Reusable GitHub Actions packaging prompt.** Added a Markdown prompt that can be copied into
+  other projects so Claude or another assistant asks for the current workflow first, explains
+  planned changes, researches whether the requested package targets are supported for that
+  project's stack, and then applies the same AMD64 Ubuntu self-hosted packaging approach where
+  possible.
+- **Self-hosted runner troubleshooting notes.** Added guidance for repeated GitHub runner AAD/RSA
+  credential messages and the Ctrl-C `TaskCanceledException` shutdown block. These are runner
+  listener/service lifecycle logs rather than application packaging failures; running the runner
+  through its service wrapper is recommended instead of using an interactive terminal.
+
+### Changed
+- **The application is now KitsuNexus.** Rebranded NekoSuneAPPSVRC throughout the desktop app,
+  standalone updater, package/bin metadata, Electron and Microsoft Store identities, Discord and
+  backend labels, release workflow, issue templates, documentation, policies, community-rank
+  wording, and user-facing runtime messages. The release version is now `1.0.69`.
+- **Brand artwork and release filenames now match KitsuNexus.** Updated the GitHub social preview,
+  Microsoft Store hero, and cute README banner without changing their fox artwork, then renamed
+  the three final PNGs from `nekosuneapps-*` to `kitsunexus-*` and updated their references.
+- **The Windows updater now lives outside the install directory.** The packaged helper is copied
+  to `%LOCALAPPDATA%\KitsuNexus\Update.exe`, allowing normal app updates to replace files under
+  Program Files without replacing the running updater. Windows updates prefer published ZIP
+  packages and copy their contents in place while excluding the updater executable.
+- **Portable installs keep their data beside the executable.** A `portable` marker or existing
+  `Data` directory now redirects Electron's user-data path to the portable installation folder.
+- **Release workflow now cross-builds desktop packages from one AMD64 Ubuntu runner.** The GitHub Actions build matrix now targets Windows x64, Linux x64 and Linux arm64 while running every leg on the Linux X64 self-hosted runner. It installs Ubuntu build dependencies including Wine/NSIS where available, caches npm plus Electron downloads, uploads all generated packages, and keeps the existing tag-based release, VirusTotal and Discord announcement flow with updated artifact labels.
+
+### Fixed
+- **Updater handoff no longer depends on a helper inside the app being replaced.** Startup now
+  bootstraps the external updater before update checks, and relaunch errors identify the expected
+  LocalAppData helper path clearly.
+- **Language selection is easier to complete.** The first-run language picker now has a compact,
+  responsive card, an explicit button type, and Enter-key submission.
 
 ## [1.0.68] - 2026-08-07
 
@@ -65,8 +97,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - **Updater: fixed "Failed to uninstall old application files" (exit code 2) error.** The NSIS
-  uninstaller was failing because NekoSuneAPPSVRC processes were still holding file locks. The
-  updater now kills running NekoSuneAPPSVRC instances before attempting uninstall, and if the
+  uninstaller was failing because KitsuNexus processes were still holding file locks. The
+  updater now kills running KitsuNexus instances before attempting uninstall, and if the
   uninstaller still fails (exit code 2), it manually cleans up the install directory so the new
   installer can proceed. Error messages also now suggest running the installer as Administrator.
 - **Live Typing with Translation no longer lags while typing.** Every keystroke was immediately
@@ -93,7 +125,7 @@ This project follows [Semantic Versioning](https://semver.org/).
   startup to populate the `seen` Set, and clears it on restart.
 
 ### Changed
-- **Default NSIS install directory changed from AppData to Program Files** (`${PROGRAMFILES}\NekoSuneAPPSVRC`).
+- **Default NSIS install directory changed from AppData to Program Files** (`${PROGRAMFILES}\KitsuNexus`).
   Users can still choose a custom location during install. Existing installs in AppData are not
   affected — the updater will continue to use whichever directory the previous install used.
 
@@ -102,7 +134,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 ### Added
 - **Discord Activity (live VRChat status panel) + an official shared Discord bot mode**,
   backed by a new standalone backend service that lives on its own branch in this repo
-  ([`feature/discord-backend-server`](https://github.com/NekoSuneProjects/NekoSuneAPPSVRC/tree/feature/discord-backend-server),
+  ([`feature/discord-backend-server`](https://github.com/NekoSuneProjects/KitsuNexus/tree/feature/discord-backend-server),
   its own `package.json`/Docker deployment) rather than as a subfolder of the Electron app —
   it's never bundled into an installer. This exists because a bot token — and the OAuth client
   secret needed to identify users — can never be safely shipped inside a distributed Electron
@@ -122,7 +154,7 @@ This project follows [Semantic Versioning](https://semver.org/).
     `stopOfficialBot`/`setMuteOfficial`/`setDeafOfficial`) that polls the backend instead of
     running a local token-based gateway client, producing the identical state shape so the
     existing OSC/chatbox pipeline needed no changes.
-  - Defaults to the official `https://nekosuneappsvrc.nekosunevr.co.uk` deployment
+  - Defaults to the official `https://kitsunexus.nekosunevr.co.uk` deployment
     (`DEFAULT_NEKOSUNE_BACKEND_URL` in `main.js`), but — unlike the locked RPC app ID — this is
     intentionally user-overridable: a new "Backend URL" field on the Voice Bot card
     (`nekosuneBackendUrl` setting) lets self-hosters point the app at their own deployment
@@ -147,7 +179,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - **"Invite link" on the Voice Bot card always showed "Connect first, or enter the Application
-  ID..." when the official NekoSuneAPPSVRC bot mode was selected**, even though that message only
+  ID..." when the official KitsuNexus bot mode was selected**, even though that message only
   makes sense for the bring-your-own-bot mode. Root cause: the button's click handler always
   called the own-bot `api.botInvite()` path regardless of which mode was active, and the
   official bot mode never sets `discordBot.js`'s internal `appId` (that only gets set by a real
@@ -320,7 +352,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 - **Discord release announcements.** The release CI job now posts a Discord embed (username
-  "NekoSuneAPPSVRC Release", app icon, changelog notes, and direct download links for whatever
+  "KitsuNexus Release", app icon, changelog notes, and direct download links for whatever
   installers actually built) whenever a version tag is released. Opt-in via a
   `DISCORD_WEBHOOK_URL` repo secret — skips cleanly with no post if that secret isn't set.
 - **Screenshot Metadata (Settings → Photo Relay page)** — VRCX-compatible metadata toggle.
@@ -349,7 +381,7 @@ This project follows [Semantic Versioning](https://semver.org/).
   cached per home-tab visit, click-through opens in your browser).
 - **Layout overhaul** — sidebar widened from 76px to 190px with icon + label on every nav button
   and visible section headers (VRChat / Social / General); brand area now shows the logo plus
-  "NekoSuneAPPSVRC"; Launch button is a full-width pill; sidebar auto-collapses to 64px icon-only
+  "KitsuNexus"; Launch button is a full-width pill; sidebar auto-collapses to 64px icon-only
   below 820px width; cards lift on hover (translateY -2px with an accent shadow).
 - **Custom backgrounds** (Settings → Background) — 8 built-in gradient presets (Aurora, Neon,
   Sakura, Ocean, Forest, Gold, Void, Dusk), a custom image picker (stored as a file path, not
@@ -490,7 +522,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 - **Standalone updater app** (`updater/`) — a small, separate Electron app with its own branded,
   animated UI (glowing/floating logo, shimmering progress bar) that owns the whole update
   experience: downloading the new release with a real progress bar, installing it, and
-  relaunching NekoSuneAPPSVRC. It has to live outside the main app's own files, since it's the thing
+  relaunching KitsuNexus. It has to live outside the main app's own files, since it's the thing
   replacing them — packaged as a standalone `updater.exe` on Windows (a portable single-file
   build, no separate install step of its own), bundled inside the app on Mac/Linux. It's built
   fresh by CI for each platform and bundled directly into **both** the NSIS `Setup.exe` and the
@@ -556,7 +588,7 @@ This project follows [Semantic Versioning](https://semver.org/).
   for you to download and run manually — clicking "Download & install" now downloads the
   release's .msi directly (saved next to the current install, falling back to a temp folder if
   that location needs admin rights to write to), shows real download progress, then closes the
-  app and runs the installer for you, relaunching NekoSuneAPPSVRC automatically once it's done. If a
+  app and runs the installer for you, relaunching KitsuNexus automatically once it's done. If a
   release doesn't have an .msi asset, it falls back to the old open-in-browser behavior.
 
 ## [1.0.50] - 2026-07-08
@@ -677,7 +709,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 ## [1.0.43] - 2026-07-08
 
 ### Added
-- **SOS clips are now saved locally** to `Videos/NekoSuneAPPSVRC/` (folder created automatically
+- **SOS clips are now saved locally** to `Videos/KitsuNexus/` (folder created automatically
   if it doesn't exist), independent of whether a Discord webhook is configured for sharing them
   with trusted friends — the clip is never lost to a missing/failed upload.
 
@@ -900,7 +932,7 @@ This project follows [Semantic Versioning](https://semver.org/).
   screen open, although firmware may deliver periodic/history samples rather than a
   continuous live stream.
 - **Generic heart-rate device bridge.** Unsupported watches and device adapters can
-  now feed BPM directly into NekoSuneAPPSVRC through a loopback-only HTTP receiver.
+  now feed BPM directly into KitsuNexus through a loopback-only HTTP receiver.
   Common BPM JSON shapes and simple query-string input are accepted, and readings
   can optionally be forwarded to Pulsoid using a write-scoped token.
 - **Configurable Pulsoid authorization.** The Heart Rate page uses Pulsoid's desktop
@@ -930,7 +962,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 - **Pluggable song-recognition providers.** Replaced the hand-written AudD multipart
   client with the official MIT `@audd/sdk`, added the MIT ACRCloud client as a credentialed
   option/fallback, and added detection for an externally installed `node-shazam`. The
-  GPL-2.0 node-shazam package is deliberately not redistributed by NekoSuneAPPSVRC.
+  GPL-2.0 node-shazam package is deliberately not redistributed by KitsuNexus.
 
 ## [1.0.33] - 2026-06-29
 
@@ -1074,7 +1106,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 ### Added
 - **ToN Tablet OSC proxy.** Forwards the core ToNSaveManager state the app already
   tracks (round type, terror, map, item, alive/opted-in/saboteur) to the avatar's
-  `ToN_` parameters over OSC, so the Terror Tablet works driven by NekoSuneAPPSVRC.
+  `ToN_` parameters over OSC, so the Terror Tablet works driven by KitsuNexus.
   Numeric ids are forwarded raw from the WebSocket; ToNSaveManager still drives the
   full 134-float terror-grid buffer. Includes a **"Show raw WS"** debug view to verify
   the id mappings in-game. Toggle under OSC Control → ToN Tablet OSC.
@@ -1086,7 +1118,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 - **Window activity: "Show full window title" toggle.** The chatbox window line can
-  now show the full window title (e.g. "renderer.js - NekoSuneAPPSVRC - Visual Studio
+  now show the full window title (e.g. "renderer.js - KitsuNexus - Visual Studio
   Code") instead of just the app name ("Code"). Off by default; toggle under Window
   activity. Long titles are truncated so they fit the 144-char chatbox.
 
@@ -1138,7 +1170,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 - **Friends' community rank from VRChat trust.** Friends now show an estimated
-  NekoSuneAPPSVRC Community Rank read straight from their VRChat trust tags — so anyone
+  KitsuNexus Community Rank read straight from their VRChat trust tags — so anyone
   who earned it shows a **Veteran** (top trust, `system_trust_veteran`) or **Legend**
   badge. Veteran/Legend pills appear in the right sidebar; Trusted-and-up in the
   Friend Den; and the full estimated rank (plus a ✦ VRC+ supporter marker) in the
@@ -1193,7 +1225,7 @@ This project follows [Semantic Versioning](https://semver.org/).
   you can tell at a glance which languages someone speaks. (50+ languages mapped.)
 - The **right sidebar** now lists **all** friends per group (paging cap removed; the
   panel scrolls), using the same reconciled, complete friend list.
-- **NekoSuneAPPSVRC Community Ranks** (opt-in) — an independent community reputation
+- **KitsuNexus Community Ranks** (opt-in) — an independent community reputation
   system that brings back the spirit of the retired Veteran / Legend ranks. Off by
   default; toggle via `communityRanks.enabled` (and `ogMode` to show/hide the OG
   tiers). 0–1000 weighted scoring, anti-farming curves, SQLite-backed, with an
@@ -1232,7 +1264,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 - **Custom sidebar icons.** The nav rail now uses a full set of custom icons (one per
   tab) instead of emoji — much clearer. Icons live in `assets/icons/<tab>.png` and are
   swapped in automatically; a missing file just keeps the emoji.
-- **About page** — a new tab with the app version, what NekoSuneAPPSVRC is, that it's made
+- **About page** — a new tab with the app version, what KitsuNexus is, that it's made
   by **NekoSuneVR**, links (GitHub, repository, releases, issues), a **Check for updates**
   button, and a **Contributors** list auto-detected from the GitHub repository.
 
@@ -1460,7 +1492,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [1.0.0] - 2026-06-09
 
-🎉 First release of **NekoSuneAPPSVRC** — a standalone VRChat OSC companion by NekoSuneVR,
+🎉 First release of **KitsuNexus** — a standalone VRChat OSC companion by NekoSuneVR,
 built on the proven OSCAudiolink architecture.
 
 ### Added
@@ -1485,7 +1517,7 @@ built on the proven OSCAudiolink architecture.
 - **Network stats** — up/down throughput and ping.
 - **Window activity** — active window/app title.
 - **Heart rate** — live BPM from **Pulsoid** over WebSocket.
-- **Discord Rich Presence** — show NekoSuneAPPSVRC on your Discord profile.
+- **Discord Rich Presence** — show KitsuNexus on your Discord profile.
 - **VR gear battery** — module scaffold (needs a native OpenVR helper; see README).
 - **OBS overlay** — browser-source now-playing overlay with multiple styles.
 - **Theme engine** — Midnight, Dark, Neon, Rainbow, Pink, Green, Light.
@@ -1546,9 +1578,9 @@ built on the proven OSCAudiolink architecture.
   chatbox look. Rotating line can sit at the top or bottom, with a live preview.
 - **Heart rate session stats** — the HR line shows `bpm | avg | max | min`.
 
-### Rebrand → NekoSuneAPPSVRC
-- App renamed from **NekoSuneOSC / NekoChatbox** to **NekoSuneAPPSVRC** (title, tray,
-  brand, installer appId `com.nekosunevr.nekosuneappsvrc`, RPC strings).
+### Rebrand → KitsuNexus
+- App renamed from **NekoSuneOSC / NekoChatbox** to **KitsuNexus** (title, tray,
+  brand, installer appId `com.nekosunevr.KitsuNexus`, RPC strings).
 - **Sidebar regrouped** into **VRChat / Tools / General** sections.
 - **Modules reorganised** — VRChat-specific modules now live under
   `modules/vrchat/` (`osc`, `chatbox`, `status`, `audio`, `world`, `vr`); new OSC

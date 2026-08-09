@@ -14,7 +14,7 @@ const settings = require('../../../settings')
 const rankEngine = require('../../ranks/rankEngine') // pure, no side effects — maps VRChat trust tags → community rank
 
 const BASE = 'https://api.vrchat.cloud/api/1'
-const UA = 'NekoSuneAPPSVRC/1.0.0 nekosunevr@nekosunevr.co.uk'
+const UA = 'KitsuNexus/1.0.0 nekosunevr@nekosunevr.co.uk'
 const COOKIE_KEY = 'vrchatCookies'
 
 let cookies = {}
@@ -196,7 +196,7 @@ function pickFriend (f) {
     state: f.state, // "online" (in-game) | "active" (on website) | "offline"
     platform: f.platform,
     languages: languagesFromTags(f.tags), // ['eng','jpn',...] → flag badges in the UI
-    // Estimated NekoSuneAPPSVRC Community Rank from VRChat trust tags (Veteran/Legend
+    // Estimated KitsuNexus Community Rank from VRChat trust tags (Veteran/Legend
     // show when earned). Renderer decides whether to display it (feature toggle).
     // Join year (when present) gates OG Veteran so not every trusted user is one.
     communityRank: rankEngine.estimateFromTags(f.tags, { joinYear: rankEngine.joinYearOf(f.date_joined) }),

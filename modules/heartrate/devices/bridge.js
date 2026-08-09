@@ -1,6 +1,6 @@
 // Loopback input bridge for devices that Pulsoid/HypeRate do not
 // support directly. Device-specific software only has to POST a BPM value to
-// this loopback server; this module handles the rest of NekoSuneAPPSVRC and can
+// this loopback server; this module handles the rest of KitsuNexus and can
 // optionally mirror the reading to Pulsoid's write API.
 
 const http = require('http')

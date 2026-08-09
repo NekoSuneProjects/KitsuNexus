@@ -1,12 +1,12 @@
 name: General Question
-description: Ask a general question about NekoSuneAPPSVRC.
+description: Ask a general question about KitsuNexus.
 title: "[Question]: "
 labels: ["question"]
 body:
   - type: markdown
     attributes:
       value: |
-        Have a question about NekoSuneAPPSVRC? Please include context so the community can help.
+        Have a question about KitsuNexus? Please include context so the community can help.
   - type: textarea
     id: question
     attributes:

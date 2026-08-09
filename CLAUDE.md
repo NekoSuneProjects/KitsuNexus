@@ -1,4 +1,4 @@
-# NekoSuneAPPSVRC — Instructions for Claude
+# KitsuNexus — Instructions for Claude
 
 This file is read automatically by Claude Code at the start of every session in this repo.
 Anyone working on this project with Claude (NekoSuneVR, FumikoEcho, etc.) gets these same rules
@@ -52,7 +52,7 @@ it for malware/backdoors/supply-chain risk first:
 
 - **Always `git pull` first** before starting work in a session, so changes are based on the
   latest `main` (FumikoEcho and NekoSuneVR both push to this repo — don't work from a stale copy).
-- **Always `git fetch` from [NekoSuneProjects/NekoSuneAPPSVRC](https://github.com/NekoSuneProjects/NekoSuneAPPSVRC)
+- **Always `git fetch` from [NekoSuneProjects/KitsuNexus](https://github.com/NekoSuneProjects/KitsuNexus)
   for whatever branch you're currently on**, not just `main` — if working on a feature/fix branch,
   fetch and sync that branch with its remote counterpart too before continuing, so you're never
   working against stale state on any branch.
@@ -63,7 +63,7 @@ it for malware/backdoors/supply-chain risk first:
   triggers the whole build/publish/Discord-announce pipeline off `v*` tags, so a version
   release genuinely needs one (`vX.Y.Z`, pushed with the version-bump commit). Don't create
   tags for anything else (docs commits, mid-session fixes, etc.).
-- **Always open a Pull Request** to [NekoSuneProjects/NekoSuneAPPSVRC](https://github.com/NekoSuneProjects/NekoSuneAPPSVRC)
+- **Always open a Pull Request** to [NekoSuneProjects/KitsuNexus](https://github.com/NekoSuneProjects/KitsuNexus)
   for the changes, rather than just committing/pushing straight to `main` with nothing to review.
   Every PR must have a real description of what changed and why — **never leave the PR description
   blank**.

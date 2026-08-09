@@ -19,13 +19,13 @@ const REDIRECT = `http://localhost:${PORT}/oauth2/twitch/callback`
 const TOKEN_PATH = '/oauth2/twitch/token'
 const TOKEN_URL = 'https://id.twitch.tv/oauth2/token'
 
-const okPage = '<!doctype html><meta charset="utf-8"><title>NekoSuneAPPSVRC</title>' +
+const okPage = '<!doctype html><meta charset="utf-8"><title>KitsuNexus</title>' +
   '<body style="font-family:sans-serif;background:#12121d;color:#fff;text-align:center;padding-top:48px">' +
   '<h2>✅ Logged in — you can close this window</h2><script>setTimeout(function(){window.close()},400)</script></body>'
 
 // Implicit grant: the token is in the URL fragment, which the browser keeps client-side.
 // This page reads it and forwards it to /token.
-const forwardPage = '<!doctype html><meta charset="utf-8"><title>NekoSuneAPPSVRC</title>' +
+const forwardPage = '<!doctype html><meta charset="utf-8"><title>KitsuNexus</title>' +
   '<body style="font-family:sans-serif;background:#12121d;color:#fff;text-align:center;padding-top:48px">' +
   '<h2>✅ Logged in — you can close this window</h2>' +
   `<script>fetch("${TOKEN_PATH}?"+location.hash.slice(1)).then(function(){setTimeout(function(){window.close()},300)})</script></body>`

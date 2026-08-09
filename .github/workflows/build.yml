@@ -1,4 +1,4 @@
-name: Build NekoSuneAPPSVRC
+name: Build KitsuNexus
 
 on:
   push:
@@ -174,7 +174,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: NekoSuneAPPSVRC-${{ matrix.artifact }}
+          name: KitsuNexus-${{ matrix.artifact }}
           retention-days: 14
           path: |
             dist/*.exe
@@ -219,7 +219,7 @@ jobs:
           fi
           echo "## 🛡️ VirusTotal" >> vt-notes.md
           shopt -s nullglob
-          files=(artifacts/NekoSuneAPPSVRC-windows/*.exe artifacts/NekoSuneAPPSVRC-windows/*.msi artifacts/NekoSuneAPPSVRC-windows/*.zip)
+          files=(artifacts/KitsuNexus-windows/*.exe artifacts/KitsuNexus-windows/*.msi artifacts/KitsuNexus-windows/*.zip)
           if [ ${#files[@]} -eq 0 ]; then
             echo "No Windows installers found to scan." >> vt-notes.md
             exit 0
@@ -273,10 +273,10 @@ jobs:
             grab && /^## \[/ { exit }
             grab { print }
           ' CHANGELOG.md > NOTES.md
-          if [ ! -s NOTES.md ]; then printf "Release %s of NekoSuneAPPSVRC.\n" "$VERSION" > NOTES.md; fi
+          if [ ! -s NOTES.md ]; then printf "Release %s of KitsuNexus.\n" "$VERSION" > NOTES.md; fi
           {
             printf "\n---\n## 📦 Downloads\n"
-            printf -- "- **Windows:** \`NekoSuneAPPSVRC-Setup-%s.exe\` (installer), \`NekoSuneAPPSVRC-Portable-%s.exe\`, or \`.zip\`\n" "$VERSION" "$VERSION"
+            printf -- "- **Windows:** \`KitsuNexus-Setup-%s.exe\` (installer), \`KitsuNexus-Portable-%s.exe\`, or \`.zip\`\n" "$VERSION" "$VERSION"
             printf -- "- **Linux (x64):** \`.AppImage\` / \`.deb\`\n"
             printf -- "- **Linux (arm64):** \`.AppImage\` / \`.deb\`\n"
             printf -- "\n> Installers are unsigned, so Windows SmartScreen may warn on first run — click *More info → Run anyway*.\n"
@@ -339,9 +339,9 @@ jobs:
           if [ -z "$DOWNLOADS" ]; then DOWNLOADS="_No build assets were attached to this release._"; fi
 
           PAYLOAD=$(jq -n \
-            --arg username "NekoSuneAPPSVRC Release" \
+            --arg username "KitsuNexus Release" \
             --arg avatar "$ICON_URL" \
-            --arg title "NekoSuneAPPSVRC v${VERSION}" \
+            --arg title "KitsuNexus v${VERSION}" \
             --arg url "$RELEASE_URL" \
             --arg desc "$DESC" \
             --arg downloads "$DOWNLOADS" \
@@ -355,7 +355,7 @@ jobs:
                 description: $desc,
                 color: 9055202,
                 fields: [{ name: "📦 Downloads", value: $downloads, inline: false }],
-                footer: { text: "NekoSuneAPPSVRC", icon_url: $avatar },
+                footer: { text: "KitsuNexus", icon_url: $avatar },
                 timestamp: $ts
               }]
             }')

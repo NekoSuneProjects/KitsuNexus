@@ -1,5 +1,5 @@
 // modules/ranks/rankDb.js
-// NekoSuneAPPSVRC Community Ranks — persistent store (SQLite via sql.js, WASM).
+// KitsuNexus Community Ranks — persistent store (SQLite via sql.js, WASM).
 // Mirrors modules/history/gamelog.js: a single .sqlite file next to user data,
 // debounced db.export() writes. Runs in MAIN. Implements the schema from
 // docs/community-ranks-spec.md §7.
@@ -21,7 +21,7 @@ async function init (userDataDir) {
   try { initSqlJs = require('sql.js') } catch (err) { console.warn('[ranks] sql.js not installed:', err.message); return false }
   const wasmDir = path.dirname(require.resolve('sql.js/dist/sql-wasm.js'))
   SQL = await initSqlJs({ locateFile: f => path.join(wasmDir, f) })
-  dbPath = path.join(userDataDir || os.tmpdir(), 'nekosuneappsvrc-ranks.sqlite')
+  dbPath = path.join(userDataDir || os.tmpdir(), 'KitsuNexus-ranks.sqlite')
   try {
     db = new SQL.Database(fs.existsSync(dbPath) ? fs.readFileSync(dbPath) : undefined)
   } catch (_) { db = new SQL.Database() }
@@ -179,7 +179,7 @@ function scalar (sql, params, col = 'v') {
 }
 
 // ---- users ---------------------------------------------------------------
-// Create-or-update a user by their NekoSuneAPPSVRC id. Returns the row.
+// Create-or-update a user by their KitsuNexus id. Returns the row.
 function upsertUser (u = {}) {
   if (!db || !u.nsaUserId) return null
   const existing = one('SELECT * FROM users WHERE nsa_user_id = :id', { ':id': u.nsaUserId })

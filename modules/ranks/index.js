@@ -1,10 +1,10 @@
 // modules/ranks/index.js
-// NekoSuneAPPSVRC Community Ranks — orchestrator.
+// KitsuNexus Community Ranks — orchestrator.
 // Ties the pure engine (rankEngine) to the store (rankDb) and a best-effort
 // collector that pulls real facts from the VRChat API + local game-log history.
 // Everything here is gated by the `communityRanks.enabled` toggle in MAIN.
 //
-// These are *NekoSuneAPPSVRC Community Ranks* — an independent community reputation
+// These are *KitsuNexus Community Ranks* — an independent community reputation
 // system, NOT official VRChat ranks.
 
 const crypto = require('crypto')
@@ -180,7 +180,7 @@ function recompute (nsaUserId, opts = {}) {
 
 function buildRankPayload (user, score, rank, opts = {}) {
   return {
-    rankSystem: 'NekoSuneAPPSVRC Community Ranks',
+    rankSystem: 'KitsuNexus Community Ranks',
     disclaimer: 'Independent community ranks — not affiliated with or endorsed by VRChat.',
     user: { nsaUserId: user.nsa_user_id, displayName: user.display_name, vrcUserId: user.vrc_user_id },
     rank: { key: rank.key, label: rank.label, shortLabel: rank.shortLabel, tier: rank.tier, color: rank.color, accent: rank.accent },

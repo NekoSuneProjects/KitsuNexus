@@ -1,12 +1,12 @@
 name: Feature Request
-description: Suggest a new feature or improvement for NekoSuneAPPSVRC.
+description: Suggest a new feature or improvement for KitsuNexus.
 title: "[Feature]: "
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for sharing an idea to improve NekoSuneAPPSVRC. Please include enough detail so we can understand the use case.
+        Thanks for sharing an idea to improve KitsuNexus. Please include enough detail so we can understand the use case.
   - type: textarea
     id: summary
     attributes:

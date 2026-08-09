@@ -3,7 +3,7 @@ const path = require('path')
 const fs = require('fs')
 const { spawn, execFile } = require('child_process')
 const axios = require('axios')
-app.setName('NekoSuneAPPSVRC')
+app.setName('KitsuNexus')
 const settings = require('./settings')
 
 // ffmpeg-static's own path points inside app.asar when packaged, which can't
@@ -49,17 +49,17 @@ const { loginDiscordIdentity } = require('./modules/oauth/providers/discordIdent
 const twitchInteractive = require('./modules/live/twitch/interactive')
 const { startDiscord, stopDiscord, updateActivity, setVrcContext, setExtraOscTargets: setDiscordExtraOscTargets, getVrcContextSnapshot } = require('./modules/integrations/discord/discord')
 const { startStatusPush, stopStatusPush } = require('./modules/integrations/discord/statusPush')
-// Fixed NekoSuneAPPSVRC Discord Rich Presence Application ID — must match
+// Fixed KitsuNexus Discord Rich Presence Application ID — must match
 // DEFAULT_DISCORD_APP_ID in renderer.js. Not user-editable.
 const DISCORD_APP_ID = '1534208250046578790'
-// NekoSuneAPPSVRC backend (feature/discord-backend-server, deployed separately)
+// KitsuNexus backend (feature/discord-backend-server, deployed separately)
 // for the Discord Activity panel + official shared bot — holds the bot
 // token/OAuth secret, never this app. Defaults to the official NekoSuneVR
 // deployment, but — unlike DISCORD_APP_ID — users may point this at their own
 // self-hosted instance instead (see #nekosuneBackendUrl in index.html), since
 // a self-hoster runs their own backend with their own bot/OAuth app entirely;
 // nothing here needs to match DISCORD_APP_ID for that to work.
-const DEFAULT_NEKOSUNE_BACKEND_URL = 'https://nekosuneappsvrc.nekosunevr.co.uk'
+const DEFAULT_NEKOSUNE_BACKEND_URL = 'https://kitsunexus.nekosunevr.co.uk'
 function getNekosuneBackendUrl () {
   return String(settings.get('nekosuneBackendUrl', '') || '').trim() || DEFAULT_NEKOSUNE_BACKEND_URL
 }
@@ -191,10 +191,10 @@ function push (channel, payload) {
 function createTray () {
   tray = new Tray(path.join(__dirname, 'assets/icon.ico'))
   const contextMenu = Menu.buildFromTemplate([
-    { label: 'Show NekoSuneAPPSVRC', click: () => mainWindow.show() },
+    { label: 'Show KitsuNexus', click: () => mainWindow.show() },
     { label: 'Quit', click: () => app.quit() }
   ])
-  tray.setToolTip('NekoSuneAPPSVRC')
+  tray.setToolTip('KitsuNexus')
   tray.setContextMenu(contextMenu)
   tray.on('click', () => mainWindow.show())
 }
@@ -322,7 +322,7 @@ app.whenReady().then(async () => {
   // Track the current VRChat world from its log; feed it to the renderer and
   // (when connected) into the Discord presence.
   gamelog.init(app.getPath('userData')).catch(err => console.warn('gamelog init:', err.message))
-  // Community Ranks (NekoSuneAPPSVRC OG ranks) — only spin up the store when the
+  // Community Ranks (KitsuNexus OG ranks) — only spin up the store when the
   // master toggle is on. Dormant DB is retained when off (it just isn't loaded).
   if (settings.get('communityRanks', {}).enabled) {
     ranks.init(app.getPath('userData'))
@@ -953,7 +953,7 @@ ipcMain.handle('tonNotify:set', (e, cfg = {}) => {
 })
 ipcMain.handle('tonNotify:test', () => {
   const logo = path.join(__dirname, 'assets', 'logo.png')
-  return vrNotify.notify('🏆 NekoSuneAPPSVRC', 'ToN alerts are working!', settings.get('tonNotifyMode', 'auto'), fs.existsSync(logo) ? logo : null)
+  return vrNotify.notify('🏆 KitsuNexus', 'ToN alerts are working!', settings.get('tonNotifyMode', 'auto'), fs.existsSync(logo) ? logo : null)
 })
 ipcMain.handle('tonNotify:detect', () => vrNotify.detect())
 
@@ -963,7 +963,7 @@ ipcMain.handle('ton:export', async () => {
   if (r.canceled || !r.filePath) return { ok: false, error: 'cancelled' }
   try {
     const payload = {
-      app: 'NekoSuneAPPSVRC', kind: 'ton-player-data', version: 1, exportedAt: Date.now(),
+      app: 'KitsuNexus', kind: 'ton-player-data', version: 1, exportedAt: Date.now(),
       stats: getTonState(),
       seenTerrors: [...tonSeenTerrors],
       seenMaps: [...tonSeenMaps],
@@ -1216,7 +1216,7 @@ async function detectGpuEncoder () {
   return detectedEncoderPromise
 }
 
-// Saves an SOS instant-replay clip to ~/Videos/NekoSuneAPPSVRC (created if
+// Saves an SOS instant-replay clip to ~/Videos/KitsuNexus (created if
 // missing), alongside any Discord-webhook upload the assistant also does.
 // The renderer records segments as mp4/h264+aac when the system's Chromium
 // build exposes a hardware encoder for it (the normal case on Windows), only
@@ -1229,7 +1229,7 @@ async function detectGpuEncoder () {
 ipcMain.handle('assistant:saveClip', async (e, { segments } = {}) => {
   if (!Array.isArray(segments) || !segments.length) throw new Error('No clip data was captured')
 
-  const dir = path.join(app.getPath('videos'), 'NekoSuneAPPSVRC')
+  const dir = path.join(app.getPath('videos'), 'KitsuNexus')
   fs.mkdirSync(dir, { recursive: true })
   const stamp = new Date().toISOString().replace(/[:.]/g, '-')
   const tmpDir = path.join(app.getPath('temp'), `nekosune-clip-${stamp}`)
@@ -1303,7 +1303,7 @@ ipcMain.handle('oauth:twitchLogin', async (e, { clientId, clientSecret, scopes }
 /* ------------------------------------------------------------------ */
 ipcMain.handle('discord:start', async (e, cfg) => {
   const oscPort = settings.get('oscPort', 9000)
-  // Discord Application ID is fixed (official NekoSuneAPPSVRC app) — never take
+  // Discord Application ID is fixed (official KitsuNexus app) — never take
   // it from renderer input, no matter what cfg claims.
   const r = await startDiscord({ ...(cfg || {}), clientId: DISCORD_APP_ID, oscPort, extraOscTargets: settings.get('extraOscTargets', []) }, s => push('discord:update', s))
   // Seed the presence with the world we've already detected.
@@ -1601,7 +1601,7 @@ async function fetchVrchatNewsOnce () {
   const { data } = await axios.get('https://hello.vrchat.com/blog?format=rss', {
     timeout: 15000,
     responseType: 'text',
-    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) NekoSuneAPPSVRC/1.0' }
+    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) KitsuNexus/1.0' }
   })
   const doc = new DOMParser({
     onError: (level, msg) => console.warn(`[vrchat:news] xml ${level}:`, msg)
@@ -1682,7 +1682,7 @@ ipcMain.handle('apps:launch', (e, { paths, withVrchat } = {}) => {
 
 // Data export / import (settings + history) via file dialogs.
 ipcMain.handle('data:export', async () => {
-  const r = await dialog.showSaveDialog({ defaultPath: 'nekosuneappsvrc-backup.json', filters: [{ name: 'JSON', extensions: ['json'] }] })
+  const r = await dialog.showSaveDialog({ defaultPath: 'KitsuNexus-backup.json', filters: [{ name: 'JSON', extensions: ['json'] }] })
   if (r.canceled || !r.filePath) return { ok: false, error: 'cancelled' }
   try {
     fs.writeFileSync(r.filePath, JSON.stringify({ settings: settings.all(), history: gamelog.list({ limit: 5000 }) }, null, 2))
@@ -1794,7 +1794,7 @@ ipcMain.handle('bot:setMute', (e, m) => botSetMute(m))
 ipcMain.handle('bot:setDeaf', (e, d) => botSetDeaf(d))
 ipcMain.handle('bot:invite', (e, appId) => inviteUrl(appId))
 
-// Official NekoSuneAPPSVRC bot mode — no token, backed by the NekoSuneAPPSVRC backend
+// Official KitsuNexus bot mode — no token, backed by the KitsuNexus backend
 // (server/) instead of a local discord.js gateway client. Requires having
 // logged in via oauth:discordLogin first (session token in settings).
 ipcMain.handle('bot:startOfficial', () => {
@@ -1889,7 +1889,7 @@ ipcMain.handle('afk:start', (e, opts) => { startAfk(opts || {}, s => push('afk:u
 ipcMain.handle('afk:stop', () => { stopAfk(); return true })
 
 /* ------------------------------------------------------------------ */
-/* Community Ranks — NekoSuneAPPSVRC OG ranks (Veteran / Legend), opt-in  */
+/* Community Ranks — KitsuNexus OG ranks (Veteran / Legend), opt-in  */
 /* These are independent community ranks, NOT official VRChat ranks.   */
 /* ------------------------------------------------------------------ */
 const ranksCfg = () => settings.get('communityRanks', { enabled: false, ogMode: true })

@@ -14,7 +14,7 @@ reward | Throw Tomato | 2
 
 Reward mappings can use either the exact reward title or its Twitch reward ID. The
 integer values must match the actions configured by the purchased Unity package;
-NekoSuneAPPSVRC does not redistribute that package.
+KitsuNexus does not redistribute that package.
 
 Both features consume the shared account stored by the OAuth sidebar page. OAuth requires
 `moderator:read:followers chat:read channel:read:redemptions`. Reward events use Twitch

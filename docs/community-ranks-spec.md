@@ -1,21 +1,21 @@
-# NekoSuneAPPSVRC Community Ranks — Technical Specification
+# KitsuNexus Community Ranks — Technical Specification
 
 > **Version:** 1.0 (draft)
 > **Status:** Design / RFC
 > **Owner:** NekoSuneVR
-> **Applies to:** NekoSuneAPPSVRC ≥ 1.1.0
+> **Applies to:** KitsuNexus ≥ 1.1.0
 
 ---
 
 ## 0. Disclaimer & Scope
 
-**NekoSuneAPPSVRC Community Ranks are an independent, community-run reputation system.**
+**KitsuNexus Community Ranks are an independent, community-run reputation system.**
 They are **not** affiliated with, endorsed by, or representative of VRChat Inc., and they
 are **not** a revival of any official VRChat trust rank, badge, or moderation system.
 
-The names *Veteran* and *Legend* are used here as **NekoSuneAPPSVRC Community Rank labels
+The names *Veteran* and *Legend* are used here as **KitsuNexus Community Rank labels
 only**. Every surface that displays a rank **must** prefix or badge it as a
-**"NekoSuneAPPSVRC Community Rank"** (abbreviated **NSA Rank** in compact UI).
+**"KitsuNexus Community Rank"** (abbreviated **NSA Rank** in compact UI).
 
 This system recreates the *spirit* of recognising long-term, positive community members —
 it does not read, mirror, or claim VRChat's internal trust score.
@@ -77,7 +77,7 @@ and raw upload counts are deliberately capped (easy to spam).
 |--------------------------------|--------------|--------:|------:|
 | VRChat join age                | Tenure       |     150 | 15.0% |
 | Years active in VRChat         | Tenure       |     150 | 15.0% |
-| NekoSuneAPPSVRC account age       | Tenure       |      50 |  5.0% |
+| KitsuNexus account age       | Tenure       |      50 |  5.0% |
 | World uploads                  | Creation     |     120 | 12.0% |
 | Avatar uploads                 | Creation     |      80 |  8.0% |
 | Creator activity (recency)     | Creation     |     100 | 10.0% |
@@ -105,7 +105,7 @@ sat(n, cap, k) = cap * (1 - exp(-n / k))
 |---|---|---|
 | VRChat join age | `min(150, yearsSinceJoin * 25)` | Linear to the cap at **6 years**. Pure time. |
 | Years active in VRChat | `sat(activeYears, 150, 3)` | "Active year" = ≥1 verified session in ≥6 distinct weeks that year. ~3 yrs ⇒ ~95%. |
-| NekoSuneAPPSVRC account age | `min(50, monthsInstalled * 2.1)` | Linear to cap at **~24 months**. |
+| KitsuNexus account age | `min(50, monthsInstalled * 2.1)` | Linear to cap at **~24 months**. |
 | World uploads | `sat(publishedWorlds, 120, 4)` | Only **published, non-private, non-duplicate** worlds count. |
 | Avatar uploads | `sat(publicAvatars, 80, 6)` | Only **public** avatars; clones/reuploads excluded. |
 | Creator activity | `min(100, creatorScore)` | See 2.3 — rewards *recent + consistent* creation, not raw totals. |
@@ -242,7 +242,7 @@ sanction demotes to Trusted User.
 ## 6. Legend Requirements
 
 *Legend* = an extremely rare community pillar. Score ≥ 950 **and** a **manual nomination
-+ review** by NekoSuneAPPSVRC staff. Score alone never grants Legend.
++ review** by KitsuNexus staff. Score alone never grants Legend.
 
 | Requirement                 | Minimum |
 |-----------------------------|---------|
@@ -252,7 +252,7 @@ sanction demotes to Trusted User.
 | Significant world creation  | ≥ 5 published, actively-used worlds |
 | Significant avatar creation | ≥ 15 public avatars **OR** strong adoption (`totalFavourites ≥ 1000`) |
 | Community leadership        | Documented: event hosting, moderation, mentorship, or org role |
-| Major contribution          | ≥ 1 partner-community project **OR** sustained core contribution to NekoSuneAPPSVRC |
+| Major contribution          | ≥ 1 partner-community project **OR** sustained core contribution to KitsuNexus |
 | Reputation                  | `repNet ≥ +20` |
 | Staff approval              | Recorded nomination + ≥ 2 staff sign-offs |
 
@@ -267,12 +267,12 @@ Schema is written for the app's bundled `sql.js`. Times are Unix epoch seconds (
 
 ```sql
 -- =========================================================
--- NekoSuneAPPSVRC Community Ranks — schema v1
+-- KitsuNexus Community Ranks — schema v1
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS users (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    nsa_user_id       TEXT    NOT NULL UNIQUE,          -- internal NekoSuneAPPSVRC id
+    nsa_user_id       TEXT    NOT NULL UNIQUE,          -- internal KitsuNexus id
     vrc_user_id       TEXT    UNIQUE,                   -- usr_... (nullable until linked)
     display_name      TEXT    NOT NULL,
     vrc_join_date     INTEGER,                          -- epoch s, attested
@@ -420,10 +420,10 @@ a staff scope. Responses are JSON. Errors use `{ "error": { "code", "message" } 
 ```json
 {
   "user": { "nsaUserId": "nsa_abc123", "displayName": "Mika" },
-  "rankSystem": "NekoSuneAPPSVRC Community Ranks",
+  "rankSystem": "KitsuNexus Community Ranks",
   "rank": {
     "key": "veteran",
-    "label": "NekoSuneAPPSVRC Community Rank: Veteran",
+    "label": "KitsuNexus Community Rank: Veteran",
     "tier": 5,
     "color": "#C9A227"
   },
@@ -462,7 +462,7 @@ a staff scope. Responses are JSON. Errors use `{ "error": { "code", "message" } 
 
 ```json
 {
-  "rankSystem": "NekoSuneAPPSVRC Community Ranks",
+  "rankSystem": "KitsuNexus Community Ranks",
   "generatedAt": 1771027200,
   "entries": [
     { "position": 1, "displayName": "Yuki",  "rank": "legend",  "score": 974 },

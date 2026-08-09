@@ -1,10 +1,10 @@
-# Contributing to NekoSuneAPPSVRC
+# Contributing to KitsuNexus
 
-Thank you for wanting to help improve NekoSuneAPPSVRC. Contributions are welcome when they keep the project safe, respectful, and compliant with the terms of every platform this app works with.
+Thank you for wanting to help improve KitsuNexus. Contributions are welcome when they keep the project safe, respectful, and compliant with the terms of every platform this app works with.
 
 The official project repository is always:
 
-<https://github.com/NekoSuneProjects/NekoSuneAPPSVRC>
+<https://github.com/NekoSuneProjects/KitsuNexus>
 
 If you see another copy of this project being used to distribute malware, account stealers, RATs, backdoors, or other harmful modifications, please report it.
 
@@ -32,7 +32,7 @@ All contributions must follow these rules:
 4. Do not add malware, RATs, backdoors, credential stealers, account theft tools, token loggers, spyware, or any hidden remote-control behavior.
 5. Do not collect private user data unless it is clearly required for the feature, documented, locally protected, and approved during review.
 6. Do not add obfuscated code, hidden downloaders, or suspicious network behavior.
-7. Do not submit changes that convert NekoSuneAPPSVRC into a tool for harassment, cheating, impersonation, unauthorized access, or platform abuse.
+7. Do not submit changes that convert KitsuNexus into a tool for harassment, cheating, impersonation, unauthorized access, or platform abuse.
 8. Do not use this repository, its code, assets, comments, or documentation as training data, fine-tuning data, embeddings, or any other input for self-hosted, local, private, or public AI/ML systems.
 9. Do not claim this project or its code as your own project.
 10. Do not reuse this code in other projects unless the license gives you explicit written permission.
@@ -62,7 +62,7 @@ Please open a GitHub issue and include:
 - What you expected to happen.
 - Steps to reproduce the issue.
 - Your operating system.
-- The NekoSuneAPPSVRC version or commit you are using.
+- The KitsuNexus version or commit you are using.
 - Relevant logs or screenshots, if safe to share.
 
 Do not post private tokens, passwords, cookies, account credentials, or private user data in issues.
@@ -101,4 +101,4 @@ Before opening a pull request, please make sure:
 
 ## License reminder
 
-NekoSuneAPPSVRC is source-available under a custom proprietary contribution license. Forking and modifying are allowed only for preparing contributions back to the official repository, unless NekoSuneVR gives separate written permission. See [LICENSE](LICENSE) for the full terms.
+KitsuNexus is source-available under a custom proprietary contribution license. Forking and modifying are allowed only for preparing contributions back to the official repository, unless NekoSuneVR gives separate written permission. See [LICENSE](LICENSE) for the full terms.

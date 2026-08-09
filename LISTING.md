@@ -1,4 +1,4 @@
-# NekoSuneAPPSVRC — Store & Repository Listing
+# KitsuNexus — Store & Repository Listing
 
 Copy/paste blocks for GitHub, the Microsoft Store, and other platforms.
 
@@ -12,7 +12,7 @@ Copy/paste blocks for GitHub, the Microsoft Store, and other platforms.
 ## GitHub
 
 **Repository description (≤350 chars):**
-> NekoSuneAPPSVRC — a VRChat OSC companion: chatbox, status presets, AudioLink, Now Playing (KAT), component/network stats, heart rate (Pulsoid/HypeRate), TikTok/Twitch/Kick counters, IntelliChat AI, Discord Rich Presence with VRChat world + join button, auto-AFK, stopwatch & calculator. Windows · macOS · Linux.
+> KitsuNexus — a VRChat OSC companion: chatbox, status presets, AudioLink, Now Playing (KAT), component/network stats, heart rate (Pulsoid/HypeRate), TikTok/Twitch/Kick counters, IntelliChat AI, Discord Rich Presence with VRChat world + join button, auto-AFK, stopwatch & calculator. Windows · macOS · Linux.
 
 **Topics / tags:**
 ```
@@ -29,7 +29,7 @@ kick, now-playing, vr, vrchat-tools, nekosunevr, windows, macos, linux
 > The all-in-one VRChat OSC companion: chatbox, heart rate, now playing, Discord & more.
 
 **Long description:**
-> NekoSuneAPPSVRC is a polished VRChat OSC companion that pushes your live data
+> KitsuNexus is a polished VRChat OSC companion that pushes your live data
 > straight into the in-game chatbox and onto your avatar.
 >
 > • Chatbox + auto-rotating status presets with tokens
@@ -66,5 +66,5 @@ vrchat, osc, utility, vr, chatbox, heart-rate, discord, streaming, overlay, wind
 ---
 
 ## One-liner (social / Discord)
-> 🦊 NekoSuneAPPSVRC — the all-in-one VRChat OSC companion. Chatbox, heart rate, now
+> 🦊 KitsuNexus — the all-in-one VRChat OSC companion. Chatbox, heart rate, now
 > playing, Discord Rich Presence with a Join-World button, and more. Win/Mac/Linux.

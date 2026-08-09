@@ -1,16 +1,16 @@
 # Disclaimer
 
-**Software:** NekoSuneAPPSVRC
+**Software:** KitsuNexus
 **Owner:** NekoSuneVR
 
 ## No warranty
-NekoSuneAPPSVRC is provided **"as is" and "as available", without warranty of any
+KitsuNexus is provided **"as is" and "as available", without warranty of any
 kind**, express or implied, including but not limited to the implied warranties of
 merchantability, fitness for a particular purpose, title, and non-infringement. You
 use the App entirely at your own risk.
 
 ## No code injection / no game modification
-NekoSuneAPPSVRC **does not modify, inject code into, hook, patch, or tamper with**
+KitsuNexus **does not modify, inject code into, hook, patch, or tamper with**
 VRChat or any other application or software. It uses only official, supported
 interfaces: VRChat's OSC protocol, official/public APIs (with credentials you
 supply), reading the log files VRChat itself writes, and standard OS media keys.
@@ -18,7 +18,7 @@ There are no memory edits, no DLL injection, no mods, and no automation of the g
 client itself.
 
 ## Not affiliated
-NekoSuneAPPSVRC is an independent project. It is **not affiliated with, endorsed by, or
+KitsuNexus is an independent project. It is **not affiliated with, endorsed by, or
 sponsored by** VRChat, Discord, Twitch, TikTok, Kick, Pulsoid, HypeRate, Spotify,
 Leppsoft, OpenAI, Anthropic, Google, xAI, or any other third party. All trademarks,
 logos, and brand names are the property of their respective owners and are used for
@@ -33,7 +33,7 @@ result in rate-limiting, suspension, or banning of your account. **You accept th
 risk.** Always follow the Terms of Service of every platform you connect to, and use
 only credentials you are authorized to use.
 
-**Because NekoSuneAPPSVRC does not inject code into or modify VRChat (or any other
+**Because KitsuNexus does not inject code into or modify VRChat (or any other
 software), it does not itself break those platforms — and NekoSuneVR is not
 responsible for any bans, suspensions, or account actions** resulting from how you
 choose to use third-party services.

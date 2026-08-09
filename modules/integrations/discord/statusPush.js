@@ -1,6 +1,6 @@
 // modules/integrations/discord/statusPush.js
 // Periodically pushes the live VRChat status (already assembled in discord.js
-// for Rich Presence — see getVrcContextSnapshot()) to the NekoSuneAPPSVRC backend
+// for Rich Presence — see getVrcContextSnapshot()) to the KitsuNexus backend
 // (server/, deployed separately), so the Discord Activity panel and anyone
 // viewing this user's shared voice channel can see it. Independent opt-in from
 // Rich Presence/voice bot — only runs once the user has logged in with Discord.

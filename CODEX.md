@@ -1,4 +1,4 @@
-# NekoSuneAPPSVRC — Instructions for Codex
+# KitsuNexus — Instructions for Codex
 
 This is Codex's counterpart to [CLAUDE.md](CLAUDE.md). Work on this repo bounces between Claude
 (code/logic) and Codex (icons/images), so read this file at the start of any session here.

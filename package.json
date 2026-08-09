@@ -1,6 +1,6 @@
 {
-  "name": "nekosuneappsvrc",
-  "version": "1.0.68",
+  "name": "kitsunexus",
+  "version": "1.0.69",
   "main": "main.js",
   "bin": "main.js",
   "scripts": {
@@ -11,14 +11,14 @@
   },
   "build": {
     "copyright": "Copyright © 2024-2026 NekoSuneVR",
-    "appId": "com.nekosunevr.nekosuneappsvrc",
-    "productName": "NekoSuneAPPSVRC",
+    "appId": "com.nekosunevr.kitsunexus",
+    "productName": "KitsuNexus",
     "appx": {
       "backgroundColor": "#0b0b14",
-      "displayName": "NekoSuneAPPSVRC",
+      "displayName": "KitsuNexus",
       "publisher": "CN=NekoSuneVR",
       "publisherDisplayName": "NekoSuneVR",
-      "identityName": "com.nekosunevr.nekosuneappsvrc"
+      "identityName": "com.nekosunevr.kitsunexus"
     },
     "directories": {
       "output": "dist",
@@ -156,7 +156,7 @@
   },
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
-  "description": "NekoSuneAPPSVRC - a VRChat OSC companion: chatbox, status, social suite, component stats, heart rate, TikTok & Twitch follower counters, AudioLink and Now Playing with KAT support.",
+  "description": "KitsuNexus - a VRChat OSC companion: chatbox, status, social suite, component stats, heart rate, TikTok & Twitch follower counters, AudioLink and Now Playing with KAT support.",
   "dependencies": {
     "@audd/sdk": "^1.5.11",
     "@aws-sdk/client-polly": "^3.1081.0",
