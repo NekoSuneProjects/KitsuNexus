@@ -216,7 +216,7 @@ jobs:
             echo "No VT_API_KEY secret set - skipping VirusTotal scan."
             exit 0
           fi
-          echo "## ðŸ›¡ï¸ VirusTotal" >> vt-notes.md
+          echo "## 🛡️ VirusTotal" >> vt-notes.md
           shopt -s nullglob
           files=(artifacts/NekoSuneAPPS-windows/*.exe artifacts/NekoSuneAPPS-windows/*.msi)
           if [ ${#files[@]} -eq 0 ]; then
@@ -246,7 +246,7 @@ jobs:
               [ "$status" = "completed" ] && break
             done
             if [ "$status" != "completed" ]; then
-              echo "- **$name**: scan still in progress â€” [check status](https://www.virustotal.com/gui/file-analysis/$analysis_id)" >> vt-notes.md
+              echo "- **$name**: scan still in progress — [check status](https://www.virustotal.com/gui/file-analysis/$analysis_id)" >> vt-notes.md
               continue
             fi
             malicious=$(echo "$status_resp" | jq -r '.data.attributes.stats.malicious // 0')
@@ -255,7 +255,7 @@ jobs:
             undetected=$(echo "$status_resp" | jq -r '.data.attributes.stats.undetected // 0')
             total=$((malicious + suspicious + harmless + undetected))
             flagged=$((malicious + suspicious))
-            echo "- **$name**: $flagged/$total engines flagged something â€” [full report](https://www.virustotal.com/gui/file-analysis/$analysis_id)" >> vt-notes.md
+            echo "- **$name**: $flagged/$total engines flagged something — [full report](https://www.virustotal.com/gui/file-analysis/$analysis_id)" >> vt-notes.md
           done
         env:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
@@ -266,7 +266,7 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           echo "Extracting CHANGELOG notes for $VERSION"
           # Pull the section for this version (everything between its ## [x.y.z] header
-          # and the next ## [ header) â€” gives the What's Added / Changed / Fixed lists.
+          # and the next ## [ header) — gives the What's Added / Changed / Fixed lists.
           awk -v ver="$VERSION" '
             $0 ~ ("^## \\[" ver "\\]") { grab=1; next }
             grab && /^## \[/ { exit }
@@ -274,11 +274,11 @@ jobs:
           ' CHANGELOG.md > NOTES.md
           if [ ! -s NOTES.md ]; then printf "Release %s of NekoSuneAPPS.\n" "$VERSION" > NOTES.md; fi
           {
-            printf "\n---\n## ðŸ“¦ Downloads\n"
+            printf "\n---\n## 📦 Downloads\n"
             printf -- "- **Windows:** \`NekoSuneAPPS-Setup-%s.exe\` (installer) or \`.msi\`\n" "$VERSION"
             printf -- "- **Linux (x64):** \`.AppImage\` / \`.deb\`\n"
             printf -- "- **Linux (arm64):** \`.AppImage\` / \`.deb\`\n"
-            printf -- "\n> Installers are unsigned, so Windows SmartScreen may warn on first run â€” click *More info â†’ Run anyway*.\n"
+            printf -- "\n> Installers are unsigned, so Windows SmartScreen may warn on first run — click *More info → Run anyway*.\n"
             if [ -s vt-notes.md ]; then printf "\n"; cat vt-notes.md; fi
           } >> NOTES.md
           echo "----- release notes -----"; cat NOTES.md
@@ -313,7 +313,7 @@ jobs:
           # Release notes body, trimmed to fit under Discord's 4096-char embed description limit
           DESC=$(cat NOTES.md)
           if [ "${#DESC}" -gt 3500 ]; then
-            DESC="${DESC:0:3500}"$'\n\nâ€¦continued â€” [see the full release notes]('"$RELEASE_URL"').'
+            DESC="${DESC:0:3500}"$'\n\n…continued — [see the full release notes]('"$RELEASE_URL"').'
           fi
 
           # Build a Downloads field from whatever assets actually got attached to the
@@ -322,13 +322,13 @@ jobs:
           DOWNLOADS=""
           while IFS=$'\t' read -r name url; do
             case "$name" in
-              *.exe)              label="ðŸªŸ Windows Installer (.exe)" ;;
-              *.msi)              label="ðŸªŸ Windows Installer (.msi)" ;;
-              *arm64*.AppImage)   label="ðŸ§ Linux ARM64 (.AppImage)" ;;
-              *aarch64*.AppImage) label="ðŸ§ Linux ARM64 (.AppImage)" ;;
-              *arm64*.deb)        label="ðŸ§ Linux ARM64 (.deb)" ;;
-              *.AppImage)         label="ðŸ§ Linux x64 (.AppImage)" ;;
-              *.deb)              label="ðŸ§ Linux x64 (.deb)" ;;
+              *.exe)              label="🪟 Windows Installer (.exe)" ;;
+              *.msi)              label="🪟 Windows Installer (.msi)" ;;
+              *arm64*.AppImage)   label="🐧 Linux ARM64 (.AppImage)" ;;
+              *aarch64*.AppImage) label="🐧 Linux ARM64 (.AppImage)" ;;
+              *arm64*.deb)        label="🐧 Linux ARM64 (.deb)" ;;
+              *.AppImage)         label="🐧 Linux x64 (.AppImage)" ;;
+              *.deb)              label="🐧 Linux x64 (.deb)" ;;
               *)                  continue ;;
             esac
             DOWNLOADS="${DOWNLOADS}[${label}](${url})"$'\n'
@@ -352,7 +352,7 @@ jobs:
                 url: $url,
                 description: $desc,
                 color: 9055202,
-                fields: [{ name: "ðŸ“¦ Downloads", value: $downloads, inline: false }],
+                fields: [{ name: "📦 Downloads", value: $downloads, inline: false }],
                 footer: { text: "NekoSuneAPPS", icon_url: $avatar },
                 timestamp: $ts
               }]
