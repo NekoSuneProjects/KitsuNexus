@@ -3009,7 +3009,7 @@ $('vrc2faVerify').addEventListener('click', async () => {
     loadRightbar(); loadNotifications(); loadProfileEditor()
   } else setText('vrcAcctOut', 'Error: ' + (r.error || '2FA failed'))
 })
-$('vrcLogout').addEventListener('click', async () => { await api.vrchatLogout(); setAcctState(false, 'Logged out'); $('vrcAutoStatus').checked = false; api.saveSetting('vrcAutoStatus', false) })
+$('vrcLogout').addEventListener('click', async () => { await api.vrchatLogout(); resetFriendsCache(); setAcctState(false, 'Logged out'); $('vrcAutoStatus').checked = false; api.saveSetting('vrcAutoStatus', false) })
 $('vrcAutoStatus').addEventListener('change', e => { api.saveSetting('vrcAutoStatus', e.target.checked); api.vrchatAutoStatus(e.target.checked); $('discordVrcStatus').disabled = e.target.checked })
 const STATUS_KEY = { 'join me': 'join', active: 'active', 'ask me': 'ask', busy: 'busy', offline: 'busy' }
 api.on('vrchat:account', s => {
@@ -4053,11 +4053,23 @@ api.on('notif:update', () => loadNotifications())
 /* ---------------- right friends panel ---------------- */
 const RB_COLOR = { 'join me': '#3b82f6', active: '#22c55e', 'ask me': '#f59e0b', busy: '#ef4444', offline: '#6b7280' }
 let rbFriendsCache = { online: [], offline: [] }
+let rbFriendsLoaded = false
 let favFriendIds = new Set()
 let favFriendGroups = {} // friend id -> favorite group name
 let favGroupNames = {} // group name -> display name
 let myUserId = ''
 const rbCollapsed = { same: false, online: false, web: false, offline: true } // offline collapsed by default
+function renderHomeFriendsOnline () {
+  const count = rbFriendsLoaded && Array.isArray(rbFriendsCache.online)
+    ? rbFriendsCache.online.length
+    : null
+  setText('homeFriendsOnline', count == null ? '—' : String(count))
+}
+function resetFriendsCache () {
+  rbFriendsCache = { online: [], offline: [] }
+  rbFriendsLoaded = false
+  renderHomeFriendsOnline()
+}
 // VRCX-style state, derived from the API bucket (f.online) + location, NOT the
 // unreliable `state` field: online = in a world, active = on the website, offline.
 function friendState (f) {
@@ -4110,7 +4122,11 @@ function renderRightbar () {
   resolveWorldNames($('rbFriends'))
 }
 async function loadRightbar () {
-  if (!await api.vrchatIsLoggedIn()) { $('rbFriends').textContent = 'Log in on the VRChat tab.'; return }
+  if (!await api.vrchatIsLoggedIn()) {
+    resetFriendsCache()
+    $('rbFriends').textContent = 'Log in on the VRChat tab.'
+    return
+  }
   // One reconciled call gets the WHOLE friend list (including the stragglers the
   // paginated buckets drop), then we split it online/offline ourselves.
   const [all, me] = await Promise.all([api.vrchatAllFriends(), api.vrchatStatus()])
@@ -4129,8 +4145,13 @@ async function loadRightbar () {
   }
   if (all && all.ok) {
     // Trust the API's online/offline buckets (see getAllFriends) — not per-friend state.
-    rbFriendsCache.online = all.online || all.friends.filter(f => f.online)
-    rbFriendsCache.offline = all.offline || all.friends.filter(f => !f.online)
+    const friends = Array.isArray(all.friends) ? all.friends : []
+    rbFriendsCache.online = Array.isArray(all.online) ? all.online : friends.filter(f => f.online)
+    rbFriendsCache.offline = Array.isArray(all.offline) ? all.offline : friends.filter(f => !f.online)
+    rbFriendsLoaded = true
+    // Home usually renders before this API call finishes. Update its metric as
+    // soon as the cache is populated, including a valid zero-friends result.
+    renderHomeFriendsOnline()
   }
   try { const fav = await api.vrchatFavFriendIds(); if (fav.ok) { favFriendIds = new Set(fav.ids); favFriendGroups = fav.groups || {} } } catch (_) {}
   try { const fg = await api.vrchatFavGroups('friend'); if (fg.ok) { favGroupNames = {}; fg.groups.forEach(g => { favGroupNames[g.name] = g.displayName || g.name }) } } catch (_) {}
@@ -5659,10 +5680,9 @@ async function loadHome () {
     }
   } catch (_) {}
 
-  // Friends online count from cache (populated after rightbar loads)
-  if (Array.isArray(rbFriendsCache.online) && rbFriendsCache.online.length) {
-    setText('homeFriendsOnline', String(rbFriendsCache.online.length))
-  }
+  // Friends online count from cache. loadRightbar() also calls this after its
+  // asynchronous API request completes, so Home cannot get stuck on the dash.
+  renderHomeFriendsOnline()
 
   // Recent worlds from history
   try {

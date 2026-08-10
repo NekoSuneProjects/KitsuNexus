@@ -5,6 +5,23 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.72] - 2026-08-10
+
+### Fixed
+- **The standalone Windows updater now has a verified launch handoff before KitsuNexus closes.**
+  Update details use an environment payload, inherited `ELECTRON_RUN_AS_NODE` overrides are removed
+  so `Update.exe` cannot silently run as plain Node, and a two-way ready/ack handshake confirms the
+  real extracted updater window is alive. Windows updates now prefer the elevation-capable NSIS
+  Setup asset, preserve `/allusers` uninstall context and the existing install directory, and
+  refresh external `Update.exe` copies to helper version `1.0.3`. NSIS now launches with Windows
+  ShellExecute semantics instead of through a nested PowerShell process, its own manifest handles
+  UAC, quoted `/D=` destinations containing spaces remain intact, and the updater waits for installed
+  payload files to become stable before relaunching the app. The registry lookup that discovers the
+  existing uninstaller was also corrected.
+- **The Home dashboard's “Friends Online” tile no longer stays on an em dash while friends are
+  online.** The tile now refreshes when the asynchronous VRChat friends cache finishes loading,
+  displays a real `0` when nobody is online, and clears stale counts after logout.
+
 ## [1.0.71] - 2026-08-09
 
 ### Fixed

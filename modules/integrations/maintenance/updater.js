@@ -13,12 +13,16 @@
 const axios = require('axios')
 const path = require('path')
 const fs = require('fs')
+const os = require('os')
+const crypto = require('crypto')
 const { spawn } = require('child_process')
 
 const REPO = 'NekoSuneProjects/KitsuNexus'
 const API = `https://api.github.com/repos/${REPO}/releases/latest`
 const RELEASES_PAGE = `https://github.com/${REPO}/releases`
-const EXTERNAL_UPDATER_VERSION = '1.0.1'
+const UPDATE_PAYLOAD_ENV = 'KITSUNEXUS_UPDATE_PAYLOAD'
+const EXTERNAL_UPDATER_VERSION = '1.0.3'
+const UPDATER_READY_TIMEOUT_MS = 30000
 
 // Compare dotted versions; returns >0 if a>b, <0 if a<b, 0 if equal.
 function cmp (a, b) {
@@ -32,15 +36,15 @@ function cmp (a, b) {
 }
 
 // The asset the standalone updater actually installs, one per platform.
-// Windows: prefer the app zip when published, then the NSIS .exe Setup
-// installer (runs with /S for a silent in-place upgrade to the same directory
-// the user originally chose). The portable .exe is a manual fallback only.
+// Windows: prefer the NSIS Setup installer because per-machine installs under
+// Program Files require elevation. The zip remains a fallback for portable
+// installs that live in a user-writable directory.
 // MSI is intentionally avoided here — msiexec installs to its own default
 // path and won't update an existing NSIS install, so the relaunch would
 // re-open the old binary instead of the new one.
 function pickUpdateAsset (assets) {
   const pick = re => assets.find(a => re.test(a.name || ''))
-  if (process.platform === 'win32') return pick(/\.zip$/i) || pick(/Setup.*\.exe$/i) || pick(/\.exe$/i) || pick(/\.msi$/i)
+  if (process.platform === 'win32') return pick(/Setup.*\.exe$/i) || pick(/\.zip$/i) || pick(/\.exe$/i) || pick(/\.msi$/i)
   if (process.platform === 'darwin') return pick(/\.zip$/i)
   if (process.platform === 'linux') return pick(/\.appimage$/i) || pick(/\.deb$/i)
   return null
@@ -139,8 +143,26 @@ function resolveUpdaterLaunch (appRootDir, isPackaged) {
   return null
 }
 
+function updaterSignalPaths (token) {
+  if (!/^[a-f0-9]{32}$/i.test(String(token || ''))) return null
+  const base = path.join(os.tmpdir(), `kitsunexus-updater-${token}`)
+  return { ready: `${base}.ready`, ack: `${base}.ack` }
+}
+
+function removeUpdaterSignals (signals) {
+  if (!signals) return
+  for (const file of [signals.ready, signals.ack]) {
+    try { fs.unlinkSync(file) } catch (_) {}
+  }
+}
+
 // Launches the standalone updater with everything it needs, then quits this
-// process - it has to, since the updater is about to replace its files.
+// process - it has to, since the updater is about to replace its files. The
+// payload travels through the environment instead of launcher command-line
+// switches, and Electron-only environment overrides are sanitized before the
+// helper starts. A ready/ack file handshake also proves the real
+// extracted updater window is alive before KitsuNexus exits (the Windows
+// portable wrapper's own `spawn` event is not sufficient).
 function startUpdate ({ url, name, version, appRootDir, isPackaged, execPath, pid }, quitApp) {
   const launch = resolveUpdaterLaunch(appRootDir, isPackaged)
   if (!launch) throw new Error(`No update helper available for platform "${process.platform}"`)
@@ -149,26 +171,68 @@ function startUpdate ({ url, name, version, appRootDir, isPackaged, execPath, pi
     throw new Error('Update helper is missing from this install (Update.exe not found in LocalAppData)')
   }
 
-  const cliArgs = [
-    ...launch.args,
-    `--url=${url}`,
-    `--exe=${execPath}`,
-    `--name=${name || 'KitsuNexus-Update'}`,
-    `--version=${version || ''}`,
-    `--pid=${pid}`
-  ]
+  const readyToken = crypto.randomBytes(16).toString('hex')
+  const signals = updaterSignalPaths(readyToken)
+  removeUpdaterSignals(signals)
+  const payload = JSON.stringify({
+    url,
+    exe: execPath,
+    name: name || 'KitsuNexus-Update',
+    version: version || '',
+    pid,
+    readyToken
+  })
+
   return new Promise((resolve, reject) => {
-    const child = spawn(launch.cmd, cliArgs, { detached: true, stdio: 'ignore' })
-    let launched = false
+    const childEnv = { ...process.env, [UPDATE_PAYLOAD_ENV]: payload }
+    // Developer shells and automation can export this for Electron-based
+    // tooling. If inherited, it turns Update.exe into plain Node and app.asar
+    // never starts at all.
+    delete childEnv.ELECTRON_RUN_AS_NODE
+    const child = spawn(launch.cmd, launch.args, {
+      detached: true,
+      stdio: 'ignore',
+      env: childEnv
+    })
+    let settled = false
+    let readyTimer = null
+
+    const fail = err => {
+      if (settled) return
+      settled = true
+      if (readyTimer) clearTimeout(readyTimer)
+      removeUpdaterSignals(signals)
+      reject(err)
+    }
+
     child.once('error', err => {
-      if (!launched) reject(err)
+      if (!settled) fail(err)
       else console.warn('Updater process error after launch:', err.message)
     })
     child.once('spawn', () => {
-      launched = true
-      child.unref()
-      resolve(child.pid)
-      quitApp()
+      const deadline = Date.now() + UPDATER_READY_TIMEOUT_MS
+      const checkReady = () => {
+        if (settled) return
+        if (signals && fs.existsSync(signals.ready)) {
+          try {
+            fs.writeFileSync(signals.ack, `${process.pid}\n`, 'utf8')
+          } catch (err) {
+            fail(new Error(`Could not acknowledge the update helper: ${err.message}`))
+            return
+          }
+          settled = true
+          child.unref()
+          resolve(child.pid)
+          quitApp()
+          return
+        }
+        if (Date.now() >= deadline) {
+          fail(new Error('Update.exe started but its updater window did not become ready. KitsuNexus was left open.'))
+          return
+        }
+        readyTimer = setTimeout(checkReady, 100)
+      }
+      checkReady()
     })
   })
 }
@@ -199,4 +263,4 @@ async function contributors () {
   }
 }
 
-module.exports = { check, cmp, contributors, startUpdate, resolveUpdaterLaunch, ensureExternalUpdater, externalUpdaterPath, EXTERNAL_UPDATER_VERSION, RELEASES_PAGE }
+module.exports = { check, cmp, contributors, startUpdate, resolveUpdaterLaunch, ensureExternalUpdater, externalUpdaterPath, updaterSignalPaths, UPDATE_PAYLOAD_ENV, EXTERNAL_UPDATER_VERSION, RELEASES_PAGE }

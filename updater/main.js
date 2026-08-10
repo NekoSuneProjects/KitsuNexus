@@ -9,11 +9,9 @@
 //   - Install info (dir + uninstall path) is read from the registry BEFORE
 //     uninstalling, then the uninstaller runs /S, then the new installer runs
 //     /S /D=<originalDir> so it lands in exactly the same place.
-//   - Install/uninstall are driven via PowerShell Start-Process -Wait, which
-//     correctly blocks until the elevated child process finishes — Node's
-//     execFile returns as soon as the NSIS stub launches (before the elevated
-//     installer actually runs), which was the root cause of "claims it works
-//     but nothing changed".
+//   - NSIS is launched with Windows ShellExecute semantics so its own manifest
+//     owns UAC elevation. The helper watches installed files instead of
+//     trusting the short-lived setup stub's exit event.
 //
 // Mac / Linux paths are implemented from documented platform behaviour but
 // have NOT been verified on a real machine of either OS.
@@ -25,9 +23,24 @@ const os = require('os')
 const https = require('https')
 const { spawn, execFile } = require('child_process')
 
+const UPDATE_PAYLOAD_ENV = 'KITSUNEXUS_UPDATE_PAYLOAD'
+const UPDATER_ACK_TIMEOUT_MS = 45000
+const NSIS_OPERATION_TIMEOUT_MS = 300000
+const STARTUP_LOG = path.join(os.tmpdir(), 'KitsuNexus-updater-startup.log')
+
+function startupLog (message) {
+  try { fs.appendFileSync(STARTUP_LOG, `${new Date().toISOString()} pid=${process.pid} ${message}\n`, 'utf8') } catch (_) {}
+}
+
+process.on('uncaughtException', err => startupLog(`uncaughtException: ${err && (err.stack || err.message)}`))
+process.on('unhandledRejection', err => startupLog(`unhandledRejection: ${err && (err.stack || err.message || err)}`))
+startupLog(`start packaged=${app.isPackaged} payload=${process.env[UPDATE_PAYLOAD_ENV] ? 'present' : 'missing'}`)
+
 // Only one updater window at a time — a previous attempt that got stuck must
 // not block a fresh one.
-if (!app.requestSingleInstanceLock()) app.quit()
+const hasSingleInstanceLock = app.requestSingleInstanceLock()
+startupLog(`singleInstanceLock=${hasSingleInstanceLock}`)
+if (!hasSingleInstanceLock) app.quit()
 
 function parseArgs (argv) {
   const out = {}
@@ -38,13 +51,64 @@ function parseArgs (argv) {
   return out
 }
 
-const args = parseArgs(process.argv.slice(app.isPackaged ? 1 : 2))
-const { url, exe: exePath, name: fileName = 'KitsuNexus-Update.exe', version = '', pid } = args
+function parseUpdatePayload (argv, env = process.env) {
+  const legacyArgs = parseArgs(argv)
+  const rawPayload = env[UPDATE_PAYLOAD_ENV]
+  if (!rawPayload) return legacyArgs
+  try {
+    const payload = JSON.parse(rawPayload)
+    return payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? { ...legacyArgs, ...payload }
+      : legacyArgs
+  } catch (_) {
+    return legacyArgs
+  }
+}
+
+const args = parseUpdatePayload(process.argv.slice(app.isPackaged ? 1 : 2))
+delete process.env[UPDATE_PAYLOAD_ENV]
+const { url, exe: exePath, name: fileName = 'KitsuNexus-Update.exe', version = '', pid, readyToken } = args
+startupLog(`payloadParsed url=${!!url} exe=${!!exePath} readyToken=${!!readyToken}`)
 
 let mainWindow = null
 
 function send (channel, payload) {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload)
+}
+
+function updaterSignalPaths (token) {
+  if (!/^[a-f0-9]{32}$/i.test(String(token || ''))) return null
+  const base = path.join(os.tmpdir(), `kitsunexus-updater-${token}`)
+  return { ready: `${base}.ready`, ack: `${base}.ack` }
+}
+
+async function signalReadyAndWaitForAck () {
+  if (!readyToken) return true // Backward-compatible direct/manual launch.
+  const signals = updaterSignalPaths(readyToken)
+  if (!signals) return false
+  try {
+    for (const file of [signals.ready, signals.ack]) {
+      try { fs.unlinkSync(file) } catch (_) {}
+    }
+    fs.writeFileSync(signals.ready, `${process.pid}\n`, 'utf8')
+  } catch (_) {
+    return false
+  }
+
+  const deadline = Date.now() + UPDATER_ACK_TIMEOUT_MS
+  while (Date.now() < deadline) {
+    if (fs.existsSync(signals.ack)) {
+      for (const file of [signals.ready, signals.ack]) {
+        try { fs.unlinkSync(file) } catch (_) {}
+      }
+      return true
+    }
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+  for (const file of [signals.ready, signals.ack]) {
+    try { fs.unlinkSync(file) } catch (_) {}
+  }
+  return false
 }
 
 function waitForPidExit (targetPid, timeoutMs = 30000) {
@@ -134,60 +198,108 @@ function mainAppProcessNames (targetExePath) {
   return [...names]
 }
 
-// Kills any running KitsuNexus main-app processes so files aren't locked
-// during uninstall/install. This is the most common cause of NSIS exit code 2.
-// PowerShell's $PID is the PowerShell child, not this Electron updater, so the
-// real updater PID is embedded explicitly as an additional safety guard.
+// Kills only exact KitsuNexus main-app image names so files aren't locked.
+// The separate "KitsuNexus Updater.exe" image is deliberately not a match.
 async function killRunningInstances (targetExePath = exePath) {
   if (process.platform !== 'win32') return
-  try {
-    const processNames = mainAppProcessNames(targetExePath)
-      .map(name => `'${name.replace(/'/g, "''")}'`)
-      .join(',')
-    const updaterPid = process.pid
-    await new Promise((resolve, reject) =>
-      execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-        `$updaterPid=${updaterPid}; Get-Process -Name ${processNames} -ErrorAction SilentlyContinue |` +
-        ' Where-Object { $_.Id -ne $updaterPid } | ForEach-Object { ' +
-        "  Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue" +
-        " }; Start-Sleep -Milliseconds 500"
-      ], { timeout: 10000 }, (e) => e ? reject(e) : resolve())
-    )
-  } catch (_) { /* best effort */ }
+  await Promise.all(mainAppProcessNames(targetExePath).map(name =>
+    new Promise(resolve => {
+      execFile('taskkill.exe', ['/F', '/IM', `${name}.exe`], { timeout: 10000 }, () => resolve())
+    })
+  ))
+  await new Promise(resolve => setTimeout(resolve, 500))
 }
 
-// Runs an NSIS installer/uninstaller via PowerShell Start-Process -Wait.
-//
-// WHY NOT execFile directly:
-//   Node's execFile() calls CreateProcess() and waits for that specific PID.
-//   When NSIS needs elevation it launches a UAC-elevated child and the outer
-//   stub exits immediately — CreateProcess sees exit code 0 before the actual
-//   installer has done anything. Start-Process -Wait waits on the elevated
-//   process itself, so we don't return until the install is truly done.
-async function runNsisInstaller (installerPath, nsisArgs) {
-  // Build a PowerShell -ArgumentList from the args array.
-  // /D=<path> must be LAST and must not be quoted — NSIS parses it specially.
-  const escapedExe = installerPath.replace(/'/g, "''")
-  const argStr = nsisArgs.map(a => {
-    const s = String(a)
-    // /D= args: pass unquoted so NSIS sees the raw path
-    if (/^\/D=/i.test(s)) return s
-    return `'${s.replace(/'/g, "''")}'`
-  }).join(',')
-  const cmd = argStr
-    ? `Start-Process -FilePath '${escapedExe}' -ArgumentList ${argStr} -Wait`
-    : `Start-Process -FilePath '${escapedExe}' -Wait`
+// `cmd start` uses Windows ShellExecute semantics, allowing the NSIS manifest
+// to request UAC from this non-elevated Electron helper. The destination is
+// kept as one quoted argument so a path such as C:\Program Files\KitsuNexus is
+// not truncated to C:\Program.
+function launchNsis (installerPath, nsisArgs) {
+  const values = [installerPath, ...nsisArgs]
+  if (values.some(value => /["\r\n]/.test(String(value)))) {
+    return Promise.reject(new Error('The installer path contains unsupported command-line characters.'))
+  }
+  const commandArgs = nsisArgs.map(value => {
+    const arg = String(value)
+    return /^\/D=/i.test(arg) ? `"${arg}"` : arg
+  })
+  const command = `start "" "${installerPath}" ${commandArgs.join(' ')}`.trim()
 
-  return new Promise((resolve, reject) =>
-    execFile('powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-Command', cmd],
-      { timeout: 120000 },
-      (err, _out, stderr) => {
-        if (err) { err.stderrText = String(stderr || '').trim(); reject(err) }
-        else resolve()
-      }
-    )
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', command], {
+      detached: false,
+      stdio: 'ignore',
+      windowsHide: true,
+      windowsVerbatimArguments: true
+    })
+    child.once('error', reject)
+    child.once('exit', code => {
+      if (code === 0) resolve(child)
+      else reject(new Error(`Windows could not launch the installer (exit code ${code}).`))
+    })
+  })
+}
+
+async function waitForCondition (check, timeoutMs, errorMessage, intervalMs = 500) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      if (await check()) return
+    } catch (_) {}
+    await new Promise(resolve => setTimeout(resolve, intervalMs))
+  }
+  throw new Error(errorMessage)
+}
+
+async function waitForUninstallComplete (uninstallExe, targetExePath) {
+  await waitForCondition(
+    () => !fs.existsSync(uninstallExe) && (!targetExePath || !fs.existsSync(targetExePath)),
+    NSIS_OPERATION_TIMEOUT_MS,
+    'The old version was not removed. Approve the Windows UAC prompt, then retry.'
   )
+}
+
+async function waitForInstallComplete (targetExePath) {
+  // app.asar is the largest payload and the uninstaller is written near the
+  // end. Requiring both to remain stable prevents a premature relaunch.
+  const installDir = path.dirname(targetExePath)
+  const appAsar = path.join(installDir, 'resources', 'app.asar')
+  let previousSignature = ''
+  let stablePolls = 0
+
+  await waitForCondition(() => {
+    if (!fs.existsSync(targetExePath) || !fs.existsSync(appAsar)) {
+      previousSignature = ''
+      stablePolls = 0
+      return false
+    }
+    const uninstaller = fs.readdirSync(installDir)
+      .find(name => /^Uninstall .+\.exe$/i.test(name))
+    if (!uninstaller) return false
+
+    const signature = [targetExePath, appAsar, path.join(installDir, uninstaller)]
+      .map(file => {
+        const stat = fs.statSync(file)
+        return `${stat.size}:${stat.mtimeMs}`
+      })
+      .join('|')
+    stablePolls = signature === previousSignature ? stablePolls + 1 : 0
+    previousSignature = signature
+    return stablePolls >= 5
+  }, NSIS_OPERATION_TIMEOUT_MS, 'The new version did not finish installing. Approve the Windows UAC prompt, then retry.')
+
+  await waitUntilFileUnlocked(targetExePath, 20, 250)
+}
+
+function parseUninstallCommand (rawValue) {
+  const raw = String(rawValue || '').trim()
+  const quotedExe = raw.match(/^"([^"]+\.exe)"/i)
+  const plainExe = raw.match(/^(.+?\.exe)(?:\s|$)/i)
+  const exe = (quotedExe && quotedExe[1]) || (plainExe && plainExe[1]) || ''
+  const args = []
+  if (/\s\/allusers(?:\s|$)/i.test(raw)) args.push('/allusers')
+  else if (/\s\/currentuser(?:\s|$)/i.test(raw)) args.push('/currentuser')
+  return { exe, args }
 }
 
 // Reads the current installation's directory and uninstall-string from the
@@ -200,8 +312,8 @@ async function findNsisInstallInfo () {
       execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
         "@('HKLM','HKCU') | ForEach-Object {" +
         "  Get-ItemProperty" +
-        "  \"$_:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*\"," +
-        "  \"$_:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*\"" +
+        "  \"${_}:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*\"," +
+        "  \"${_}:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*\"" +
         "  -ErrorAction SilentlyContinue" +
         "} | Where-Object { $_.DisplayName -like '*NekoSuneAPPS*' -or $_.DisplayName -like '*KitsuNexus*' }" +
         " | Select-Object -First 1 -Property InstallLocation,UninstallString" +
@@ -211,11 +323,14 @@ async function findNsisInstallInfo () {
     const json = stdout.trim()
     if (!json) return {}
     const obj = JSON.parse(json)
-    const installDir = (obj.InstallLocation || '').trim() || null
-    // UninstallString can be quoted: "C:\path\Uninstall.exe" — strip outer quotes
-    const rawUninstall = (obj.UninstallString || '').trim().replace(/^"(.*)"$/, '$1').trim()
-    const uninstallExe = (rawUninstall && fs.existsSync(rawUninstall)) ? rawUninstall : null
-    return { installDir, uninstallExe }
+    const registryInstallDir = (obj.InstallLocation || '').trim() || null
+    // UninstallString can include a quoted path plus /allusers or /currentuser.
+    const rawUninstall = (obj.UninstallString || '').trim()
+    const parsedUninstall = parseUninstallCommand(rawUninstall)
+    const uninstallExe = (parsedUninstall.exe && fs.existsSync(parsedUninstall.exe)) ? parsedUninstall.exe : null
+    const uninstallArgs = parsedUninstall.args
+    const installDir = registryInstallDir || (uninstallExe ? path.dirname(uninstallExe) : null)
+    return { installDir, uninstallExe, uninstallArgs }
   } catch (_) {}
   return {}
 }
@@ -230,14 +345,19 @@ async function findRelaunchExe (originalExePath) {
       execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
         "@('HKLM','HKCU') | ForEach-Object {" +
         "  Get-ItemProperty" +
-        "  \"$_:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*\"," +
-        "  \"$_:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*\"" +
+        "  \"${_}:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*\"," +
+        "  \"${_}:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*\"" +
         "  -ErrorAction SilentlyContinue" +
         "} | Where-Object { $_.DisplayName -like '*NekoSuneAPPS*' -or $_.DisplayName -like '*KitsuNexus*' }" +
-        " | Select-Object -ExpandProperty InstallLocation -First 1"
+        " | Select-Object -First 1 -Property InstallLocation,UninstallString" +
+        " | ConvertTo-Json -Compress"
       ], { timeout: 15000 }, (e, out) => e ? reject(e) : resolve({ stdout: out }))
     )
-    const dir = stdout.trim()
+    const json = stdout.trim()
+    if (!json) return null
+    const obj = JSON.parse(json)
+    const uninstall = parseUninstallCommand(obj.UninstallString)
+    const dir = String(obj.InstallLocation || '').trim() || (uninstall.exe ? path.dirname(uninstall.exe) : '')
     if (dir) {
       const candidate = path.join(dir, 'KitsuNexus.exe')
       if (fs.existsSync(candidate)) return candidate
@@ -292,7 +412,8 @@ async function applyInstaller (downloadedPath, targetExePath) {
 
     // Read registry info BEFORE uninstalling — the uninstaller removes those keys.
     send('status', { phase: 'step', step: 'uninstall', label: 'Preparing…' })
-    const { installDir, uninstallExe } = await findNsisInstallInfo()
+    const { installDir, uninstallExe, uninstallArgs = [] } = await findNsisInstallInfo()
+    const targetInstallDir = (installDir || path.dirname(targetExePath) || '').trim()
 
     // Kill any running instances so files aren't locked (most common cause of
     // uninstall failure / NSIS exit code 2).
@@ -302,56 +423,19 @@ async function applyInstaller (downloadedPath, targetExePath) {
     // Step 1: clean uninstall of old files
     if (uninstallExe) {
       send('status', { phase: 'step', step: 'uninstall', label: 'Removing old version…' })
-      try {
-        await runNsisInstaller(uninstallExe, ['/S'])
-      } catch (uninstallErr) {
-        // If the uninstaller fails (exit code 2 = files locked), try to
-        // manually remove the install directory so the new installer can
-        // proceed.  This is the most common path for the "exit code 2" error.
-        if (installDir && fs.existsSync(installDir)) {
-          send('status', { phase: 'step', step: 'uninstall', label: 'Cleaning up leftover files…' })
-          try {
-            // Remove read-only attributes first (NSIS uninstaller sets these)
-            await new Promise((resolve, reject) =>
-              execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-                `Get-ChildItem -Path '${installDir.replace(/'/g, "''")}' -Recurse -Force -ErrorAction SilentlyContinue |` +
-                ' Set-ItemProperty -Name IsReadOnly -Value $false -ErrorAction SilentlyContinue;' +
-                ` Remove-Item -Path '${installDir.replace(/'/g, "''")}' -Recurse -Force -ErrorAction SilentlyContinue`
-              ], { timeout: 30000 }, (e) => e ? reject(e) : resolve())
-            )
-          } catch (_) {
-            // If manual cleanup fails, we'll let the installer try anyway —
-            // it may still succeed in overwriting what it can.
-          }
-        }
-      }
+      await launchNsis(uninstallExe, [...uninstallArgs, '/S'])
+      await waitForUninstallComplete(uninstallExe, targetExePath)
     }
 
     // Step 2: install new version to the same directory the user originally chose
     send('status', { phase: 'step', step: 'install', label: 'Installing new version…' })
-    const installArgs = (installDir && installDir.trim())
-      ? ['/S', `/D=${installDir.trim()}`]
+    const installArgs = targetInstallDir
+      ? ['/S', `/D=${targetInstallDir}`]
       : ['/S']
 
-    const attempts = 3
-    let lastErr = null
-    for (let i = 1; i <= attempts; i++) {
-      try {
-        await runNsisInstaller(downloadedPath, installArgs)
-        return { relaunch: true }
-      } catch (err) {
-        lastErr = err
-        if (i < attempts) {
-          // Wait a bit and kill any lingering processes before retrying
-          await killRunningInstances(targetExePath)
-          await new Promise(r => setTimeout(r, 2000))
-        }
-      }
-    }
-    const detail = lastErr.stderrText
-      ? `: ${lastErr.stderrText}`
-      : (lastErr.code !== undefined ? ` (exit code ${lastErr.code})` : '')
-    throw new Error(`Installer failed after ${attempts} attempts${detail}. Try running the installer manually as Administrator.`)
+    await launchNsis(downloadedPath, installArgs)
+    await waitForInstallComplete(targetExePath)
+    return { relaunch: true }
   }
 
   if (process.platform === 'darwin') {
@@ -451,6 +535,7 @@ ipcMain.handle('updater:openDownloadFolder', (e, targetPath) => {
 })
 
 app.whenReady().then(() => {
+  startupLog('appReady')
   mainWindow = new BrowserWindow({
     width: 420,
     height: 370,
@@ -467,8 +552,15 @@ app.whenReady().then(() => {
   })
   mainWindow.setMenuBarVisibility(false)
   mainWindow.loadFile('index.html')
-  mainWindow.webContents.once('did-finish-load', () => {
+  mainWindow.webContents.once('did-finish-load', async () => {
+    startupLog('windowLoaded')
     send('status', { phase: 'starting', version })
+    if (url && exePath && !await signalReadyAndWaitForAck()) {
+      startupLog('readyHandshakeFailed')
+      send('status', { phase: 'error', message: 'KitsuNexus did not acknowledge the separate updater. No files were changed.' })
+      return
+    }
+    startupLog('readyHandshakeComplete')
     run()
   })
 })

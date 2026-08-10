@@ -1,6 +1,6 @@
 {
   "name": "kitsunexus-updater",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "private": true,
   "description": "Standalone update helper for KitsuNexus - downloads and installs a new version while the main app is closed, then relaunches it.",
   "main": "main.js",
