@@ -5,6 +5,31 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+
+## [1.0.73] - 2026-09-07
+
+### Added
+- **VRChat Public Profile support through VRChat.js.** KitsuNexus now reads the public-profile
+  payload for profile fields including age verification, badges, bio/bio links, VRC+, profile
+  effects, pronouns, represented group, theme, languages and `trustTags`.
+- **Economy Creator verification.** Profiles with `isEconomyCreator: true` are exposed as verified
+  VRChat Economy Creators so the UI can show the verified/economy-creator state directly from the
+  API instead of guessing from badges or unrelated tags.
+
+### Changed
+- **Migrated the VRChat account API layer to the `vrchat` (VRChat.js) npm SDK.** The existing
+  KitsuNexus IPC/module contract is preserved while authentication, 2FA, friends, profiles and
+  other VRChat requests now go through the shared SDK client rather than the old hand-written
+  Axios transport.
+- **OG trust rank detection now uses Public Profile `trustTags`.** Normal Get User by ID `tags`
+  remain available separately for user metadata such as languages, while rank determination is
+  sourced from the public profile. The legacy mapping is preserved exactly: `system_trust_legend`
+  = Veteran, `system_trust_veteran` = Trusted User, `system_trust_trusted` = Known User,
+  `system_trust_known` = User, `system_trust_intermediate` = Intermediate,
+  `system_trust_basic` = New User, and `system_legend` = Legend.
+- **VRChat.js is pinned to the available 2.22.x line.** The dependency is currently `~2.22.8`,
+  allowing 2.22.9 when that patch is published without crossing into a newer minor version.
+
 ## [1.0.72] - 2026-08-10
 
 ### Fixed
