@@ -178,6 +178,7 @@
     "systeminformation": "^5.23.5",
     "tesseract.js": "^7.0.0",
     "tiktok-live-connector": "^2.1.0",
+    "vrchat": "~2.22.8",
     "ws": "^8.18.0"
   },
   "devDependencies": {

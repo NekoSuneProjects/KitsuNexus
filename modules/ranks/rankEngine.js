@@ -2,13 +2,11 @@
 // KitsuNexus Community Ranks — pure scoring engine.
 // Implements the 0–1000 weighted model from docs/community-ranks-spec.md.
 // NO side effects, NO I/O: takes a plain `stats` object and returns a breakdown.
-// This is the single source of truth for the numbers; the DB/collector just feed it.
 //
-// IMPORTANT: these are *KitsuNexus Community Ranks*, an independent community
-// reputation system. They are NOT official VRChat ranks and do not read VRChat's
-// internal trust score.
+// IMPORTANT: the score-based KitsuNexus ladder below is independent from VRChat.
+// `estimateFromTags()` is a separate compatibility helper for VRChat's legacy
+// trustTags and follows the old TrustedData mapping exactly.
 
-// ---- factor caps (must sum to 1000) -------------------------------------
 const MAX = {
   joinAge: 150,
   yearsActive: 150,
@@ -22,9 +20,6 @@ const MAX = {
   recognition: 50
 }
 
-// ---- rank ladder ---------------------------------------------------------
-// `min` is the promotion threshold; `floor` is the demotion threshold (hysteresis,
-// §11 of the spec) so ranks don't flicker around a boundary.
 const RANKS = [
   { key: 'visitor', label: 'Visitor', tier: 0, min: 0, floor: 0, color: '#8A8F98', accent: '#B5BAC2', og: false },
   { key: 'new_user', label: 'New User', tier: 1, min: 100, floor: 90, color: '#4FB477', accent: '#7FE0A6', og: false },
@@ -35,33 +30,40 @@ const RANKS = [
   { key: 'legend', label: 'Legend', tier: 6, min: 950, floor: 920, color: '#E0115F', accent: '#FF6FB5', og: true }
 ]
 
+// Exact legacy VRChat TrustedData mapping supplied for OG trust display.
+// Keep this separate from RANKS: the same label can intentionally have different
+// legacy colors/tier ordering from KitsuNexus's own community score ladder.
+const VRC_TRUST_RANKS = [
+  { tag: 'admin_moderator', key: 'admin', label: 'Admin', tier: 8, color: '#8B0000', accent: '#8B0000', og: false },
+  { tag: 'system_troll', key: 'troll', label: 'Troll', tier: 0, color: '#808080', accent: '#808080', og: false },
+  { tag: 'system_probable_troll', key: 'probable_troll', label: 'Troll??', tier: 0, color: '#808080', accent: '#808080', og: false },
+  { tag: 'system_legend', key: 'legend', label: 'Legend', tier: 7, color: '#FF0000', accent: '#FF0000', og: true },
+  { tag: 'system_trust_legend', key: 'veteran', label: 'Veteran', tier: 6, color: 'yellow', accent: 'yellow', og: true },
+  { tag: 'system_trust_veteran', key: 'trusted_user', label: 'Trusted User', tier: 5, color: '#8143E6', accent: '#8143E6', og: false },
+  { tag: 'system_trust_trusted', key: 'known_user', label: 'Known User', tier: 4, color: '#FF7B42', accent: '#FF7B42', og: false },
+  { tag: 'system_trust_known', key: 'user', label: 'User', tier: 3, color: '#2BCF5C', accent: '#2BCF5C', og: false },
+  { tag: 'system_trust_intermediate', key: 'intermediate', label: 'Intermediate', tier: 2, color: '#000080', accent: '#000080', og: false },
+  { tag: 'system_trust_basic', key: 'new_user', label: 'New User', tier: 1, color: '#1778FF', accent: '#1778FF', og: false }
+]
+
 const SECONDS_PER_YEAR = 365.25 * 24 * 3600
 const SECONDS_PER_MONTH = SECONDS_PER_YEAR / 12
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x))
-// Saturating curve: reaches ~95% of `cap` at n = 3k. The first units are worth a
-// lot; the 50th upload is worthless — this is the core anti-spam shape.
 const sat = (n, cap, k) => cap * (1 - Math.exp(-Math.max(0, n) / k))
 
-// ---- creator activity (recency-weighted, §2.3) ---------------------------
-// Rewards *sustained* creation, not raw totals.
 function creatorScore (s, nowSec) {
   const daysSinceLast = s.lastPublishAt
     ? Math.max(0, (nowSec - s.lastPublishAt) / 86400)
     : Infinity
   const recency = daysSinceLast <= 180
     ? 1
-    : Math.max(0, 1 - (daysSinceLast - 180) / 540) // fades to 0 over the next ~18 months
+    : Math.max(0, 1 - (daysSinceLast - 180) / 540)
   const consistency = clamp((s.distinctPublishMonths24 || 0) / 24, 0, 1)
   const adoption = sat(s.totalFavourites || 0, 20, 50) / 20
   return 40 * recency + 40 * consistency + 20 * adoption
 }
 
-/**
- * Compute the full score breakdown for a user.
- * @param {object} stats  collected facts (see modules/ranks/rankStore collectStats)
- * @param {number} nowSec current time in epoch seconds (injected for determinism)
- */
 function computeScore (stats, nowSec) {
   const s = stats || {}
   const now = nowSec || Math.floor(Date.now() / 1000)
@@ -82,12 +84,8 @@ function computeScore (stats, nowSec) {
     recognition: clamp((s.recognitionTier || 0) * 25, 0, MAX.recognition)
   }
 
-  // Round each component for display; sum the rounded parts so the breakdown adds up.
   for (const k of Object.keys(breakdown)) breakdown[k] = Math.round(breakdown[k])
   const rawScore = Object.values(breakdown).reduce((a, b) => a + b, 0)
-
-  // Confirmed abuse scales the WHOLE score down (multiplicative, §2.5) rather than
-  // shaving a few points, so farming can't out-run a sanction.
   const penalty = clamp(s.abusePenalty == null ? 1 : s.abusePenalty, 0, 1)
   const finalScore = Math.round(clamp(rawScore, 0, 1000) * penalty)
 
@@ -105,8 +103,6 @@ function computeScore (stats, nowSec) {
   }
 }
 
-// ---- Veteran / Legend hard gates (§5–6) ----------------------------------
-// Score is necessary but NOT sufficient: the OG tiers require real history.
 function veteranGates (stats, score) {
   const s = stats || {}
   const meaningfulCreation =
@@ -146,19 +142,9 @@ function yearsJoined (s) {
   return s.vrcJoinDate ? (now - s.vrcJoinDate) / SECONDS_PER_YEAR : 0
 }
 
-/**
- * Resolve a final rank from a score + the hard gates, honouring the OG toggle and
- * the previous rank (for demotion hysteresis).
- * @param {object} score    output of computeScore
- * @param {object} stats    the same stats fed to computeScore
- * @param {object} opts      { ogMode:boolean, previousRankKey:string }
- */
 function resolveRank (score, stats, opts = {}) {
   const ogMode = opts.ogMode !== false
   const prevTier = (RANKS.find(r => r.key === opts.previousRankKey) || {}).tier ?? -1
-
-  // Start from the highest score-eligible rank, applying hysteresis: to SIT in a
-  // rank you only need its `floor` if you were already at/above it.
   let candidate = RANKS[0]
   for (const r of RANKS) {
     const threshold = prevTier >= r.tier ? r.floor : r.min
@@ -166,28 +152,21 @@ function resolveRank (score, stats, opts = {}) {
   }
 
   const pending = []
-  // OG tiers are gated. If a gate fails, fall back to Trusted User but report why.
   if (candidate.key === 'veteran') {
-    const gates = veteranGates(stats, score)
-    const failed = gates.filter(g => !g.ok)
+    const failed = veteranGates(stats, score).filter(g => !g.ok)
     if (failed.length) { pending.push(...failed.map(g => g.need)); candidate = RANKS.find(r => r.key === 'trusted_user') }
   }
   if (candidate.key === 'legend') {
-    const gates = legendGates(stats, score)
-    const failed = gates.filter(g => !g.ok)
+    const failed = legendGates(stats, score).filter(g => !g.ok)
     if (failed.length) {
       pending.push(...failed.map(g => g.need))
-      // Drop to Veteran if those gates pass, else Trusted.
       const vetFailed = veteranGates(stats, score).filter(g => !g.ok)
       candidate = vetFailed.length ? RANKS.find(r => r.key === 'trusted_user') : RANKS.find(r => r.key === 'veteran')
     }
   }
 
-  // When OG mode is off, never surface the nostalgia tiers — cap the label at Trusted.
   let display = candidate
   if (!ogMode && candidate.og) display = RANKS.find(r => r.key === 'trusted_user')
-
-  // What's the next rank up, and what stands between the user and it?
   const next = RANKS.find(r => r.tier === display.tier + 1)
   return {
     key: display.key,
@@ -204,74 +183,86 @@ function resolveRank (score, stats, opts = {}) {
   }
 }
 
-// ---- VRChat trust → seed score (migration, §10) --------------------------
-// One-time floor only; never re-read after first computation.
-const TRUST_SEED = { visitor: 50, basic: 150, new_user: 150, known: 500, known_user: 500, trusted: 680, trusted_user: 680, user: 300 }
-// VRChat exposes trust via account tags; map the highest present tag to a seed.
+// One-time migration floor from the legacy VRChat trust ladder. This now mirrors
+// the same tag meaning used by estimateFromTags instead of treating
+// system_trust_veteran as Veteran.
+const TRUST_SEED = { visitor: 50, basic: 150, new_user: 150, intermediate: 200, user: 300, known: 500, known_user: 500, trusted: 680, trusted_user: 680, veteran: 800, legend: 950 }
 function seedFromVrcTags (tags) {
   const t = new Set(tags || [])
-  if (t.has('system_trust_veteran')) return 680 // VRChat "Trusted"-equivalent ceiling; OG tiers must be earned here
-  if (t.has('system_trust_trusted')) return 680
-  if (t.has('system_trust_known')) return 500
-  if (t.has('system_trust_intermediate')) return 300
+  if (t.has('system_legend')) return 950
+  if (t.has('system_trust_legend')) return 800
+  if (t.has('system_trust_veteran')) return 680
+  if (t.has('system_trust_trusted')) return 500
+  if (t.has('system_trust_known')) return 300
+  if (t.has('system_trust_intermediate')) return 200
   if (t.has('system_trust_basic')) return 150
   return 50
 }
 
-// Year from a VRChat date_joined string ("YYYY-MM-DD"); 0 if unknown/unparseable.
 function joinYearOf (dateStr) {
   if (!dateStr) return 0
   const m = /^(\d{4})/.exec(String(dateStr))
   return m ? parseInt(m[1], 10) : 0
 }
 
-// ---- Friend/other-user rank from VRChat trust tags -----------------------
-// This mirrors exactly how VRChat itself ranks users — the same thing the
-// OGTrustRanks mod surfaces in-game. That mod doesn't compute anything: it calls
-// VRChat's still-present internal APIUser.GetTrustRankEnum() /
-// GetFriendlyDetailedNameForSocialRank(), which keep producing Veteran & Legend.
-// VRChat only removed the on-screen DISPLAY, not the calculation, and it is driven
-// by these trust tags. So we map them the same way:
-//   system_trust_legend  → Legend      (rare — grandfathered legends, e.g. Shadowriver)
-//   system_trust_veteran → Veteran     (the real OG Veteran tier; common — by design)
-//   system_trust_trusted → Trusted User
-//   system_trust_known   → Known User
-//   system_trust_basic   → User
-//   (none)               → Visitor / New User
-// `system_trust_veteran` being common is correct: it IS the OG Veteran rank.
+// VRChat legacy rank resolver. `tags` should be PublicProfile.trustTags plus
+// non-rank helper tags such as system_supporter. Rank selection itself only
+// consults VRC_TRUST_RANKS.
 function estimateFromTags (tags, opts = {}) {
-  const t = new Set(tags || [])
-  let key
-  if (t.has('system_trust_legend') || t.has('system_legend') || t.has('legend')) key = 'legend'
-  else if (t.has('system_trust_veteran')) key = 'veteran'
-  else if (t.has('system_trust_trusted')) key = 'trusted_user'
-  else if (t.has('system_trust_known')) key = 'known_user'
-  else if (t.has('system_trust_basic')) key = 'user'
-  else key = 'visitor'
+  const t = new Set(Array.isArray(tags) ? tags : [])
+  let rank = null
 
-  let r = RANKS.find(x => x.key === key)
-  const isOg = r.og
-  // When OG tiers are hidden, cap the visible label at Trusted User (same rule as
-  // resolveRank) — the underlying trust is unchanged.
-  if (opts.ogMode === false && r.og) r = RANKS.find(x => x.key === 'trusted_user')
+  // Admin and troll states are overrides. Otherwise choose the highest normal
+  // legacy rank present, matching the TrustedData hierarchy supplied by the user.
+  if (t.has('admin_moderator')) rank = VRC_TRUST_RANKS.find(r => r.tag === 'admin_moderator')
+  else if (t.has('system_troll')) rank = VRC_TRUST_RANKS.find(r => r.tag === 'system_troll')
+  else if (t.has('system_probable_troll')) rank = VRC_TRUST_RANKS.find(r => r.tag === 'system_probable_troll')
+  else {
+    const order = [
+      'system_legend',
+      'system_trust_legend',
+      'system_trust_veteran',
+      'system_trust_trusted',
+      'system_trust_known',
+      'system_trust_intermediate',
+      'system_trust_basic'
+    ]
+    const selected = order.find(tag => t.has(tag))
+    if (selected) rank = VRC_TRUST_RANKS.find(r => r.tag === selected)
+  }
+
+  if (!rank) rank = { tag: null, key: 'visitor', label: 'Visitor', tier: 0, color: '#808080', accent: '#808080', og: false }
+  const earned = rank
+
+  // Existing UI toggle semantics: hide Veteran/Legend when OG mode is disabled,
+  // but use the legacy Trusted User colour when capping the display.
+  if (opts.ogMode === false && earned.og) {
+    rank = VRC_TRUST_RANKS.find(r => r.tag === 'system_trust_veteran')
+  }
 
   return {
-    key: r.key,
-    shortLabel: r.label,
-    label: 'KitsuNexus Community Rank: ' + r.label,
-    tier: r.tier,
-    color: r.color,
-    accent: r.accent,
-    isOg,                       // true when the *earned* tier is Veteran/Legend
-    estimated: true,            // derived from VRChat trust tags, not a full score
-    vrcPlus: t.has('system_supporter'), // VRC+ supporter (the monthly "boost")
-    moderator: t.has('admin_moderator')
+    key: rank.key,
+    shortLabel: rank.label,
+    label: 'VRChat OG Rank: ' + rank.label,
+    tier: rank.tier,
+    color: rank.color,
+    accent: rank.accent,
+    isOg: earned.og,
+    ogHidden: opts.ogMode === false && earned.og,
+    estimated: true,
+    source: 'publicProfile.trustTags',
+    sourceTag: earned.tag,
+    vrcPlus: t.has('system_supporter'),
+    moderator: t.has('admin_moderator'),
+    troll: t.has('system_troll'),
+    probableTroll: t.has('system_probable_troll')
   }
 }
 
 module.exports = {
   MAX,
   RANKS,
+  VRC_TRUST_RANKS,
   computeScore,
   resolveRank,
   veteranGates,
