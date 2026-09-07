@@ -1,0 +1,98 @@
+name: Prepare KitsuNexus v1.0.73
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-release:
+    if: github.event.head_commit.message == 'chore: prepare v1.0.73 release'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Bump package version and regenerate lockfile
+        run: |
+          npm version 1.0.73 --no-git-tag-version
+          npm install --package-lock-only --ignore-scripts
+
+      - name: Add v1.0.73 changelog
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('CHANGELOG.md')
+          text = path.read_text(encoding='utf-8')
+          marker = '## Unreleased\n'
+          section = '''
+
+## [1.0.73] - 2026-09-07
+
+### Added
+- **VRChat Public Profile support through VRChat.js.** KitsuNexus now reads the public-profile
+  payload for profile fields including age verification, badges, bio/bio links, VRC+, profile
+  effects, pronouns, represented group, theme, languages and `trustTags`.
+- **Economy Creator verification.** Profiles with `isEconomyCreator: true` are exposed as verified
+  VRChat Economy Creators so the UI can show the verified/economy-creator state directly from the
+  API instead of guessing from badges or unrelated tags.
+
+### Changed
+- **Migrated the VRChat account API layer to the `vrchat` (VRChat.js) npm SDK.** The existing
+  KitsuNexus IPC/module contract is preserved while authentication, 2FA, friends, profiles and
+  other VRChat requests now go through the shared SDK client rather than the old hand-written
+  Axios transport.
+- **OG trust rank detection now uses Public Profile `trustTags`.** Normal Get User by ID `tags`
+  remain available separately for user metadata such as languages, while rank determination is
+  sourced from the public profile. The legacy mapping is preserved exactly: `system_trust_legend`
+  = Veteran, `system_trust_veteran` = Trusted User, `system_trust_trusted` = Known User,
+  `system_trust_known` = User, `system_trust_intermediate` = Intermediate,
+  `system_trust_basic` = New User, and `system_legend` = Legend.
+- **VRChat.js is pinned to the available 2.22.x line.** The dependency is currently `~2.22.8`,
+  allowing 2.22.9 when that patch is published without crossing into a newer minor version.
+'''
+          if '## [1.0.73]' not in text:
+              if marker not in text:
+                  raise SystemExit('CHANGELOG.md is missing the Unreleased marker')
+              text = text.replace(marker, marker + section, 1)
+              path.write_text(text, encoding='utf-8')
+
+      - name: Remove one-time workflow
+        run: rm -f .github/workflows/prepare-v1.0.73.yml
+
+      - name: Validate release metadata
+        run: |
+          node -e "const p=require('./package.json'); if(p.version!=='1.0.73') throw new Error('package.json version mismatch'); if(!p.dependencies.vrchat) throw new Error('vrchat dependency missing')"
+          node -e "const p=require('./package-lock.json'); if(p.version!=='1.0.73'||p.packages[''].version!=='1.0.73') throw new Error('package-lock version mismatch'); if(!p.packages[''].dependencies.vrchat) throw new Error('vrchat lock dependency missing'); if(!p.packages['node_modules/vrchat']) throw new Error('vrchat package missing from lockfile')"
+          grep -F '## [1.0.73] - 2026-09-07' CHANGELOG.md
+
+      - name: Commit and tag v1.0.73
+        env:
+          RELEASE_PAT: ${{ secrets.RUNNER_STATUS_PAT }}
+          GH_TOKEN_FALLBACK: ${{ github.token }}
+        run: |
+          git config user.name 'NekoSuneVR'
+          git config user.email 'nekosunevr@nekosunevr.co.uk'
+          git add package.json package-lock.json CHANGELOG.md .github/workflows/prepare-v1.0.73.yml
+          git commit -m 'Release KitsuNexus v1.0.73'
+          git tag -a v1.0.73 -m 'KitsuNexus v1.0.73'
+
+          TOKEN="$RELEASE_PAT"
+          if [ -z "$TOKEN" ]; then
+            TOKEN="$GH_TOKEN_FALLBACK"
+            echo 'RUNNER_STATUS_PAT is unavailable; using GITHUB_TOKEN for the release push.'
+          fi
+          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push origin HEAD:main
+          git push origin v1.0.73
