@@ -5,6 +5,13 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Changed
+- **Simplified the release build workflow's runner selection.** Removed the `detect-runners` job
+  that dynamically probed the org's self-hosted runner status via the GitHub API (which required
+  a `RUNNER_STATUS_PAT` secret and was falling back to GitHub-hosted runners unexpectedly). The
+  Windows leg now always builds on GitHub-hosted `windows-latest` (no self-hosted Windows box
+  exists yet), and both Linux legs (x64 and arm64) always build on the same self-hosted
+  `[self-hosted, Linux, docker, buildx]` server.
 
 ## [1.0.73] - 2026-09-07
 

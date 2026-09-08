@@ -10,82 +10,13 @@ permissions:
   contents: write
 
 jobs:
-  detect-runners:
-    # Any online self-hosted runner is preferred over GitHub-hosted ones,
-    # matched generically by OS (and, for the Linux matrix, by X64/ARM64
-    # arch labels) rather than by name - currently nekorpi1 (Linux ARM64) and
-    # vmi555990 (Linux X64), but adding/renaming/replacing runners later, or
-    # adding a self-hosted Windows box, needs no workflow edit. GitHub
-    # Actions has no native "try self-hosted, else hosted": a job queued for
-    # an offline self-hosted runner just waits forever (timeout-minutes only
-    # starts counting once a runner picks the job up, not while it's
-    # queued), so this job checks runner status via the API first and hands
-    # the actual runs-on labels down to every other job through its outputs.
-    # Every other job now depends on this one (previously build-and-release
-    # ran in parallel with it) so its own runs-on can be resolved first - the
-    # cost is a small serial delay (this is just an API call, seconds) in
-    # exchange for the Windows job also getting self-hosted routing.
-    #
-    # Requires a repo secret RUNNER_STATUS_PAT: a PAT (classic with the "repo"
-    # scope covering org runner read access, or fine-grained with the org's
-    # "Self-hosted runners: Read" permission) - the default GITHUB_TOKEN can't
-    # call the org runners API. If the secret is missing or the call fails,
-    # this falls back to GitHub-hosted runners across the board rather than
-    # failing the whole release.
-    runs-on: ubuntu-latest
-    outputs:
-      x64_runner: ${{ steps.pick.outputs.x64_runner }}
-      arm64_runner: ${{ steps.pick.outputs.arm64_runner }}
-      windows_runner: ${{ steps.pick.outputs.windows_runner }}
-    steps:
-      - name: Check self-hosted runner status
-        id: pick
-        shell: pwsh
-        run: |
-          $x64Runner = '["ubuntu-latest"]'
-          $arm64Runner = '["ubuntu-latest"]'
-          $windowsRunner = '["windows-latest"]'
-          if ($env:RUNNER_STATUS_PAT) {
-            try {
-              $headers = @{
-                "Authorization" = "Bearer $env:RUNNER_STATUS_PAT"
-                "Accept"        = "application/vnd.github+json"
-                "User-Agent"    = "ZFTP-CI"
-              }
-              $resp = Invoke-RestMethod -Uri "https://api.github.com/orgs/${{ github.repository_owner }}/actions/runners?per_page=100" -Headers $headers
-              # "busy" (mid-job) is still fine to target - it'll just run next.
-              # Only "offline" means the job would queue forever - fall back then.
-              $online = $resp.runners | Where-Object { $_.status -eq "online" }
-              $onlineLinux = $online | Where-Object { $_.os -eq "linux" }
-              $x64   = $onlineLinux | Where-Object { $_.labels.name -contains "X64" }   | Select-Object -First 1
-              $arm64 = $onlineLinux | Where-Object { $_.labels.name -contains "ARM64" } | Select-Object -First 1
-              $win   = $online | Where-Object { $_.os -eq "windows" } | Select-Object -First 1
-              if ($x64)   { $x64Runner     = '["self-hosted","Linux","X64"]' }
-              if ($arm64) { $arm64Runner   = '["self-hosted","Linux","ARM64"]' }
-              if ($win)   { $windowsRunner = '["self-hosted","Windows"]' }
-              Write-Output "Online self-hosted runners: $($online.name -join ', ')"
-            } catch {
-              Write-Warning "Couldn't query self-hosted runner status ($_) - falling back to GitHub-hosted runners."
-            }
-          } else {
-            Write-Warning "RUNNER_STATUS_PAT secret not set - falling back to GitHub-hosted runners."
-          }
-          Write-Output "x64 runner: $x64Runner"
-          Write-Output "arm64 runner: $arm64Runner"
-          Write-Output "windows runner: $windowsRunner"
-          "x64_runner=$x64Runner" >> $env:GITHUB_OUTPUT
-          "arm64_runner=$arm64Runner" >> $env:GITHUB_OUTPUT
-          "windows_runner=$windowsRunner" >> $env:GITHUB_OUTPUT
-        env:
-          RUNNER_STATUS_PAT: ${{ secrets.RUNNER_STATUS_PAT }}
-
   build:
-    needs: [detect-runners]
     name: Build (${{ matrix.artifact }})
-    # runs-on is resolved from the matrix: every leg pulls its runner from
-    # detect-runners (self-hosted if a matching box is online, else the
-    # GitHub-hosted fallback).
-    runs-on: ${{ fromJson(matrix.runner) }}
+    # Windows has no self-hosted box yet, so it always runs on GitHub-hosted
+    # windows-latest. Both Linux legs (x64 and arm64) run on the same
+    # self-hosted Linux server - it cross-builds both arches itself, so
+    # there's no separate arm64 machine to detect.
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
@@ -93,15 +24,15 @@ jobs:
           - artifact: windows
             os_family: windows
             arch: x64
-            runner: ${{ needs.detect-runners.outputs.windows_runner }}
+            runner: windows-latest
           - artifact: linux-x64
             os_family: linux
             arch: x64
-            runner: ${{ needs.detect-runners.outputs.x64_runner }}
+            runner: [self-hosted, Linux, docker, buildx]
           - artifact: linux-arm64
             os_family: linux
             arch: arm64
-            runner: ${{ needs.detect-runners.outputs.arm64_runner }}
+            runner: [self-hosted, Linux, docker, buildx]
 
     steps:
       - name: Checkout
@@ -123,10 +54,10 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # OPTIONAL self-hosted-only patch. runner.environment is 'self-hosted'
-      # only when one of our own runners was online and picked up this job
-      # ("if online"); on the GitHub-hosted fallback it's 'github-hosted' and
-      # this step is skipped. Put the global sed substitution here.
+      # OPTIONAL self-hosted-only patch. runner.environment is 'self-hosted' on
+      # the Linux legs (both run on our own box) and 'github-hosted' on the
+      # windows-latest leg, which skips this step. Put the global sed
+      # substitution here.
       - name: Self-hosted patch (sed global)
         if: runner.environment == 'self-hosted'
         run: |
@@ -186,15 +117,14 @@ jobs:
 
   release:
     name: Publish release
-    needs: [detect-runners, build]
+    needs: [build]
     # Publish on ANY tag (v1.0.7 or 1.0.7). !cancelled() lets the release run and
     # attach whatever built even if one OS/arch leg failed.
     if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/') }}
-    # Uses the detected Linux x64 runner (self-hosted vmi555990 if online, else
-    # ubuntu-latest). NOTE: this job relies on gh, jq, curl and awk - present on
-    # GitHub-hosted ubuntu, but make sure they're installed on the self-hosted
-    # X64 box too, or the VirusTotal/Discord/changelog steps will fail there.
-    runs-on: ${{ fromJson(needs.detect-runners.outputs.x64_runner) }}
+    # Same self-hosted Linux box used for the build legs. NOTE: this job
+    # relies on gh, jq, curl and awk - make sure they're installed there, or
+    # the VirusTotal/Discord/changelog steps will fail.
+    runs-on: [self-hosted, Linux, docker, buildx]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
