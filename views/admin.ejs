@@ -42,4 +42,44 @@
       </div>
     <% }) %>
   </div>
+
+  <h2 style="font-size:1.1rem;margin:28px 0 10px">🔑 API keys</h2>
+  <p class="muted" style="font-size:.85rem;margin:-6px 0 14px">
+    For pulling <code>GET /api/worlds/feed</code> into an external service you own — e.g. an
+    avatar/world search site — as plain JSON of worlds you've favorited or visited. Not a
+    public API: anyone holding a key can read your worlds feed, so keep it like a password.
+  </p>
+
+  <% if (newApiKey) { %>
+    <div class="pair-result ok" style="max-width:none;margin-bottom:14px">
+      New key created — copy it now, it won't be shown again:<br>
+      <code style="user-select:all;word-break:break-all"><%= newApiKey %></code>
+    </div>
+  <% } %>
+
+  <% if (!apiKeys.length) { %>
+    <p class="muted">No API keys yet.</p>
+  <% } else { %>
+    <div class="device-list">
+      <% apiKeys.forEach(k => { %>
+        <div class="device-row">
+          <div>
+            <b><%= k.label %></b>
+            <span class="muted" style="font-size:.78rem">
+              Created <%= new Date(k.createdAt).toLocaleDateString() %>
+              <% if (k.lastUsedAt) { %> · last used <%= new Date(k.lastUsedAt).toLocaleString() %><% } else { %> · never used<% } %>
+            </span>
+          </div>
+          <form method="post" action="/admin/api-keys/<%= k.id %>/revoke" onsubmit="return confirm('Revoke this API key? Anything using it will stop working immediately.')">
+            <button class="btn danger" type="submit" style="padding:6px 14px;font-size:.8rem">Revoke</button>
+          </form>
+        </div>
+      <% }) %>
+    </div>
+  <% } %>
+
+  <form method="post" action="/admin/api-keys" class="row" style="margin-top:12px">
+    <input type="text" name="label" placeholder="Label (e.g. Avatar Search Site)" style="max-width:260px" />
+    <button class="btn primary" type="submit">Generate new key</button>
+  </form>
 </section>

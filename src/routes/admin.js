@@ -1,22 +1,24 @@
 const express = require('express')
 const fs = require('fs')
-const { User, Device, Favorite, sequelize } = require('../db')
+const { User, Device, Favorite, ApiKey, sequelize } = require('../db')
 const requireAdmin = require('../middleware/requireAdmin')
 const asyncHandler = require('../utils/asyncHandler')
 const config = require('../config')
+const { generateToken, hashToken } = require('../auth/deviceToken')
 const { guildCount } = require('../discord/authorizedGuilds')
 const { isReady: isDiscordBotReady } = require('../discord/discordBotGateway')
 
 const router = express.Router()
 
-// Server-operator view — every account, aggregate totals, bot/server health. Locked to
-// owner/admin roles only (requireAdmin), never shown to a regular account's own /dashboard.
-router.get('/admin', requireAdmin, asyncHandler(async (req, res) => {
+// Shared by GET /admin and POST /admin/api-keys (which re-renders the page to show a freshly
+// created key's plaintext exactly once, instead of redirecting and losing it).
+async function renderAdmin (req, res, { newApiKey = null } = {}) {
   const users = await User.findAll({ order: [['createdAt', 'ASC']] })
   const deviceCounts = await Device.count({ group: ['userId'] })
   const favoriteCounts = await Favorite.count({ group: ['userId'] })
   const devicesByUser = Object.fromEntries(deviceCounts.map(r => [r.userId, r.count]))
   const favoritesByUser = Object.fromEntries(favoriteCounts.map(r => [r.userId, r.count]))
+  const apiKeys = await ApiKey.findAll({ where: { userId: req.user.id }, order: [['createdAt', 'DESC']] })
 
   let dbSizeBytes = 0
   try { dbSizeBytes = fs.statSync(sequelize.options.storage).size } catch (_) {}
@@ -43,7 +45,27 @@ router.get('/admin', requireAdmin, asyncHandler(async (req, res) => {
       botReady: isDiscordBotReady(),
       authorizedGuilds: guildCount(),
     },
+    apiKeys,
+    newApiKey,
   })
+}
+
+// Server-operator view — every account, aggregate totals, bot/server health. Locked to
+// owner/admin roles only (requireAdmin), never shown to a regular account's own /dashboard.
+router.get('/admin', requireAdmin, asyncHandler((req, res) => renderAdmin(req, res)))
+
+// Owner-facing API keys — for pulling GET /api/worlds/feed into an external service (e.g. the
+// owner's avatar/world search site). The plaintext key is shown exactly once, right here.
+router.post('/admin/api-keys', requireAdmin, asyncHandler(async (req, res) => {
+  const label = (req.body && req.body.label) || 'API key'
+  const token = generateToken()
+  await ApiKey.create({ userId: req.user.id, label, keyHash: hashToken(token) })
+  await renderAdmin(req, res, { newApiKey: token })
+}))
+
+router.post('/admin/api-keys/:id/revoke', requireAdmin, asyncHandler(async (req, res) => {
+  await ApiKey.destroy({ where: { id: req.params.id, userId: req.user.id } })
+  res.redirect('/admin')
 }))
 
 module.exports = router
