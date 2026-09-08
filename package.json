@@ -1,0 +1,26 @@
+{
+  "name": "kitsunexus-server",
+  "version": "0.1.0",
+  "description": "KitsuNexus website + backend — accounts, device pairing, cloud-synced Favorites, and the NekoSuneAPPS Discord bot, all in one self-hostable Node service.",
+  "private": true,
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "express": "^4.21.1",
+    "express-ejs-layouts": "^2.5.1",
+    "express-rate-limit": "^7.4.1",
+    "helmet": "^7.2.0",
+    "jsonwebtoken": "^9.0.3",
+    "sequelize": "^6.37.8",
+    "sqlite3": "^6.0.1"
+  }
+}

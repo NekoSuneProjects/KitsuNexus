@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en" data-theme="midnight">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title><%= title %></title>
+  <link rel="icon" href="/img/logo.png" />
+  <link rel="stylesheet" href="/css/site.css" />
+</head>
+<body>
+  <header class="site-nav">
+    <a class="brand" href="/">
+      <img src="/img/logo.png" alt="KitsuNexus" />
+      <span>KitsuNexus</span>
+    </a>
+    <nav>
+      <a href="https://github.com/NekoSuneProjects/KitsuNexus" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/NekoSuneProjects/KitsuNexus/releases" target="_blank" rel="noopener">Download</a>
+      <% if (typeof currentUser !== 'undefined' && currentUser) { %>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/logout">Log out</a>
+      <% } else { %>
+        <a href="/login">Login</a>
+      <% } %>
+    </nav>
+  </header>
+
+  <main><%- body %></main>
+
+  <footer class="site-footer">
+    <p>KitsuNexus is an independent, community project. Not affiliated with VRChat, Discord, or any third party.</p>
+    <p>&copy; <%= new Date().getFullYear() %> NekoSuneVR &amp; the KitsuNexus community.</p>
+  </footer>
+</body>
+</html>

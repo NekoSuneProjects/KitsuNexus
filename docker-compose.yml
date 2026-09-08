@@ -1,0 +1,11 @@
+services:
+  kitsunexus-server:
+    build: .
+    env_file: .env
+    ports:
+      - "8081:8080"
+    restart: unless-stopped
+    volumes:
+      # Persists the sqlite DB (accounts, devices, favorites) across container
+      # restarts/redeploys.
+      - ./data:/app/data

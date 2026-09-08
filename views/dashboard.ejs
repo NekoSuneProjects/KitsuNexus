@@ -1,0 +1,50 @@
+<section class="dash">
+  <h1 style="font-size:1.6rem;margin:0 0 4px">📊 Dashboard</h1>
+  <p class="muted" style="margin:0 0 24px">Signed in as <b><%= user.displayName || user.email %></b> (<%= user.role %>)</p>
+
+  <div class="dash-grid">
+    <div class="feature-card">
+      <h3>⭐ Favorites</h3>
+      <div class="stat-row"><span>Total</span><b><%= favoriteCount %></b></div>
+      <div class="stat-row"><span>👤 Friends</span><b><%= byType.friend %></b></div>
+      <div class="stat-row"><span>🌐 Worlds</span><b><%= byType.world %></b></div>
+      <div class="stat-row"><span>🧍 Avatars</span><b><%= byType.avatar %></b></div>
+      <% if (byCollection.length) { %>
+        <div class="um-sec" style="margin-top:10px">Collections</div>
+        <% byCollection.forEach(([name, count]) => { %>
+          <div class="stat-row"><span><%= name %></span><b><%= count %></b></div>
+        <% }) %>
+      <% } %>
+    </div>
+
+    <div class="feature-card">
+      <h3>🖥 Server</h3>
+      <div class="stat-row"><span>Uptime</span><b><%= Math.floor(server.uptimeSeconds / 3600) %>h <%= Math.floor((server.uptimeSeconds % 3600) / 60) %>m</b></div>
+      <div class="stat-row"><span>Node</span><b><%= server.nodeVersion %></b></div>
+      <div class="stat-row"><span>Database size</span><b><%= (server.dbSizeBytes / 1024).toFixed(1) %> KB</b></div>
+      <div class="stat-row"><span>Site URL</span><b style="font-size:.78rem"><%= server.siteUrl %></b></div>
+    </div>
+  </div>
+
+  <h2 style="font-size:1.1rem;margin:28px 0 10px">🔗 Connected devices</h2>
+  <% if (!devices.length) { %>
+    <p class="muted">No devices paired yet — go to Settings ▸ ☁ Cloud Sync in the app and connect to this server.</p>
+  <% } else { %>
+    <div class="device-list">
+      <% devices.forEach(d => { %>
+        <div class="device-row">
+          <div>
+            <b><%= d.name %></b>
+            <span class="muted" style="font-size:.78rem">
+              <%= d.status === 'paired' ? '🟢 Connected' : '🟡 Pending' %>
+              <% if (d.lastSeenAt) { %> · last seen <%= new Date(d.lastSeenAt).toLocaleString() %><% } %>
+            </span>
+          </div>
+          <form method="post" action="/dashboard/devices/<%= d.id %>/revoke" onsubmit="return confirm('Revoke access for &quot;' + <%- JSON.stringify(d.name) %> + '&quot;? It will need to be paired again.')">
+            <button class="btn danger" type="submit" style="padding:6px 14px;font-size:.8rem">Revoke</button>
+          </form>
+        </div>
+      <% }) %>
+    </div>
+  <% } %>
+</section>
