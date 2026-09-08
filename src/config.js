@@ -24,4 +24,16 @@ module.exports = {
   // Electron's local OAuth loopback — fixed, matches modules/oauth/providers/discordIdentity.js's
   // established port/path convention in the KitsuNexus desktop app.
   electronLoopbackRedirect: 'http://localhost:3737/oauth2/discord/callback',
+
+  // ZITADEL SSO — optional, offered ALONGSIDE the email/password setup/login/register built
+  // into src/routes/auth.js (not a replacement): every field is env-driven per-deployment, and
+  // /login, /register, /setup all keep working with this left disabled.
+  zitadelEnabled: process.env.ZITADEL_ENABLED === 'true',
+  zitadelEndpoint: (process.env.ZITADEL_ENDPOINT || '').replace(/\/+$/, ''),
+  zitadelClientId: process.env.ZITADEL_CLIENT_ID || '',
+  zitadelClientSecret: process.env.ZITADEL_CLIENT_SECRET || '',
+  // Must exactly match a redirect URI registered on the ZITADEL application. Defaults to this
+  // server's own SITE_URL + the fixed callback path below, but can be overridden if the two differ.
+  zitadelRedirectUri: process.env.ZITADEL_REDIRECT_URI || `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/+$/, '')}/auth/zitadel/callback`,
+  zitadelScopes: process.env.ZITADEL_SCOPES || 'openid profile email',
 }

@@ -20,6 +20,7 @@
     "express-ejs-layouts": "^2.5.1",
     "express-rate-limit": "^7.4.1",
     "helmet": "^7.2.0",
+    "jose": "^6.2.12",
     "jsonwebtoken": "^9.0.3",
     "sequelize": "^6.37.8",
     "sqlite3": "^6.0.1"

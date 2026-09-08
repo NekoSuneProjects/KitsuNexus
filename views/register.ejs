@@ -6,6 +6,11 @@
 
     <% if (error) { %><div class="pair-result err" style="max-width:none;margin-bottom:14px"><%= error %></div><% } %>
 
+    <% if (zitadelEnabled) { %>
+      <a class="btn sso" href="/auth/zitadel/login">🛡 Sign up with NekoSuneVR SSO</a>
+      <div class="auth-divider">or</div>
+    <% } %>
+
     <form method="post" action="/register" class="auth-form">
       <input type="text" name="displayName" placeholder="Display name" autocomplete="name" autofocus />
       <input type="email" name="email" placeholder="Email" autocomplete="email" required />

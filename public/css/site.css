@@ -116,6 +116,10 @@ main { flex: 1; display: flex; flex-direction: column; }
 .auth-links { margin-top: 18px; font-size: .82rem; color: var(--muted); }
 .auth-links a { color: var(--accent2); font-weight: 600; }
 .auth-links a:hover { text-decoration: underline; }
+.auth-divider { display: flex; align-items: center; gap: 10px; margin: 18px 0; color: var(--muted); font-size: .76rem; text-transform: uppercase; letter-spacing: .05em; }
+.auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.btn.sso { width: 100%; background: var(--panel2); border: 1px solid var(--border); color: var(--text); display: flex; align-items: center; justify-content: center; gap: 8px; }
+.btn.sso:hover { border-color: var(--accent2); }
 
 .auth-form { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 320px; }
 .auth-form input {
