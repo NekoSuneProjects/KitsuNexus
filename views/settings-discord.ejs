@@ -1,0 +1,46 @@
+<section class="dash">
+  <h1 style="font-size:1.6rem;margin:0 0 4px">💜 Discord</h1>
+  <p class="muted" style="margin:0 0 24px">Link your Discord account and manage where the KitsuNexus bot is installed.</p>
+
+  <% if (!discordConfigured) { %>
+    <div class="pair-result err" style="max-width:480px">This server hasn't configured Discord yet (missing <code>DISCORD_CLIENT_ID</code>/<code>DISCORD_CLIENT_SECRET</code>/<code>DISCORD_REDIRECT_URI</code>). Ask the server owner to set those up first.</div>
+  <% } else if (!link) { %>
+    <div class="feature-card" style="max-width:420px">
+      <h3>Not linked</h3>
+      <p>Link your Discord account to use status push, voice controls, and to install the KitsuNexus bot in your own server.</p>
+      <a class="btn primary" href="/oauth2/discord/authorize-link" style="align-self:flex-start">Link Discord account</a>
+    </div>
+  <% } else { %>
+    <div class="feature-card" style="max-width:420px">
+      <h3>🟢 Linked as <%= link.discordUsername || link.discordId %></h3>
+      <p class="muted" style="font-size:.78rem">Discord ID: <%= link.discordId %></p>
+      <form method="post" action="/settings/discord/unlink" onsubmit="return confirm('Unlink this Discord account?')" style="align-self:flex-start">
+        <button class="btn danger" type="submit">Unlink</button>
+      </form>
+    </div>
+
+    <h2 style="font-size:1.1rem;margin:28px 0 10px">🤖 Bot installations</h2>
+    <% if (!guilds.length) { %>
+      <p class="muted">You haven't added the KitsuNexus bot to any server yet.</p>
+    <% } else { %>
+      <div class="device-list">
+        <% guilds.forEach(g => { %>
+          <div class="device-row">
+            <div>
+              <b><%= g.id %></b>
+              <span class="muted" style="font-size:.78rem">Authorized <%= new Date(g.authorizedAt).toLocaleString() %></span>
+            </div>
+            <% if (g.canManage) { %>
+              <form method="post" action="/settings/discord/guilds/<%= g.id %>/revoke" onsubmit="return confirm('Remove the bot from this server?')">
+                <button class="btn danger" type="submit" style="padding:6px 14px;font-size:.8rem">Remove</button>
+              </form>
+            <% } else { %>
+              <span class="muted" style="font-size:.78rem">View only — no Manage Server permission there</span>
+            <% } %>
+          </div>
+        <% }) %>
+      </div>
+    <% } %>
+    <div class="row" style="margin-top:14px"><a class="btn ghost" href="/oauth2/discord/authorize-bot">➕ Add bot to another server</a></div>
+  <% } %>
+</section>

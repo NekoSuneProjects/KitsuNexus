@@ -35,6 +35,31 @@ router.post('/setup', asyncHandler(async (req, res) => {
   res.redirect('/dashboard')
 }))
 
+// Public registration — always creates role: 'user' (never 'owner'/'admin'; those only ever
+// come from /setup or a future manual promotion). Requires the server to actually be set up
+// first, same as /login.
+router.get('/register', asyncHandler(async (req, res) => {
+  if (!await ownerExists()) return res.redirect('/setup')
+  res.render('register', { title: 'Create an account — KitsuNexus', error: null })
+}))
+
+router.post('/register', asyncHandler(async (req, res) => {
+  if (!await ownerExists()) return res.redirect('/setup')
+  const { email, password, confirmPassword, displayName } = req.body || {}
+  const fail = msg => res.render('register', { title: 'Create an account — KitsuNexus', error: msg })
+  if (!email || !password) return fail('Email and password are required.')
+  if (password.length < 8) return fail('Password must be at least 8 characters.')
+  if (password !== confirmPassword) return fail('Passwords do not match.')
+
+  const normalizedEmail = String(email).trim().toLowerCase()
+  if (await User.findOne({ where: { email: normalizedEmail } })) return fail('An account with that email already exists.')
+
+  const passwordHash = await bcrypt.hash(password, 12)
+  const user = await User.create({ email: normalizedEmail, passwordHash, displayName: displayName || normalizedEmail.split('@')[0], role: 'user', isStub: false })
+  session.setCookie(res, session.sign(user))
+  res.redirect('/dashboard')
+}))
+
 router.get('/login', asyncHandler(async (req, res) => {
   if (!await ownerExists()) return res.redirect('/setup')
   res.render('login', { title: 'Log in — KitsuNexus', error: null })

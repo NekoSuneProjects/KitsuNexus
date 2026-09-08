@@ -1,0 +1,45 @@
+<section class="dash">
+  <h1 style="font-size:1.6rem;margin:0 0 4px">🛡 Admin</h1>
+  <p class="muted" style="margin:0 0 24px">Server-wide overview — visible to owners/admins only.</p>
+
+  <div class="dash-grid">
+    <div class="feature-card">
+      <h3>📈 Totals</h3>
+      <div class="stat-row"><span>Users</span><b><%= totals.users %></b></div>
+      <div class="stat-row"><span>Devices</span><b><%= totals.devices %></b></div>
+      <div class="stat-row"><span>Favorites</span><b><%= totals.favorites %></b></div>
+    </div>
+
+    <div class="feature-card">
+      <h3>🖥 Server</h3>
+      <div class="stat-row"><span>Uptime</span><b><%= Math.floor(server.uptimeSeconds / 3600) %>h <%= Math.floor((server.uptimeSeconds % 3600) / 60) %>m</b></div>
+      <div class="stat-row"><span>Node</span><b><%= server.nodeVersion %></b></div>
+      <div class="stat-row"><span>Database size</span><b><%= (server.dbSizeBytes / 1024).toFixed(1) %> KB</b></div>
+      <div class="stat-row"><span>Site URL</span><b style="font-size:.78rem"><%= server.siteUrl %></b></div>
+    </div>
+
+    <div class="feature-card">
+      <h3>💜 Discord bot</h3>
+      <div class="stat-row"><span>Configured</span><b><%= discord.configured ? 'Yes' : 'No' %></b></div>
+      <div class="stat-row"><span>Gateway</span><b><%= discord.botReady ? '🟢 Connected' : '⚪ Offline' %></b></div>
+      <div class="stat-row"><span>Authorized guilds</span><b><%= discord.authorizedGuilds %></b></div>
+    </div>
+  </div>
+
+  <h2 style="font-size:1.1rem;margin:28px 0 10px">👥 Users</h2>
+  <div class="device-list">
+    <% users.forEach(u => { %>
+      <div class="device-row">
+        <div>
+          <b><%= u.displayName || u.email || '(stub)' %></b>
+          <span class="muted" style="font-size:.78rem">
+            <%= u.role %><% if (u.isStub) { %> · unclaimed stub<% } %>
+            <% if (u.email) { %> · <%= u.email %><% } %>
+            · <%= u.deviceCount %> device(s) · <%= u.favoriteCount %> favorite(s)
+          </span>
+        </div>
+        <span class="muted" style="font-size:.75rem"><%= new Date(u.createdAt).toLocaleDateString() %></span>
+      </div>
+    <% }) %>
+  </div>
+</section>

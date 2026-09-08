@@ -18,8 +18,12 @@
       <a href="https://github.com/NekoSuneProjects/KitsuNexus/releases" target="_blank" rel="noopener">Download</a>
       <% if (typeof currentUser !== 'undefined' && currentUser) { %>
         <a href="/dashboard">Dashboard</a>
+        <% if (currentUser.role === 'owner' || currentUser.role === 'admin') { %>
+          <a href="/admin">Admin</a>
+        <% } %>
         <a href="/logout">Log out</a>
       <% } else { %>
+        <a href="/register">Sign up</a>
         <a href="/login">Login</a>
       <% } %>
     </nav>

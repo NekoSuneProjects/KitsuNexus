@@ -11,8 +11,13 @@ const pairingRoutes = require('./routes/pairing')
 const favoritesSyncRoutes = require('./routes/favoritesSync')
 const authRoutes = require('./routes/auth')
 const dashboardRoutes = require('./routes/dashboard')
+const adminRoutes = require('./routes/admin')
+const discordOauthRoutes = require('./routes/discordOauth')
+const discordStatusRoutes = require('./routes/discordStatus')
+const settingsDiscordRoutes = require('./routes/settingsDiscord')
 const currentUser = require('./middleware/currentUser')
 const asyncHandler = require('./utils/asyncHandler')
+const discordBotGateway = require('./discord/discordBotGateway')
 
 const app = express()
 
@@ -44,6 +49,10 @@ app.get('/', (req, res) => {
 
 app.use(authRoutes)
 app.use(dashboardRoutes)
+app.use(adminRoutes)
+app.use(settingsDiscordRoutes)
+app.use(discordOauthRoutes)
+app.use(discordStatusRoutes)
 app.use(pairingRoutes)
 app.use(favoritesSyncRoutes)
 
@@ -60,5 +69,15 @@ db.init()
     app.listen(config.port, () => {
       console.log(`KitsuNexus server listening on ${config.siteUrl} (port ${config.port})`)
     })
+    // Non-blocking and optional: the rest of this server (accounts, Favorites sync) has to
+    // keep working with no Discord app configured at all, or if the bot token is bad/Discord
+    // is briefly unreachable — a login retry shouldn't take the whole site down with it.
+    if (config.discordBotToken) {
+      discordBotGateway.start().catch(err => {
+        console.error('[discord] bot gateway failed to start (will not retry automatically):', err.message)
+      })
+    } else {
+      console.log('[discord] DISCORD_BOT_TOKEN not set — Discord bot disabled (website + Favorites sync still work).')
+    }
   })
   .catch(err => { console.error('Database init failed:', err); process.exit(1) })

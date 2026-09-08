@@ -18,11 +18,13 @@
     </div>
 
     <div class="feature-card">
-      <h3>🖥 Server</h3>
-      <div class="stat-row"><span>Uptime</span><b><%= Math.floor(server.uptimeSeconds / 3600) %>h <%= Math.floor((server.uptimeSeconds % 3600) / 60) %>m</b></div>
-      <div class="stat-row"><span>Node</span><b><%= server.nodeVersion %></b></div>
-      <div class="stat-row"><span>Database size</span><b><%= (server.dbSizeBytes / 1024).toFixed(1) %> KB</b></div>
-      <div class="stat-row"><span>Site URL</span><b style="font-size:.78rem"><%= server.siteUrl %></b></div>
+      <h3>💜 Discord</h3>
+      <% if (discordLink) { %>
+        <div class="stat-row"><span>Linked as</span><b><%= discordLink.discordUsername || discordLink.discordId %></b></div>
+      <% } else { %>
+        <p class="muted" style="font-size:.85rem;margin:0">Not linked.</p>
+      <% } %>
+      <div class="row" style="margin-top:8px"><a class="btn ghost" href="/settings/discord" style="padding:6px 14px;font-size:.8rem">Manage</a></div>
     </div>
   </div>
 

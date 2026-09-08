@@ -2,6 +2,7 @@ const sequelize = require('./sequelize')
 const User = require('./models/User')
 const Device = require('./models/Device')
 const Favorite = require('./models/Favorite')
+const DiscordLink = require('./models/DiscordLink')
 
 const STUB_USER_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -22,4 +23,4 @@ async function ensureStubUser () {
   return user
 }
 
-module.exports = { sequelize, User, Device, Favorite, ensureStubUser, STUB_USER_ID, init }
+module.exports = { sequelize, User, Device, Favorite, DiscordLink, ensureStubUser, STUB_USER_ID, init }

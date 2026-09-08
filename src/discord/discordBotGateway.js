@@ -1,0 +1,155 @@
+// Persistent gateway connection for the shared/official KitsuNexus Discord bot.
+// Server-side twin of modules/vrchat/assistant/../integrations/discord bits in the Electron
+// app, generalized from "watch one user" to "answer lookups for any user/channel" since this
+// backend serves every installed copy of the app.
+//
+// Deliberately does NOT hand-roll a channel/voice-state cache: discord.js already
+// maintains guild.voiceStates.cache (and VoiceChannel#members derived from it) live
+// from gateway events, so lookups just read straight from discord.js's own cache.
+//
+// Ported from NekoSuneAPPS/server/src/discordBotGateway.js — logic unchanged, only the
+// config import path and the "NekoSuneAPPS" → "KitsuNexus" audit-log wording differ.
+
+const { Client, GatewayIntentBits, Events, PermissionFlagsBits } = require('discord.js')
+const config = require('../config')
+const authorizedGuilds = require('./authorizedGuilds')
+
+let client = null
+let ready = false
+
+// Guards against a real race: Discord adds the bot to the guild (firing
+// GuildCreate over the gateway) as part of the SAME consent click that then
+// redirects the browser back to /oauth2/discord/callback, which is what
+// actually records the authorization (authorizedGuilds.authorize()). Those
+// two arrive over completely independent channels with no ordering
+// guarantee — the gateway event can and does win the race in practice,
+// which would otherwise kick a guild that's about to be legitimately
+// authorized seconds later. Give the callback a grace window before
+// enforcing on a freshly-joined guild; the retroactive startup sweep below
+// doesn't need one, since there's no in-flight callback to race against
+// for guilds the bot was already sitting in when it started.
+const JOIN_GRACE_MS = 15_000
+
+// Only /oauth2/discord/authorize-bot is allowed to let a guild keep the bot —
+// leave anything else, whether it's a guild added before this whitelist
+// existed or one added via a leaked raw invite link.
+async function enforceWhitelist (guild) {
+  if (authorizedGuilds.isAuthorized(guild.id)) return
+  console.warn(`[discordBotGateway] leaving unauthorized guild "${guild.name}" (${guild.id}) — never went through /oauth2/discord/authorize-bot`)
+  try { await guild.leave() } catch (err) { console.warn('[discordBotGateway] failed to leave guild:', err.message) }
+}
+
+async function start () {
+  if (!config.discordBotToken) throw new Error('DISCORD_BOT_TOKEN not set — Discord bot disabled')
+  client = new Client({
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers],
+    presence: { status: 'invisible', activities: [] }
+  })
+  client.once(Events.ClientReady, () => {
+    ready = true
+    console.log(`[discordBotGateway] logged in as ${client.user.tag}`)
+    // Retroactive sweep, e.g. after this whitelist was added to an
+    // already-running bot, or if the authorized-guilds data volume was lost.
+    for (const guild of client.guilds.cache.values()) enforceWhitelist(guild)
+  })
+  // Fires the moment the bot is added to any guild, authorized or not —
+  // delayed so /oauth2/discord/authorize-bot's callback has a chance to win.
+  client.on(Events.GuildCreate, guild => setTimeout(() => enforceWhitelist(guild), JOIN_GRACE_MS))
+  client.on(Events.Error, err => console.warn('[discordBotGateway] error:', err.message))
+  await client.login(config.discordBotToken)
+  return client
+}
+
+function isReady () { return ready }
+
+// Used by /settings/discord's "Remove" action: revoking a guild in
+// authorizedGuilds.js only updates the persisted list — this is what
+// actually makes the bot leave right away instead of waiting for it to be
+// re-added (or a restart) to notice it's no longer authorized.
+async function leaveGuild (guildId) {
+  const guild = client && client.guilds.cache.get(guildId)
+  if (!guild) return { ok: false, error: 'Bot is not currently in that guild' }
+  try {
+    await guild.leave()
+    return { ok: true }
+  } catch (err) { return { ok: false, error: err.message } }
+}
+
+// Gates /settings/discord's "Remove" action: only someone who CURRENTLY holds
+// Manage Server (or Administrator, or is the guild owner) in this guild may
+// revoke it — not just whoever originally authorized it, since admin rights
+// are a property of the server, not of who happened to click "invite" first.
+// Live-fetched rather than read from cache, since the acting member may not
+// already be cached. Adding the bot doesn't need this same check here:
+// Discord's own OAuth consent screen already restricts the guild picker in
+// /oauth2/discord/authorize-bot to guilds where the authorizing user has
+// Manage Server — there's no separate "add" gate to enforce on our side.
+async function hasManagePermission (guildId, discordUserId) {
+  const guild = client && client.guilds.cache.get(guildId)
+  if (!guild) return false
+  try {
+    const member = await guild.members.fetch(discordUserId)
+    return member.permissions.has(PermissionFlagsBits.ManageGuild) || member.permissions.has(PermissionFlagsBits.Administrator)
+  } catch (_) {
+    return false // not a member of the guild (or fetch failed) — no permission
+  }
+}
+
+// Mirrors the Electron app's per-user Discord bot voice-state read, generalized to any userId.
+// First guild match wins — same accepted ambiguity as the existing per-user bot.
+function getUserVoiceState (userId) {
+  const state = {
+    inVoice: false, channelName: '', userCount: 0,
+    selfMute: false, selfDeaf: false, guildId: ''
+  }
+  if (!client) return state
+  for (const guild of client.guilds.cache.values()) {
+    const member = guild.members.cache.get(userId)
+    const vs = member && member.voice
+    if (vs && vs.channelId && vs.channel) {
+      state.inVoice = true
+      state.channelName = vs.channel.name
+      state.userCount = vs.channel.members ? vs.channel.members.size : 0
+      state.selfMute = !!(vs.selfMute || vs.serverMute)
+      state.selfDeaf = !!(vs.selfDeaf || vs.serverDeaf)
+      state.guildId = guild.id
+      return state
+    }
+  }
+  return state
+}
+
+// Used by the Activity iframe: who's in this voice channel right now.
+function getChannelRoster (channelId) {
+  if (!client) return null
+  const channel = client.channels.cache.get(channelId)
+  if (!channel || !channel.isVoiceBased?.()) return null
+  return {
+    guildId: channel.guildId,
+    channelName: channel.name,
+    userCount: channel.members.size,
+    memberIds: [...channel.members.keys()]
+  }
+}
+
+async function setMute (guildId, userId, mute) {
+  const guild = client && client.guilds.cache.get(guildId)
+  const member = guild && guild.members.cache.get(userId)
+  if (!member) return { ok: false, error: 'Member not found' }
+  try {
+    await member.voice.setMute(!!mute, 'KitsuNexus official bot')
+    return { ok: true }
+  } catch (err) { return { ok: false, error: err.message } }
+}
+
+async function setDeaf (guildId, userId, deaf) {
+  const guild = client && client.guilds.cache.get(guildId)
+  const member = guild && guild.members.cache.get(userId)
+  if (!member) return { ok: false, error: 'Member not found' }
+  try {
+    await member.voice.setDeaf(!!deaf, 'KitsuNexus official bot')
+    return { ok: true }
+  } catch (err) { return { ok: false, error: err.message } }
+}
+
+module.exports = { start, isReady, getUserVoiceState, getChannelRoster, setMute, setDeaf, leaveGuild, hasManagePermission }
