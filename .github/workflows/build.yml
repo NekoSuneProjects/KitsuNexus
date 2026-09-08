@@ -51,8 +51,14 @@ jobs:
         if: matrix.os_family == 'linux'
         run: sudo apt-get update && sudo apt-get install -y rpm fakeroot dpkg libudev-dev
 
+      # onnxruntime-node (pulled in by @huggingface/transformers for local Whisper STT) tries
+      # to download an extra CUDA-enabled GPU runtime from NuGet on Linux by default — that
+      # download+extract is large enough to OOM-kill the runner (npm error 137) even though the
+      # app only needs the CPU/WASM backend already bundled in the package. Skip it in CI.
       - name: Install dependencies
         run: npm install
+        env:
+          ONNXRUNTIME_NODE_INSTALL: skip
 
       # OPTIONAL self-hosted-only patch. runner.environment is 'self-hosted' on
       # the Linux legs (both run on our own box) and 'github-hosted' on the
