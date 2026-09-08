@@ -3887,7 +3887,10 @@ async function openGroupModal (id) {
   setText('dmSub', (g.shortCode ? '@' + g.shortCode + ' · ' : '') + (g.memberCount || 0) + ' members')
   $('dmImage').src = g.iconUrl || 'assets/logo.png'
   $('dmBanner').style.backgroundImage = g.bannerUrl ? `url("${g.bannerUrl}")` : ''
-  $('dmActions').innerHTML = `<a class="btn" href="https://vrchat.com/home/group/${g.id}" target="_blank">Open on VRChat</a><button class="btn ghost" id="grpInvite">Invite people…</button><button class="btn ghost" id="grpMakeInst">Create instance…</button>`
+  $('dmActions').innerHTML = `<a class="btn" href="https://vrchat.com/home/group/${g.id}" target="_blank">Open on VRChat</a><button class="btn ghost" id="grpInvite">Invite people…</button><button class="btn ghost" id="grpMakeInst">Create instance…</button><button class="btn ghost" id="dmLocalFav">☆ Local Favorite</button>`
+  // VRChat has no official "favorite group" API — Local Favorites is the only way to bookmark
+  // a group (e.g. to quickly get back to groups you've recently joined).
+  bindDmLocalFav('group', g.id, g.name, g.iconUrl || '')
   $('grpInvite').addEventListener('click', async () => {
     const ids = await pickFriends('Invite to ' + (g.name || 'group'))
     if (!ids.length) return
@@ -4834,7 +4837,7 @@ $('favImport').addEventListener('click', () => {
 /* ---------------- Favorites page (official + Local Favorites) ---------------- */
 const favState = { source: 'official', type: 'all', selected: new Set() }
 function favCard ({ id, kind, name, image, note, collection, cloudBadge, removeAttr }) {
-  const kindIcon = kind === 'world' ? '🌐' : kind === 'avatar' ? '🧍' : '👤'
+  const kindIcon = kind === 'world' ? '🌐' : kind === 'avatar' ? '🧍' : kind === 'group' ? '👥' : '👤'
   return `<div class="fav-card" data-fav-id="${id}">
     <div class="fav-thumb-wrap">
       <img src="${image || 'assets/logo.png'}" referrerpolicy="no-referrer" loading="lazy" decoding="async" />
@@ -4877,7 +4880,10 @@ async function loadFavoritesPage () {
   const { source, type } = favState
   favState.selected.clear()
   $('favCollectionFilter').style.display = source === 'local' ? '' : 'none'
-  $('favToolbar').style.display = source === 'local' ? '' : 'none'
+  $('favToolbar').style.display = ''
+  $('favBulkRestore').style.display = source === 'local' ? '' : 'none'
+  $('favBulkRemove').style.display = source === 'local' ? '' : 'none'
+  $('favBulkMoveCloud').style.display = source === 'official' ? '' : 'none'
   body.innerHTML = 'Loading…'
   const q = $('favSearchBox').value.trim().toLowerCase()
   const matches = name => !q || (name || '').toLowerCase().includes(q)
@@ -4885,7 +4891,7 @@ async function loadFavoritesPage () {
     const collection = $('favCollectionFilter').value.trim()
     const rows = await api.localFavList({ type: type === 'all' ? undefined : type, collection: collection || undefined })
     const filtered = (rows || []).filter(f => matches(f.display_name || f.vrchat_id))
-    if (!filtered.length) { body.innerHTML = '<div class="muted">No local favorites yet — add one below, or use "☆ Local Favorite" on a profile/world/avatar.</div>'; return }
+    if (!filtered.length) { body.innerHTML = '<div class="muted">No local favorites yet — add one below, or use "☆ Local Favorite" on a profile/world/avatar/group.</div>'; return }
     // Group by collection (like VRChat's own favorite categories) unless a specific
     // collection is already being filtered to.
     if (collection) { body.innerHTML = `<div class="fav-grid">${filtered.map(favLocalCard).join('')}</div>` } else {
@@ -4952,7 +4958,12 @@ async function loadFavoritesPage () {
       if (items.length) sections.push(['Avatars', renderGroupSection('avatar', items, labels)])
     }
   }
-  if (!sections.length) { body.innerHTML = '<div class="muted">No official favorites match (or not logged in on the VRChat tab).</div>'; return }
+  if (!sections.length) {
+    body.innerHTML = type === 'group'
+      ? '<div class="muted">VRChat has no official "favorite group" feature — switch to Local Favorites to bookmark groups.</div>'
+      : '<div class="muted">No official favorites match (or not logged in on the VRChat tab).</div>'
+    return
+  }
   body.innerHTML = sections.map(([title, html]) => `<div class="um-sec">${esc(title)}</div>${html}`).join('')
 }
 $('favSourcePills').addEventListener('click', e => {
@@ -4984,11 +4995,54 @@ $('favBulkRemove').addEventListener('click', async () => {
   for (const id of favState.selected) await api.localFavRemove(id)
   loadFavoritesPage()
 })
+// Official → Cloud, for whatever's checked (in addition to the per-item/per-group buttons).
+$('favBulkMoveCloud').addEventListener('click', async () => {
+  if (!favState.selected.size) return
+  const cards = [...favState.selected].map(id => document.querySelector(`#favPageBody .fav-card[data-fav-id="${id}"] .fav-move-cloud`)).filter(Boolean)
+  if (!cards.length) return
+  if (!await confirmDialog(`Move ${cards.length} selected favorite(s) to Local/Cloud Favorites and remove them from VRChat (frees up those slots)?`)) return
+  $('favBulkMoveCloud').disabled = true
+  for (const c of cards) {
+    await moveOfficialToCloud(c.dataset.type, c.dataset.id, c.dataset.name, c.dataset.image, c.dataset.group)
+    await new Promise(res => setTimeout(res, 350))
+  }
+  $('favBulkMoveCloud').disabled = false
+  loadFavoritesPage()
+})
+// Local/Cloud → back onto VRChat's official favorites ("restoring" a slot), for whatever's
+// checked. Asks once per distinct type which VRChat favorite group/slot to use.
+$('favBulkRestore').addEventListener('click', async () => {
+  if (!favState.selected.size) return
+  const rows = await api.localFavList({})
+  const selectedRows = rows.filter(f => favState.selected.has(f.id))
+  if (!selectedRows.length) return
+  const types = [...new Set(selectedRows.map(f => f.type))]
+  const groupByType = {}
+  for (const type of types) {
+    const r = await api.vrchatFavGroups(type)
+    const names = r.ok ? r.groups.map(g => g.displayName || g.name).join(', ') : ''
+    const defaultGroup = selectedRows.find(f => f.type === type)?.collection || ''
+    const chosen = await promptDialog(`Which VRChat favorite group for ${type}s?${names ? ' (' + names + ')' : ''}`, defaultGroup)
+    if (chosen === null) return
+    groupByType[type] = chosen.trim() || undefined
+  }
+  if (!await confirmDialog(`Add ${selectedRows.length} selected favorite(s) back to VRChat's official favorites?`)) return
+  $('favBulkRestore').disabled = true
+  let added = 0, skipped = 0
+  for (const f of selectedRows) {
+    const r = await api.vrchatAddFav(f.type, f.vrchat_id, groupByType[f.type])
+    r.ok ? added++ : skipped++
+    await new Promise(res => setTimeout(res, 350))
+  }
+  $('favBulkRestore').disabled = false
+  toast(`<b>Restored to VRChat</b><br>${added} added${skipped ? `, ${skipped} skipped (already favorited, or that group is full)` : ''}`)
+  loadFavoritesPage()
+})
 $('favPageBody').addEventListener('click', async e => {
   const sel = e.target.closest('.fav-select')
   if (sel) { if (sel.checked) favState.selected.add(sel.dataset.id); else favState.selected.delete(sel.dataset.id); updateFavSelectionUi(); return }
   const openBtn = e.target.closest('.fav-open')
-  if (openBtn) { const { type, id } = openBtn.dataset; if (type === 'world') openWorldModal(id); else if (type === 'avatar') openAvatarModal(id); else openUserModal(id); return }
+  if (openBtn) { const { type, id } = openBtn.dataset; if (type === 'world') openWorldModal(id); else if (type === 'avatar') openAvatarModal(id); else if (type === 'group') openGroupModal(id); else openUserModal(id); return }
   const rmLocal = e.target.closest('.fav-remove-local')
   if (rmLocal) { if (await confirmDialog('Remove this Local Favorite?')) { await api.localFavRemove(rmLocal.dataset.id); loadFavoritesPage() } return }
   const editNote = e.target.closest('.fav-edit-note')
@@ -5046,6 +5100,7 @@ $('favAddBtn').addEventListener('click', async () => {
   try {
     if (type === 'world') { const r = await api.vrchatWorld(id); if (r.ok) { displayName = r.world.name; imageUrl = r.world.thumbnailImageUrl || r.world.imageUrl || '' } }
     else if (type === 'avatar') { const r = await api.vrchatAvatar(id); if (r.ok) { displayName = r.avatar.name; imageUrl = r.avatar.image || '' } }
+    else if (type === 'group') { const r = await api.vrchatGroup(id); if (r.ok) { displayName = r.group.name; imageUrl = r.group.iconUrl || '' } }
     else { const r = await api.vrchatUser(id); if (r.ok) { displayName = r.user.displayName; imageUrl = r.user.userIcon || r.user.currentAvatarThumbnailImageUrl || '' } }
   } catch (_) {}
   const r = await api.localFavAdd({ type: type === 'friend' ? 'friend' : type, vrchatId: id, displayName, imageUrl, note })
@@ -5082,6 +5137,8 @@ async function refreshCloudSyncUi () {
     setText('cloudSyncServerLabel', '🔗 ' + s.baseUrl)
     $('cloudSyncEnabled').checked = !!s.enabled
     setText('cloudSyncStatusOut', s.lastSyncAt ? `Last synced ${new Date(s.lastSyncAt).toLocaleString()}` : 'Not synced yet.')
+    $('cloudSyncHistoryEnabled').checked = !!s.historyEnabled
+    setText('cloudSyncHistoryOut', s.historyLastSyncAt ? `Last synced ${new Date(s.historyLastSyncAt).toLocaleString()}` : 'Not synced yet.')
   } else {
     $('cloudSyncDisconnected').style.display = ''
     $('cloudSyncConnected').style.display = 'none'
@@ -5115,6 +5172,13 @@ $('cloudSyncNowBtn').addEventListener('click', async () => {
 $('cloudSyncDisconnectBtn').addEventListener('click', async () => {
   if (!await confirmDialog('Disconnect from this server? Local Favorites stay on this device either way.')) return
   await api.cloudSyncDisconnect()
+  refreshCloudSyncUi()
+})
+$('cloudSyncHistoryEnabled').addEventListener('change', async e => { await api.cloudSyncSetHistoryEnabled(e.target.checked) })
+$('cloudSyncHistoryNowBtn').addEventListener('click', async () => {
+  setText('cloudSyncHistoryOut', 'Syncing…')
+  const r = await api.cloudSyncHistoryNow()
+  setText('cloudSyncHistoryOut', r.ok ? `✅ Synced — ${r.pushed} pushed, ${r.pulled} pulled.` : 'Error: ' + r.error)
   refreshCloudSyncUi()
 })
 

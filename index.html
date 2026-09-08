@@ -1678,6 +1678,7 @@
               <button class="pill-btn" data-type="friend">👤 Friends</button>
               <button class="pill-btn" data-type="world">🌐 Worlds</button>
               <button class="pill-btn" data-type="avatar">🧍 Avatars</button>
+              <button class="pill-btn" data-type="group">👥 Groups</button>
             </div>
           </div>
           <div class="row" style="margin-top:10px;flex-wrap:wrap">
@@ -1688,16 +1689,18 @@
           <div class="fav-toolbar" id="favToolbar" style="display:none">
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="favSelectAll" /> Select all</label>
             <span class="muted grow" id="favSelectedCount">0 selected</span>
+            <button class="btn ghost" id="favBulkMoveCloud" style="padding:5px 12px;font-size:.75rem;display:none">☁ Move selected to Cloud</button>
+            <button class="btn ghost" id="favBulkRestore" style="padding:5px 12px;font-size:.75rem;display:none">🎮 Restore selected to VRChat</button>
             <button class="btn danger" id="favBulkRemove" style="padding:5px 12px;font-size:.75rem">Remove selected</button>
           </div>
           <div id="favPageBody" class="muted" style="margin-top:8px">Loading…</div>
         </div>
         <div class="card">
           <h3>➕ Add to Local Favorites by ID</h3>
-          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Works for anyone — friend or not — and any world/avatar ID. Paste a VRChat ID (usr_…/wrld_…/avtr_…).</div>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Works for anyone — friend or not — and any world/avatar/group ID. Paste a VRChat ID (usr_…/wrld_…/avtr_…/grp_…).</div>
           <div class="row">
-            <select id="favAddType" style="max-width:120px"><option value="friend">Friend/User</option><option value="world">World</option><option value="avatar">Avatar</option></select>
-            <input type="text" id="favAddId" placeholder="usr_… / wrld_… / avtr_…" />
+            <select id="favAddType" style="max-width:120px"><option value="friend">Friend/User</option><option value="world">World</option><option value="avatar">Avatar</option><option value="group">Group</option></select>
+            <input type="text" id="favAddId" placeholder="usr_… / wrld_… / avtr_… / grp_…" />
             <input type="text" id="favAddNote" placeholder="Note (optional)" />
             <button class="btn" id="favAddBtn">Add</button>
           </div>
@@ -2086,10 +2089,17 @@
           <div id="cloudSyncConnected" style="display:none">
             <div class="row" style="justify-content:space-between;align-items:center">
               <span class="muted" id="cloudSyncServerLabel" style="font-size:.8rem"></span>
-              <label class="switch"><input type="checkbox" id="cloudSyncEnabled" /> Sync enabled</label>
+              <label class="switch"><input type="checkbox" id="cloudSyncEnabled" /> Sync favorites</label>
             </div>
-            <div class="row" style="margin-top:8px"><button class="btn ghost" id="cloudSyncNowBtn">Sync now</button><button class="btn danger" id="cloudSyncDisconnectBtn">Disconnect</button></div>
+            <div class="row" style="margin-top:8px"><button class="btn ghost" id="cloudSyncNowBtn">Sync favorites now</button><button class="btn danger" id="cloudSyncDisconnectBtn">Disconnect</button></div>
             <div class="muted" id="cloudSyncStatusOut" style="margin-top:6px;font-size:.75rem"></div>
+            <hr style="border-color:var(--border);margin:12px 0" />
+            <div class="row" style="justify-content:space-between;align-items:center">
+              <span class="muted" style="font-size:.8rem">World visit history — separate opt-in</span>
+              <label class="switch"><input type="checkbox" id="cloudSyncHistoryEnabled" /> Sync history</label>
+            </div>
+            <div class="row" style="margin-top:8px"><button class="btn ghost" id="cloudSyncHistoryNowBtn">Sync history now</button></div>
+            <div class="muted" id="cloudSyncHistoryOut" style="margin-top:6px;font-size:.75rem"></div>
           </div>
         </div>
         <div class="card">

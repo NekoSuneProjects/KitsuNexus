@@ -31,6 +31,8 @@ async function init (userDataDir) {
     world TEXT
   )`)
   db.run('CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts)')
+  // Migrate older DBs that predate world_id (Cloud Sync's world-visit history sync).
+  try { db.run('ALTER TABLE events ADD COLUMN world_id TEXT') } catch (_) { /* column already exists */ }
   // Cap the events table so db.export() stays fast (keep most recent 8000).
   try { db.run('DELETE FROM events WHERE id NOT IN (SELECT id FROM events ORDER BY ts DESC LIMIT 8000)') } catch (_) {}
   db.run(`CREATE TABLE IF NOT EXISTS notifications (
@@ -101,10 +103,13 @@ function persist () {
 }
 
 // type: 'join' | 'leave' | 'friend_add' | 'friend_remove' | 'world' | 'alert' | 'group'
-function log (type, name, detail, world) {
+// `worldId` (wrld_… ) is only meaningful for type 'world' — used by Cloud Sync's world-visit
+// history sync (modules/favorites/cloudSync.js) since `world` here is usually the world NAME,
+// not an ID (that's what VRChat's own log file gives us for join/leave events).
+function log (type, name, detail, world, worldId) {
   if (!db) return
-  db.run('INSERT INTO events (ts,type,name,detail,world) VALUES (?,?,?,?,?)',
-    [Date.now(), String(type), name || '', detail || '', world || ''])
+  db.run('INSERT INTO events (ts,type,name,detail,world,world_id) VALUES (?,?,?,?,?,?)',
+    [Date.now(), String(type), name || '', detail || '', world || '', worldId || ''])
   persist()
 }
 
@@ -112,12 +117,38 @@ function list (opts = {}) {
   if (!db) return []
   const limit = Math.min(parseInt(opts.limit, 10) || 200, 1000)
   const where = opts.type ? ' WHERE type = :t' : ''
-  const stmt = db.prepare(`SELECT id,ts,type,name,detail,world FROM events${where} ORDER BY ts DESC LIMIT ${limit}`)
+  const stmt = db.prepare(`SELECT id,ts,type,name,detail,world,world_id FROM events${where} ORDER BY ts DESC LIMIT ${limit}`)
   if (opts.type) stmt.bind({ ':t': opts.type })
   const out = []
   while (stmt.step()) out.push(stmt.getAsObject())
   stmt.free()
   return out
+}
+
+// World-visit events (type 'world') with a real world_id, added since `ts` — for Cloud Sync's
+// world-visit history push. Entries logged before world_id existed (or without one resolved)
+// are skipped, since there's nothing useful to sync for those.
+function listWorldVisitsSince (ts) {
+  if (!db) return []
+  const stmt = db.prepare("SELECT id,ts,name,detail,world_id FROM events WHERE type = 'world' AND world_id != '' AND ts > :ts ORDER BY ts ASC")
+  stmt.bind({ ':ts': ts || 0 })
+  const out = []
+  while (stmt.step()) out.push(stmt.getAsObject())
+  stmt.free()
+  return out
+}
+
+// Folds a world visit pulled from cloud sync into local history (so History shows visits made
+// from other paired devices too), skipping it if this exact visit is already present.
+function mergeWorldVisit (worldId, worldName, ts) {
+  if (!db || !worldId || !ts) return
+  const st = db.prepare("SELECT 1 FROM events WHERE type = 'world' AND world_id = :w AND ts = :ts")
+  st.bind({ ':w': worldId, ':ts': ts })
+  const exists = st.step(); st.free()
+  if (exists) return
+  db.run('INSERT INTO events (ts,type,name,detail,world,world_id) VALUES (?,?,?,?,?,?)',
+    [ts, 'world', worldName || '', 'Synced from another device', worldName || '', worldId])
+  persist()
 }
 
 function clear () {
@@ -159,4 +190,4 @@ async function importVrcx (filePath) {
 
 function close () { try { if (db) { fs.writeFileSync(dbPath, Buffer.from(db.export())) } } catch (_) {} }
 
-module.exports = { init, log, list, clear, clearType, close, importVrcx, upsertNotif, listNotifs, unreadNotifCount, markAllNotifsRead, removeNotif, reconcileNotifs, clearNotifs }
+module.exports = { init, log, list, listWorldVisitsSince, mergeWorldVisit, clear, clearType, close, importVrcx, upsertNotif, listNotifs, unreadNotifCount, markAllNotifsRead, removeNotif, reconcileNotifs, clearNotifs }

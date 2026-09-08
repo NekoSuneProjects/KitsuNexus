@@ -5,6 +5,27 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.75] - 2026-09-08
+
+### Added
+- **Bulk Cloud transfer with selection.** The Favorites page's existing checkbox selection now
+  drives "☁ Move selected to Cloud" (Official source) and "🎮 Restore selected to VRChat"
+  (Local source — asks which VRChat favorite group per type, then re-adds via the official API)
+  in the toolbar, on top of the existing per-item/per-group buttons.
+- **Favorite Groups.** VRChat has no official "favorite group" feature, so this is a Local
+  Favorites addition: favorite a group from its detail modal, filter by "👥 Groups" on the
+  Favorites page, or add one by ID — handy for getting back to groups you've recently joined.
+- **World-visit history Cloud Sync.** History now records the real `wrld_…` id per visit
+  (previously only the world name was captured, since that's all VRChat's own log file gives
+  for join/leave events). Settings ▸ ☁ Cloud Sync gained a second, separate opt-in to sync that
+  history to a self-hosted `kitsunexus-server`, and pulls visits made from other paired devices
+  back into local History too.
+- **kitsunexus-server: Owner API for a worlds feed.** `GET /api/worlds/feed`, gated by a
+  generated API key (`/admin` ▸ API keys — shown once at creation), returns JSON of worlds
+  you've favorited and/or visited. Meant for an external service you control — e.g. an
+  avatar/world search site — to pull new worlds from; not a public API, but separate from the
+  website login session too.
+
 ## [1.0.74] - 2026-09-08
 
 ### Added

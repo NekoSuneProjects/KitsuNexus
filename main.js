@@ -329,7 +329,11 @@ app.whenReady().then(async () => {
   localFavoritesDb.init(settings.get('favorites.dbPath') || localFavoritesDb.defaultPath(app.getPath('userData')))
     .catch(err => console.warn('local favorites init:', err.message))
   // Cloud Sync — no-ops unless the user has paired a device and enabled it in Settings.
-  setInterval(() => { const s = cloudSync.status(); if (s.paired && s.enabled) cloudSync.syncNow().catch(() => {}) }, 300000)
+  setInterval(() => {
+    const s = cloudSync.status()
+    if (s.paired && s.enabled) cloudSync.syncNow().catch(() => {})
+    if (s.paired && s.historyEnabled) cloudSync.syncWorldHistory().catch(() => {})
+  }, 300000)
   // Community Ranks (KitsuNexus OG ranks) — only spin up the store when the
   // master toggle is on. Dormant DB is retained when off (it just isn't loaded).
   if (settings.get('communityRanks', {}).enabled) {
@@ -1450,6 +1454,8 @@ ipcMain.handle('cloudsync:pollPairing', () => cloudSync.pollPairing())
 ipcMain.handle('cloudsync:disconnect', () => cloudSync.disconnect())
 ipcMain.handle('cloudsync:setEnabled', (e, enabled) => cloudSync.setEnabled(enabled))
 ipcMain.handle('cloudsync:syncNow', () => cloudSync.syncNow())
+ipcMain.handle('cloudsync:setHistoryEnabled', (e, enabled) => cloudSync.setHistoryEnabled(enabled))
+ipcMain.handle('cloudsync:syncHistoryNow', () => cloudSync.syncWorldHistory())
 
 // Let the user relocate the local-favorites DB file (e.g. onto a synced drive).
 ipcMain.handle('localfav:choosePath', async () => {
@@ -1487,19 +1493,20 @@ ipcMain.handle('pawprints:clear', () => { pawprints.clear(); return true })
 let lastPlayers = new Set()
 let playersPrimed = false
 let lastWorldLogged = ''
+let lastWorldIdLogged = ''
 let lastVideoLogged = ''
 let lastPortalSeq = 0
 let worldEnteredAt = 0
 function logWorldDiff (w) {
   if (!w) return
   if (!w.inWorld) {
-    if (lastWorldLogged && worldEnteredAt) { gamelog.log('world', lastWorldLogged, `Left after ${Math.round((Date.now() - worldEnteredAt) / 60000)}m`, lastWorldLogged) }
-    lastPlayers = new Set(); playersPrimed = false; lastWorldLogged = ''; worldEnteredAt = 0; return
+    if (lastWorldLogged && worldEnteredAt) { gamelog.log('world', lastWorldLogged, `Left after ${Math.round((Date.now() - worldEnteredAt) / 60000)}m`, lastWorldLogged, lastWorldIdLogged) }
+    lastPlayers = new Set(); playersPrimed = false; lastWorldLogged = ''; lastWorldIdLogged = ''; worldEnteredAt = 0; return
   }
   if (w.worldName && w.worldName !== lastWorldLogged) {
-    if (lastWorldLogged && worldEnteredAt) gamelog.log('world', lastWorldLogged, `Left after ${Math.round((Date.now() - worldEnteredAt) / 60000)}m`, lastWorldLogged)
-    lastWorldLogged = w.worldName; worldEnteredAt = Date.now()
-    gamelog.log('world', w.worldName, 'Entered instance', w.worldName)
+    if (lastWorldLogged && worldEnteredAt) gamelog.log('world', lastWorldLogged, `Left after ${Math.round((Date.now() - worldEnteredAt) / 60000)}m`, lastWorldLogged, lastWorldIdLogged)
+    lastWorldLogged = w.worldName; lastWorldIdLogged = w.worldId || ''; worldEnteredAt = Date.now()
+    gamelog.log('world', w.worldName, 'Entered instance', w.worldName, w.worldId)
   }
   const cur = new Set(w.players || [])
   if (!playersPrimed) { lastPlayers = cur; playersPrimed = true; return }

@@ -5,6 +5,7 @@
 
 const settings = require('../../settings')
 const localFavoritesDb = require('./localFavoritesDb')
+const gamelog = require('../history/gamelog')
 
 function cfg () {
   return {
@@ -13,11 +14,18 @@ function cfg () {
     deviceId: settings.get('cloudSync.deviceId', ''),
     enabled: !!settings.get('cloudSync.enabled', false),
     lastSyncAt: settings.get('cloudSync.lastSyncAt', 0),
+    // World-visit history sync is a separate opt-in from Favorites sync — someone may want to
+    // back up favorites without also uploading their whole play history, or vice versa.
+    historyEnabled: !!settings.get('cloudSync.historyEnabled', false),
+    historyLastSyncAt: settings.get('cloudSync.historyLastSyncAt', 0),
   }
 }
 
 function isPaired () { const c = cfg(); return !!(c.baseUrl && c.token) }
-function status () { const c = cfg(); return { paired: isPaired(), baseUrl: c.baseUrl, enabled: c.enabled, lastSyncAt: c.lastSyncAt } }
+function status () {
+  const c = cfg()
+  return { paired: isPaired(), baseUrl: c.baseUrl, enabled: c.enabled, lastSyncAt: c.lastSyncAt, historyEnabled: c.historyEnabled, historyLastSyncAt: c.historyLastSyncAt }
+}
 
 async function startPairing (baseUrl, deviceName) {
   const url = String(baseUrl || '').replace(/\/+$/, '')
@@ -55,10 +63,13 @@ function disconnect () {
   settings.set('cloudSync.deviceId', '')
   settings.set('cloudSync.enabled', false)
   settings.set('cloudSync.lastSyncAt', 0)
+  settings.set('cloudSync.historyEnabled', false)
+  settings.set('cloudSync.historyLastSyncAt', 0)
   return { ok: true }
 }
 
 function setEnabled (enabled) { settings.set('cloudSync.enabled', !!enabled); return status() }
+function setHistoryEnabled (enabled) { settings.set('cloudSync.historyEnabled', !!enabled); return status() }
 
 const toRemote = f => ({ type: f.type, vrchatId: f.vrchat_id, displayName: f.display_name, imageUrl: f.image_url, note: f.note, collection: f.collection, updatedAt: f.updated_at, deletedAt: f.deleted_at || null })
 const toLocal = f => ({ type: f.type, vrchat_id: f.vrchatId, display_name: f.displayName, image_url: f.imageUrl, note: f.note, collection: f.collection, updated_at: f.updatedAt, deleted_at: f.deletedAt || null })
@@ -90,4 +101,30 @@ async function syncNow () {
   } finally { syncing = false }
 }
 
-module.exports = { status, startPairing, pollPairing, disconnect, setEnabled, syncNow, isPaired }
+let syncingHistory = false
+async function syncWorldHistory () {
+  const c = cfg()
+  if (!c.baseUrl || !c.token) return { ok: false, error: 'Not connected to a server' }
+  if (syncingHistory) return { ok: false, error: 'History sync already in progress' }
+  syncingHistory = true
+  try {
+    const headers = { Authorization: `Bearer ${c.token}`, 'Content-Type': 'application/json' }
+    const changed = gamelog.listWorldVisitsSince(c.historyLastSyncAt).map(e => ({ worldId: e.world_id, worldName: e.name, visitedAt: e.ts }))
+    if (changed.length) {
+      const pushRes = await fetch(`${c.baseUrl}/api/history/worlds/sync`, { method: 'POST', headers, body: JSON.stringify({ visits: changed }) })
+      if (pushRes.status === 401) { disconnect(); return { ok: false, error: 'Device was disconnected on the server — pair again.' } }
+      if (!pushRes.ok) return { ok: false, error: `Push failed (${pushRes.status})` }
+    }
+    const pullRes = await fetch(`${c.baseUrl}/api/history/worlds/sync?since=${c.historyLastSyncAt}`, { headers })
+    if (pullRes.status === 401) { disconnect(); return { ok: false, error: 'Device was disconnected on the server — pair again.' } }
+    if (!pullRes.ok) return { ok: false, error: `Pull failed (${pullRes.status})` }
+    const pulled = await pullRes.json()
+    for (const v of pulled.visits || []) gamelog.mergeWorldVisit(v.worldId, v.worldName, v.visitedAt)
+    settings.set('cloudSync.historyLastSyncAt', pulled.serverTime || Date.now())
+    return { ok: true, pushed: changed.length, pulled: (pulled.visits || []).length }
+  } catch (err) {
+    return { ok: false, error: 'Could not reach server: ' + err.message }
+  } finally { syncingHistory = false }
+}
+
+module.exports = { status, startPairing, pollPairing, disconnect, setEnabled, setHistoryEnabled, syncNow, syncWorldHistory, isPaired }

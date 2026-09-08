@@ -481,6 +481,25 @@ opt-in cloud sync on top, not a replacement for local-first Favorites.
 - [x] **Auth page layout pass** — `/login`, `/register`, `/setup`, `/pair`, `403`, `404` now
   share a proper centered "auth card" component (`.auth-page`/`.auth-card` in `site.css`)
   instead of reusing the plain homepage `.hero` block.
+- [x] **Bulk Cloud transfer with selection** (Electron Favorites page) — the existing checkbox
+  selection now drives "☁ Move selected to Cloud" (Official source) and "🎮 Restore selected to
+  VRChat" (Local source, asks which VRChat favorite group per type before pushing back with
+  `vrchatAddFav`) in the Favorites toolbar, alongside the existing per-item/per-group buttons.
+- [x] **Favorite Groups** — VRChat has no official "favorite group" API, so this is Local
+  Favorites only: a "☆ Local Favorite" button on the group detail modal, a "👥 Groups" filter
+  pill and add-by-ID option on the Favorites page, to quickly get back to groups you've
+  recently joined.
+- [x] **World-visit history Cloud Sync** — `gamelog.js` now records the real `wrld_…` id
+  alongside each visit (previously only the world *name* was logged, since that's all VRChat's
+  own log file gives for join/leave). Settings ▸ ☁ Cloud Sync gets a second, separate opt-in
+  ("Sync history") that pushes/pulls world visits against `kitsunexus-server`'s new
+  `POST/GET /api/history/worlds/sync`, and folds visits pulled from other paired devices back
+  into local History.
+- [x] **Owner API — worlds feed** (`kitsunexus-server`) — `GET /api/worlds/feed`, gated by a
+  generated API key (`/admin` ▸ API keys, shown once), returns JSON of worlds the owner has
+  favorited and/or visited (deduped, `?since=` for incremental pulls). Meant for an external
+  service the owner controls (e.g. an avatar/world search site) to pull new worlds from —
+  not a public API, but not tied to the website login session either.
 - [ ] Avatar-switch relay over WebSocket (backend never touches VRChat credentials — always
   relayed through the paired desktop app, which already holds the real VRChat session).
 - [ ] Android/iOS apps — not started; this backend is the API surface they'll eventually use.
