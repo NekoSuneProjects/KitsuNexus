@@ -95,6 +95,8 @@ const updater = require('./modules/integrations/maintenance/updater')
 const tonManager = require('./modules/integrations/ton/tonManager')
 const vrNotify = require('./modules/integrations/maintenance/vrNotify')
 const ranks = require('./modules/ranks')
+const localFavoritesDb = require('./modules/favorites/localFavoritesDb')
+const cloudSync = require('./modules/favorites/cloudSync')
 const avatarLocker = require('./modules/avatarlocker/avatarLockerModule')
 const ruskLaserdome = require('./modules/integrations/osc/laserdome/ruskLaserdome')
 const { recognizeAudio, getProviderStatus } = require('./modules/integrations/osc/recognition/songRecognition')
@@ -322,6 +324,12 @@ app.whenReady().then(async () => {
   // Track the current VRChat world from its log; feed it to the renderer and
   // (when connected) into the Discord presence.
   gamelog.init(app.getPath('userData')).catch(err => console.warn('gamelog init:', err.message))
+  // Local Favorites — independent of VRChat's own /favorites API; path is user-configurable
+  // (Settings > Favorites), defaulting next to the other local DBs.
+  localFavoritesDb.init(settings.get('favorites.dbPath') || localFavoritesDb.defaultPath(app.getPath('userData')))
+    .catch(err => console.warn('local favorites init:', err.message))
+  // Cloud Sync — no-ops unless the user has paired a device and enabled it in Settings.
+  setInterval(() => { const s = cloudSync.status(); if (s.paired && s.enabled) cloudSync.syncNow().catch(() => {}) }, 300000)
   // Community Ranks (KitsuNexus OG ranks) — only spin up the store when the
   // master toggle is on. Dormant DB is retained when off (it just isn't loaded).
   if (settings.get('communityRanks', {}).enabled) {
@@ -381,7 +389,7 @@ app.on('before-quit', () => {
   if (blePairingCallback) { const callback = blePairingCallback; blePairingCallback = null; callback({ confirmed: false }) }
   stopComponentStats(); stopNetworkStats(); stopPulsoid(); stopHyperate(); stopDeviceBridge(); stopWindowActivity(); stopTon()
   disconnectTikTok(); stopTwitch(); twitchInteractive.stop(false); stopKick(); stopDiscord(); stopVrBattery(); stopVrcWorld(); stopAfk()
-  stopWeather(); stopVrcStatusPoll(); stopBot(); stopOfficialBot(); stopStatusPush(); pawprints.tickCommit(); stopFriendDiff(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); vrcTools.stopVideoCacher(); stopTonLog(); ranks.close(); screenshotMetadata.stop()
+  stopWeather(); stopVrcStatusPoll(); stopBot(); stopOfficialBot(); stopStatusPush(); pawprints.tickCommit(); stopFriendDiff(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); vrcTools.stopVideoCacher(); stopTonLog(); ranks.close(); screenshotMetadata.stop(); localFavoritesDb.close()
   ruskLaserdome.stop(false)
   if (unsubHotkeyHold) { unsubHotkeyHold(); unsubHotkeyHold = null }
   stopHotkeyTick()
@@ -1408,6 +1416,53 @@ ipcMain.handle('vrchat:setNote', (e, { userId, note } = {}) => vrchatApi.setNote
 ipcMain.handle('vrchat:moderate', (e, { userId, type } = {}) => vrchatApi.moderate(userId, type))
 ipcMain.handle('vrchat:unmoderate', (e, { userId, type } = {}) => vrchatApi.unmoderate(userId, type))
 ipcMain.handle('vrchat:favFriendIds', () => vrchatApi.getFavoriteFriendIds())
+ipcMain.handle('vrchat:favAvatars', () => vrchatApi.getFavoriteAvatars())
+
+// Local Favorites — app-local, independent of VRChat's own favorites API. Can hold
+// non-friends and arbitrary notes; see modules/favorites/localFavoritesDb.js.
+ipcMain.handle('localfav:list', (e, opts) => localFavoritesDb.list(opts || {}))
+ipcMain.handle('localfav:add', (e, entry) => localFavoritesDb.add(entry || {}))
+ipcMain.handle('localfav:update', (e, { id, ...fields } = {}) => localFavoritesDb.update(id, fields))
+ipcMain.handle('localfav:remove', (e, id) => localFavoritesDb.remove(id))
+ipcMain.handle('localfav:isFavorited', (e, { type, vrchatId } = {}) => localFavoritesDb.isFavorited(type, vrchatId))
+ipcMain.handle('localfav:getPath', () => localFavoritesDb.getPath())
+ipcMain.handle('localfav:export', async () => {
+  const r = await dialog.showSaveDialog({ defaultPath: 'KitsuNexus-local-favorites.json', filters: [{ name: 'JSON', extensions: ['json'] }] })
+  if (r.canceled || !r.filePath) return { ok: false, error: 'cancelled' }
+  try {
+    fs.writeFileSync(r.filePath, JSON.stringify(localFavoritesDb.exportAll(), null, 2))
+    return { ok: true, path: r.filePath }
+  } catch (err) { return { ok: false, error: err.message } }
+})
+ipcMain.handle('localfav:import', async () => {
+  const r = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] })
+  if (r.canceled || !r.filePaths[0]) return { ok: false, error: 'cancelled' }
+  try {
+    const data = JSON.parse(fs.readFileSync(r.filePaths[0], 'utf8'))
+    return localFavoritesDb.importAll(data)
+  } catch (err) { return { ok: false, error: err.message } }
+})
+// Cloud Sync — optional, opt-in sync of Local Favorites against a self-hosted
+// kitsunexus-server instance. See modules/favorites/cloudSync.js.
+ipcMain.handle('cloudsync:status', () => cloudSync.status())
+ipcMain.handle('cloudsync:startPairing', (e, { baseUrl, deviceName } = {}) => cloudSync.startPairing(baseUrl, deviceName))
+ipcMain.handle('cloudsync:pollPairing', () => cloudSync.pollPairing())
+ipcMain.handle('cloudsync:disconnect', () => cloudSync.disconnect())
+ipcMain.handle('cloudsync:setEnabled', (e, enabled) => cloudSync.setEnabled(enabled))
+ipcMain.handle('cloudsync:syncNow', () => cloudSync.syncNow())
+
+// Let the user relocate the local-favorites DB file (e.g. onto a synced drive).
+ipcMain.handle('localfav:choosePath', async () => {
+  const r = await dialog.showSaveDialog({ defaultPath: localFavoritesDb.getPath() || 'KitsuNexus-favorites.sqlite', filters: [{ name: 'SQLite DB', extensions: ['sqlite'] }] })
+  if (r.canceled || !r.filePath) return { ok: false, error: 'cancelled' }
+  try {
+    const oldPath = localFavoritesDb.getPath()
+    if (oldPath && fs.existsSync(oldPath) && oldPath !== r.filePath) fs.copyFileSync(oldPath, r.filePath)
+    await localFavoritesDb.init(r.filePath)
+    settings.set('favorites.dbPath', r.filePath)
+    return { ok: true, path: r.filePath }
+  } catch (err) { return { ok: false, error: err.message } }
+})
 ipcMain.handle('vrchat:messages', (e, type) => vrchatApi.getMessages(type))
 ipcMain.handle('vrchat:updateMessage', (e, { type, slot, message } = {}) => vrchatApi.updateMessage(type, slot, message))
 ipcMain.handle('vrchat:groupGalleries', (e, id) => vrchatApi.getGroupGalleries(id))

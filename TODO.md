@@ -402,8 +402,95 @@ all feed into.
 - [x] **Messenger / message-slot editor** — edit invite & response message slots (Messenger tab)
 - [x] **Multi-Invite** — friend-picker multi-select invite to instance/group
 - [x] **Right panel: Favorites section** — favorited friends shown at top of the rail
-- [ ] **Favorites page** (dedicated sidebar) listing worlds/avatars/friends with inline remove (currently add/remove via modals + Favs tab).
+- [x] **Favorites page** (dedicated sidebar) listing worlds/avatars/friends with inline remove — grouped by VRChat's own favorite categories (Group 1/2/3, Worlds1/2/3, etc.), with search filter and bulk select/remove for Local Favorites.
+- [x] **Avatar favorites (official)** — `getFavoriteAvatars()` (`GET /avatars/favorites`), shown alongside friend/world favorites on the Favorites page.
+- [x] **Local Favorites** — app-local favorites system independent of VRChat's own `/favorites` API: favorite any user/world/avatar (friend or not) with a personal note and a collection/category, own SQLite file with a user-selectable storage location (Settings), JSON export/import separate from the official favorites backup. See `modules/favorites/localFavoritesDb.js`.
+- [x] **Profile modal action-bar redesign** — replaced the long row of same-size buttons with a tidy icon-button bar (Official Favorite / Local Favorite toggles) + a "⋯" overflow dropdown (Invite, Request Invite, Boop, Mute, Block, Add Friend/Unfriend), VRCX-style.
+- [ ] Favorites page: friend "Open" cards resolve names/avatars only for current friends (via `vrchatAllFriends()`); a favorited-then-unfriended user still falls back to showing the raw ID. Not fixed this round — would need a per-ID `vrchatUser()` lookup, which risks rate-limiting for large favorite lists.
 - [~] Friends panel: avatars for **offline** friends now show with logo.png fallback; group-by-favorite and online count badge todo.
+
+---
+
+## ☁️ Cloud backend (kitsunexus-server)
+
+New sibling project at `NekoSuneAPPS/kitsunexus-server/` (own repo, not part of this one) — a
+website + backend for accounts, device pairing, cloud-synced Favorites, and (eventually) the
+NekoSuneAPPS Discord bot merged in. Electron app stays fully functional offline; all of this is
+opt-in cloud sync on top, not a replacement for local-first Favorites.
+
+- [x] **Homepage** — Express + EJS, styled to match the app's logo/banner (dark, purple→cyan),
+  hero banner + feature cards for Favorites sync/device pairing/Discord (marked "coming soon").
+- [x] **Device-code pairing flow** — desktop app calls `POST /api/pairing/start`, shows the
+  6-char code, polls `GET /api/pairing/poll/:deviceId`; user enters it at `/pair` on the website
+  (no login wall yet — see accounts note below). Device token is a sha256 hash server-side; the
+  plaintext is only ever held in memory long enough for the poll to deliver it once.
+- [x] **Favorites sync REST API** — `POST/GET /api/favorites/sync` (delta sync via `?since=`,
+  soft-deleted tombstones via Sequelize `paranoid: true`, last-write-wins by `updatedAt`) +
+  Electron-side `modules/favorites/cloudSync.js` (push/pull against `localFavoritesDb`, opt-in,
+  Settings ▸ ☁ Cloud Sync). Background sync every 5 min while enabled + paired, no-op otherwise.
+- [x] **DB layer** — Sequelize + sqlite3 (`kitsunexus-server/src/db/`), models `User`/`Device`/
+  `Favorite`. Every Device/Favorite currently attaches to a single stub `User` row
+  (`isStub: true`) since real accounts aren't built — this is deliberate, per "accounts system
+  last": the schema is already account-shaped, so turning on real register/login later is a
+  swap-in, not a migration.
+- [x] **Owner account + first-run setup wizard** — `GET/POST /setup` creates the single Owner
+  account (bcrypt-hashed password, `role: 'owner'`), reassigns any Devices/Favorites that were
+  attached to the stub user, then locks itself (redirects to `/login`) once an owner exists.
+  Session is a JWT in an httpOnly cookie (`src/auth/session.js`); `secure` flag follows
+  `SITE_URL` starting with `https://` (will be true once deployed to
+  `kitsunexus.nekosunevr.co.uk`).
+- [x] **`/pair` now requires login** — closes the gap noted below: claiming a pairing code
+  requires being signed in, and the device attaches to `req.user.id` instead of the stub.
+- [x] **Split `/dashboard` (personal) from `/admin` (owner/admin only)** — `/dashboard` is any
+  logged-in account's own devices (with revoke), Favorites stats, and Discord link status.
+  `/admin` (`requireAdmin` — 403 for anyone else) has every account, aggregate totals, server
+  stats (uptime, Node version, DB size), and Discord bot health.
+- [x] **Docker** — `Dockerfile` (`node:20-slim`, matches `NekoSuneAPPS/server`'s shape) +
+  `docker-compose.yml` (persists `./data` for the sqlite file) + CI
+  (`.github/workflows/docker.yml`, multi-arch `linux/amd64,linux/arm64` build on the shared
+  `[self-hosted, Linux, docker, buildx]` runner via QEMU, pushed to GHCR — same runner/pattern
+  as this app's own Electron Linux builds).
+- [x] **Discord bot merge** (from `NekoSuneAPPS/server`) — `src/discord/` now holds the bot
+  gateway, guild whitelist, and live status store, ported over with logic unchanged (only
+  import paths and "NekoSuneAPPS" → "KitsuNexus" audit-log wording differ). The Electron app's
+  existing `/oauth2/discord/authorize` (Electron loopback) and `/api/status`,
+  `/api/bot/voice/*`, `/api/activity/token` routes are byte-for-byte compatible — repointing
+  the app at the new server needs no app-side changes. New: `/settings/discord` links a
+  Discord identity to a real website account (via `DiscordLink`, requires being logged in
+  first) instead of the old model where a bare Discord ID *was* the account; guild
+  authorization/removal moved there from the old bot-only `/dashboard`, which no longer exists
+  as its own page now that `/dashboard` means "your KitsuNexus account".
+- [x] **Move VRChat official favorites to Cloud** (Electron Favorites page) — "☁ Move to Cloud"
+  per official favorite and "☁ Move all to Cloud" per group: saves it to Local Favorites
+  (carrying over VRChat's own group name as the collection) then removes it from VRChat's
+  official list to free up the slot. Official cards show a "☁" badge when already saved
+  locally/to cloud. Bulk moves are throttled 350ms apart to stay friendly to VRChat's rate limit.
+- [x] **Public registration** (`/register`) — creates `role: 'user'` accounts once an Owner
+  exists (redirects to `/setup` otherwise, same as `/login`). Requested explicitly after the
+  Owner-only testing period.
+- [x] **ZITADEL SSO** (`/auth/zitadel/login`, `src/auth/zitadelOidc.js` +
+  `src/auth/zitadelAccount.js`) — Authorization Code + PKCE against the self-hosted
+  `oauth2.nekosunevr.co.uk` instance (or any OIDC-compliant ZITADEL deployment — everything is
+  env-configured, nothing hardcoded). Offered *alongside* email/password on `/setup`, `/login`,
+  `/register` (not a replacement, by explicit choice — email/password keeps working even if
+  ZITADEL is misconfigured or unreachable). ID token signature verified against the live JWKS
+  via `jose`; account resolved by the stable `(issuer, sub)` pair, only ever linking to an
+  existing email/password account when ZITADEL itself reports `email_verified`. First SSO
+  login becomes Owner if nobody has claimed that role yet (mirrors `/setup`'s stub hand-off),
+  otherwise role `user`.
+- [x] **Auth page layout pass** — `/login`, `/register`, `/setup`, `/pair`, `403`, `404` now
+  share a proper centered "auth card" component (`.auth-page`/`.auth-card` in `site.css`)
+  instead of reusing the plain homepage `.hero` block.
+- [ ] Avatar-switch relay over WebSocket (backend never touches VRChat credentials — always
+  relayed through the paired desktop app, which already holds the real VRChat session).
+- [ ] Android/iOS apps — not started; this backend is the API surface they'll eventually use.
+- [ ] Once `kitsunexus-server` has its own GitHub repo, retire the old
+  `NekoSuneAPPS/server` project (its Discord bot is fully absorbed) and remove its
+  `feature/discord-backend-server` CI — don't delete `server/` until the merged version has run
+  for real with a live Discord app configured.
+- [ ] `sequelize.sync({ alter: true })` is used instead of real migrations while the schema is
+  still moving fast — fine for a single self-hosted instance now, but switch to migrations
+  before this ever holds other people's data (register system).
 
 ---
 

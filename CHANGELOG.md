@@ -5,6 +5,62 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.74] - 2026-09-08
+
+### Added
+- **kitsunexus-server: public registration + ZITADEL SSO.** `/register` opens sign-ups
+  (`role: 'user'`) once the Owner exists. Added ZITADEL SSO as an *additional* login option on
+  `/setup`/`/login`/`/register` — Authorization Code + PKCE, ID token verified against the live
+  JWKS, account matched by the stable `(issuer, sub)` pair, every endpoint/client id/secret
+  configured via env vars. Email/password keeps working unchanged either way. Also gave
+  `/login`, `/register`, `/setup`, `/pair`, `403`, and `404` a proper centered card layout
+  instead of the plain homepage hero block they were reusing.
+- **Favorites page** — new dedicated sidebar tab covering worlds, avatars, and friends, replacing
+  the previous "favorite via modals + Favs tab only" workflow. Shows both **Official** (VRChat's
+  own `/favorites` API) and **Local** favorites, grouped by category (VRChat's own favorite
+  groups like `Worlds1/2/3`/`Group 1/2/3` for official, or your own collection name for local),
+  with a name-search filter and bulk select/remove for Local Favorites.
+- **Official avatar favorites** — `getFavoriteAvatars()` (`GET /avatars/favorites`) fills the gap
+  where only friend/world favorites were previously supported.
+- **Local Favorites** — a new app-local favorites system, entirely independent of VRChat's own
+  `/favorites` API: lets you favorite *any* user, world, or avatar — including people you're not
+  friends with, which VRChat's own friend-favorites don't allow — with a personal note and a
+  collection/category. Stored in its own SQLite file (`modules/favorites/localFavoritesDb.js`,
+  same sql.js-backed pattern as the History/Ranks DBs) with a **user-selectable storage
+  location** (Settings > ☆ Local Favorites), and its own JSON export/import separate from the
+  existing official-favorites backup. Toggle it from the profile modal, or the world/avatar
+  detail modal, via the new "☆ Local Favorite" button.
+- **Profile modal action-bar redesign** — replaced the long row of same-size buttons with a
+  tidy icon-button bar (Official/Local Favorite toggles showing filled vs. outline state) plus a
+  "⋯" overflow dropdown for Invite / Request Invite / Boop / Mute / Block / Add Friend-Unfriend,
+  closer to VRCX's compact profile-card layout.
+- **Cloud Sync (optional, self-hosted)** — Settings ▸ ☁ Cloud Sync lets you pair the desktop app
+  to a self-hosted `kitsunexus-server` with a short device code (no password typed into the app),
+  then opt in to syncing Local Favorites across devices. Fully optional — Local Favorites keep
+  working offline with zero server involvement unless you connect one. See
+  `modules/favorites/cloudSync.js` and the new `kitsunexus-server` project.
+- **Move VRChat favorites to Cloud** — on the Favorites page, official favorites now get a
+  "☁ Move to Cloud" button (and "☁ Move all to Cloud" per group) that saves the item to Local
+  Favorites — carrying over VRChat's own favorite group as the collection — then removes it from
+  VRChat's official list to free up the slot. Official cards show a "☁" badge once something is
+  already saved locally/to cloud.
+- **kitsunexus-server: Owner account, setup wizard, admin dashboard, Docker.** First-run
+  `/setup` creates the single Owner account and locks itself afterward; `/pair` now requires
+  being logged in (previously anyone who could reach the server could claim a pending pairing
+  code — closed as part of this). `/dashboard` (any account) shows your own connected devices
+  (with revoke), Favorites stats, and Discord link status; `/admin` (owner/admin only, 403
+  otherwise) shows every account, aggregate totals, and server stats. Ships with a
+  `Dockerfile`/`docker-compose.yml` plus CI that builds a multi-arch (`amd64`+`arm64`) image on
+  the shared self-hosted runner and pushes it to GHCR. Public registration is intentionally
+  not built yet — only the Owner account exists for now.
+- **kitsunexus-server: Discord bot merged in** from `NekoSuneAPPS/server` — the bot gateway,
+  guild whitelist, and live status store now live at `src/discord/`, ported with logic
+  unchanged. The Electron app's existing Discord OAuth loopback and status/voice API routes are
+  unchanged and compatible as-is. New: `/settings/discord` links a Discord identity to your
+  website account (`DiscordLink`) instead of a bare Discord ID being the whole account, and is
+  where guild authorizations are now managed (replacing the old standalone bot dashboard).
+  Fully optional — leave the `DISCORD_*` env vars unset and the site runs fine without it.
+
 ### Changed
 - **Simplified the release build workflow's runner selection.** Removed the `detect-runners` job
   that dynamically probed the org's self-hosted runner status via the GitHub API (which required
