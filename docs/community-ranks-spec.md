@@ -104,10 +104,10 @@ sat(n, cap, k) = cap * (1 - exp(-n / k))
 | Factor | Formula | Notes |
 |---|---|---|
 | VRChat join age | `min(150, yearsSinceJoin * 25)` | Linear to the cap at **6 years**. Pure time. |
-| Years active in VRChat | `sat(activeYears, 150, 3)` | "Active year" = ≥1 verified session in ≥6 distinct weeks that year. ~3 yrs ⇒ ~95%. |
+| Years active in VRChat | `sat(effectiveActiveYears, 150, 3)` | "Active year" = ≥1 verified session in ≥6 distinct weeks that year, from local history. `effectiveActiveYears = max(activeYears, yearsSinceJoin * 0.5)` — half-weight credit from VRChat account age covers tenure that predates installing KitsuNexus (nothing to log yet), so a long-time VRChat account isn't stuck at 0 on day one; local history overtakes it naturally with real continued play. |
 | KitsuNexus account age | `min(50, monthsInstalled * 2.1)` | Linear to cap at **~24 months**. |
 | World uploads | `sat(publishedWorlds, 120, 4)` | Only **published, non-private, non-duplicate** worlds count. |
-| Avatar uploads | `sat(publicAvatars, 80, 6)` | Only **public** avatars; clones/reuploads excluded. |
+| Avatar uploads | `sat(avatarUploads, 80, 6)` | Any avatar you own (public **or private**) counts — unlike worlds, keeping a personal avatar private is normal, so requiring "public" would score nearly everyone at 0. Clones/reuploads excluded. |
 | Creator activity | `min(100, creatorScore)` | See 2.3 — rewards *recent + consistent* creation, not raw totals. |
 | Community contributions | `min(120, Σ contributionPoints)` | Weighted, staff-verifiable (see 2.4). |
 | Event participation | `sat(verifiedEvents, 80, 8)` | Only **verified** attendance; caps the value of grinding events. |
@@ -544,7 +544,10 @@ through this system's own factors. The seed is a one-time floor, recorded in
 
 Rules:
 - The seed is a **floor on first computation only**: `finalScore = max(seed, computed)`.
-- VRChat trust **cannot** seed directly into Veteran/Legend — those are earned here.
+- VRChat trust **cannot** seed directly into Veteran/Legend — those are earned here. The one
+  exception is the "years active" factor's own join-date partial credit (§2.2) — that's account
+  *tenure*, not a trust-tag floor, and still leaves the rest of the Veteran/Legend gates
+  (contributions, events, reputation, staff sign-off, etc.) to be earned normally.
 - After seeding, every recompute uses the real factor formulas; if earned score exceeds
   the seed, the seed becomes irrelevant.
 - Migration writes a `rank_history` row with `reason = 'migration'`.
@@ -567,10 +570,10 @@ function computeScore(u, stats) {
   const sat = (n, cap, k) => cap * (1 - Math.exp(-n / k));
   const p = {
     joinAge:         Math.min(150, stats.yearsSinceJoin * 25),
-    yearsActive:     sat(stats.activeYears, 150, 3),
+    yearsActive:     sat(effectiveActiveYears(stats), 150, 3),
     accountAge:      Math.min(50, stats.monthsInstalled * 2.1),
     worldUploads:    sat(stats.publishedWorlds, 120, 4),
-    avatarUploads:   sat(stats.publicAvatars, 80, 6),
+    avatarUploads:   sat(stats.avatarUploads, 80, 6),
     creatorActivity: Math.min(100, creatorScore(stats)),
     contributions:   Math.min(120, stats.contributionPoints),
     events:          sat(stats.verifiedEvents, 80, 8),

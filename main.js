@@ -17,11 +17,6 @@ function getFfmpegBinPath () {
 }
 
 const { getNowPlaying, setPreferredSource, getPreferredSource, getSources } = require('./modules/media/nowPlaying')
-const {
-  setMediaProvider,
-  updateOverlaySettings,
-  getOverlayState
-} = require('./modules/overlay/overlayServer')
 
 const { startComponentStats, stopComponentStats } = require('./modules/stats/componentStats')
 const { startNetworkStats, stopNetworkStats } = require('./modules/stats/networkStats')
@@ -297,21 +292,6 @@ function createWindow () {
   createTray()
 }
 
-async function configureOverlayServer () {
-  setMediaProvider(getNowPlaying)
-  setPreferredSource(settings.get('nowPlayingSource', '')) // restore the chosen media source
-  try {
-    await updateOverlaySettings({
-      enabled: settings.get('overlayEnabled', true),
-      port: settings.get('overlayPort', 39530),
-      style: settings.get('overlayStyle', 'default'),
-      boxBg: settings.get('overlayBoxBg', 'solid')
-    })
-  } catch (error) {
-    console.error('Overlay server failed:', error)
-  }
-}
-
 app.whenReady().then(async () => {
   try { updater.ensureExternalUpdater() } catch (err) { console.warn('updater bootstrap:', err.message) }
   // Downloaded Whisper models land under userData (always writable without
@@ -319,7 +299,7 @@ app.whenReady().then(async () => {
   // default - see speechToText.js for why that default broke on a
   // per-machine install.
   configureModelsDir(app.getPath('userData'))
-  await configureOverlayServer()
+  setPreferredSource(settings.get('nowPlayingSource', '')) // restore the chosen media source
   createWindow()
   // Track the current VRChat world from its log; feed it to the renderer and
   // (when connected) into the Discord presence.
@@ -329,11 +309,24 @@ app.whenReady().then(async () => {
   localFavoritesDb.init(settings.get('favorites.dbPath') || localFavoritesDb.defaultPath(app.getPath('userData')))
     .catch(err => console.warn('local favorites init:', err.message))
   // Cloud Sync — no-ops unless the user has paired a device and enabled it in Settings.
+  // refreshMe() keeps the cached KitsuNexus account role (cloudSync.role) current — it's what
+  // canLocalFavAvatars() in renderer.js checks to let the project owner's own device skip the
+  // VRC+ gate. Without refreshing it here too, that role is only ever set once at pairing time,
+  // so it stays blank (and the owner bypass silently never fires) for anyone who paired before
+  // a relaunch, or before this role check even existed.
+  if (cloudSync.isPaired()) cloudSync.refreshMe().catch(() => {})
   setInterval(() => {
     const s = cloudSync.status()
+    if (s.paired) cloudSync.refreshMe().catch(() => {})
     if (s.paired && s.enabled) cloudSync.syncNow().catch(() => {})
     if (s.paired && s.historyEnabled) cloudSync.syncWorldHistory().catch(() => {})
   }, 300000)
+  // OBS overlay now lives server-side (kitsunexus-server's public /overlay/<id> page) instead
+  // of a local HTTP server — this just keeps it fed. 5s (not the 5min interval above) so the
+  // overlay doesn't look stuck between song changes; it's a no-op besides one POST when paired.
+  setInterval(() => {
+    if (cloudSync.isPaired()) cloudSync.pushOverlay(getNowPlaying).catch(() => {})
+  }, 5000)
   // Community Ranks (KitsuNexus OG ranks) — only spin up the store when the
   // master toggle is on. Dormant DB is retained when off (it just isn't loaded).
   if (settings.get('communityRanks', {}).enabled) {
@@ -348,7 +341,7 @@ app.whenReady().then(async () => {
   // Resume the Activity status push if the user already logged in with
   // Discord in a previous session — no need to log in again every launch.
   const savedDiscordSession = settings.get('discordSessionToken', '')
-  if (savedDiscordSession) startStatusPush(getNekosuneBackendUrl(), savedDiscordSession, getVrcContextSnapshot)
+  if (savedDiscordSession) startStatusPush(getNekosuneBackendUrl(), savedDiscordSession, getVrcContextSnapshot, handleStatusPushUnauthorized)
   // Restore the ToN Tablet OSC proxy (sends avatar params on each ToN update).
   if (settings.get('tonOscEnabled', false)) { osc.setOscPort(settings.get('oscPort', 9000)); tonOsc.setEnabled(true) }
   const savedRusk = settings.get('oscApps.ruskLaserdome', {})
@@ -417,8 +410,9 @@ ipcMain.handle('saveOscPort', (e, port) => { settings.set('oscPort', port); retu
 ipcMain.handle('getNowPlaying', () => getNowPlaying())
 ipcMain.handle('nowPlaying:sources', () => ({ sources: getSources(), preferred: getPreferredSource() }))
 ipcMain.handle('nowPlaying:setSource', (e, value) => { setPreferredSource(value); settings.set('nowPlayingSource', String(value || '')); return getPreferredSource() })
-ipcMain.handle('getOverlayState', () => getOverlayState())
-ipcMain.handle('updateOverlaySettings', (e, s) => updateOverlaySettings(s))
+// Overlay page itself is hosted by kitsunexus-server now (routes/overlay.js there) — this just
+// asks it for this account's URL. Requires being paired (Settings > Cloud Sync).
+ipcMain.handle('cloudsync:overlayUrl', () => cloudSync.getOverlayUrl())
 
 /* NekoAvatarLocker: signed ownership vault + OSC feature gates */
 ipcMain.handle('locker:getState', () => avatarLocker.getState())
@@ -1333,12 +1327,20 @@ ipcMain.handle('vrc:get', () => getVrcWorld())
 /* ------------------------------------------------------------------ */
 /* Discord identity login (official bot + Activity status push)        */
 /* ------------------------------------------------------------------ */
+// Called when statusPush gets a 401 back — the session token is dead and will never start
+// working again on its own, so clear it and tell the renderer instead of leaving the app
+// silently retrying (and logging "rejected: 401") every 20s until someone notices.
+function handleStatusPushUnauthorized () {
+  settings.set('discordSessionToken', '')
+  push('discord:sessionExpired')
+}
+
 ipcMain.handle('oauth:discordLogin', async () => {
   try {
     const backendUrl = getNekosuneBackendUrl()
     const { sessionToken } = await loginDiscordIdentity(backendUrl)
     settings.set('discordSessionToken', sessionToken)
-    startStatusPush(backendUrl, sessionToken, getVrcContextSnapshot)
+    startStatusPush(backendUrl, sessionToken, getVrcContextSnapshot, handleStatusPushUnauthorized)
     return { ok: true }
   } catch (err) { return { ok: false, error: err.message } }
 })
@@ -1457,6 +1459,7 @@ ipcMain.handle('cloudsync:syncNow', () => cloudSync.syncNow())
 ipcMain.handle('cloudsync:setHistoryEnabled', (e, enabled) => cloudSync.setHistoryEnabled(enabled))
 ipcMain.handle('cloudsync:syncHistoryNow', () => cloudSync.syncWorldHistory())
 ipcMain.handle('cloudsync:isOwner', () => cloudSync.isOwner())
+ipcMain.handle('cloudsync:refreshMe', () => cloudSync.refreshMe())
 
 // Let the user relocate the local-favorites DB file (e.g. onto a synced drive).
 ipcMain.handle('localfav:choosePath', async () => {
@@ -1507,7 +1510,7 @@ function logWorldDiff (w) {
   if (w.worldName && w.worldName !== lastWorldLogged) {
     if (lastWorldLogged && worldEnteredAt) gamelog.log('world', lastWorldLogged, `Left after ${Math.round((Date.now() - worldEnteredAt) / 60000)}m`, lastWorldLogged, lastWorldIdLogged)
     lastWorldLogged = w.worldName; lastWorldIdLogged = w.worldId || ''; worldEnteredAt = Date.now()
-    gamelog.log('world', w.worldName, 'Entered instance', w.worldName, w.worldId)
+    gamelog.log('world', w.worldName, 'Entered instance', w.worldName, w.worldId, w.groupId)
   }
   const cur = new Set(w.players || [])
   if (!playersPrimed) { lastPlayers = cur; playersPrimed = true; return }
@@ -1959,8 +1962,19 @@ const ranksCfg = () => settings.get('communityRanks', { enabled: false, ogMode: 
 // Sync the local user's facts from VRChat + history, then recompute their rank.
 async function refreshSelfRank () {
   if (!ranks.isReady()) return null
-  try { await ranks.syncSelf() } catch (err) { console.warn('ranks sync:', err.message) }
-  return ranks.recompute(ranks.localNsaId(), { ogMode: ranksCfg().ogMode !== false })
+  // syncSelf()'s returned user carries derived, not-persisted-as-columns stats (_activeYears,
+  // _autoEvents from local history) — pass it straight into recompute() so those actually reach
+  // collectStats(); recompute() re-fetching the user itself would silently lose them.
+  let user = null
+  try { user = await ranks.syncSelf() } catch (err) { console.warn('ranks sync:', err.message) }
+  const payload = ranks.recompute(ranks.localNsaId(), { ogMode: ranksCfg().ogMode !== false, user })
+  // Push to kitsunexus-server if paired — this is what backs the real cross-user leaderboard
+  // and Discord Community Rank role sync there; a no-op (cloudSync.pushRank just errors
+  // harmlessly) when not paired, same as the overlay push.
+  if (payload && cloudSync.isPaired()) {
+    cloudSync.pushRank(payload.rank.key, payload.score, payload.rank.tier).catch(() => {})
+  }
+  return payload
 }
 // Ensure the store is up when the feature is toggled on at runtime (not just boot).
 async function ensureRanksReady () {
@@ -1993,7 +2007,14 @@ ipcMain.handle('ranks:refresh', async () => {
   push('ranks:update', r)
   return r
 })
+// Server-side leaderboard when paired — the local one (modules/ranks/rankDb.js's leaderboard())
+// can only ever have this one install's own single row, so it's not a real leaderboard at all
+// once a server is available; falls back to that local-only list when not paired to one.
 ipcMain.handle('ranks:leaderboard', async (e, limit) => {
+  if (cloudSync.isPaired()) {
+    const r = await cloudSync.getLeaderboard(limit)
+    if (r.ok) return r.entries.map((row, i) => ({ position: i + 1, displayName: row.displayName, rank: row.rankKey, score: row.finalScore }))
+  }
   if (!(await ensureRanksReady())) return []
   return ranks.leaderboard(limit)
 })

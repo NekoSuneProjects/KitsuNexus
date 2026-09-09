@@ -1300,24 +1300,29 @@
       <section id="overlay" class="tabpanel">
         <div class="card">
           <h3>🖥 OBS Overlay</h3>
-          <div class="grid cols-3">
-            <label class="switch"><input type="checkbox" id="enableOverlay"> Enable overlay</label>
-            <div><label>Style</label>
-              <select id="overlayStyleSelect">
-                <option value="default">Default</option><option value="bash">Bash</option><option value="discord">Discord</option>
-                <option value="macos">macOS</option><option value="windows">Windows</option><option value="soundcloud">SoundCloud</option><option value="youtube">YouTube</option>
-              </select>
-            </div>
-            <div><label>Port</label><input type="number" id="overlayPortInput" value="39530" /></div>
-            <div><label>Box background</label>
-              <select id="overlayBgSelect">
-                <option value="solid">Solid</option><option value="thin">Thin</option><option value="hidden">Hidden (text only)</option>
-              </select>
-            </div>
+          <div id="overlayNotPaired" class="muted">
+            This overlay is hosted by your KitsuNexus server, not this app — pair a device in
+            <b>Settings ▸ Cloud Sync</b> first to get your overlay URL.
           </div>
-          <label style="margin-top:12px">OBS Browser Source URL</label><input type="text" id="overlayUrlInput" readonly />
-          <div id="overlayStatus" class="muted" style="margin-top:8px">Overlay not checked yet</div>
-          <iframe id="overlayPreview" style="width:100%; height:220px; border:1px solid var(--border); border-radius:10px; margin-top:10px; background:transparent" title="overlay preview"></iframe>
+          <div id="overlayPaired" style="display:none">
+            <div class="grid cols-2">
+              <div><label>Style</label>
+                <select id="overlayStyleSelect">
+                  <option value="default">Default</option><option value="bash">Bash</option><option value="discord">Discord</option>
+                  <option value="macos">macOS</option><option value="windows">Windows</option><option value="soundcloud">SoundCloud</option><option value="youtube">YouTube</option>
+                </select>
+              </div>
+              <div><label>Box background</label>
+                <select id="overlayBgSelect">
+                  <option value="solid">Solid</option><option value="thin">Thin</option><option value="hidden">Hidden (text only)</option>
+                </select>
+              </div>
+            </div>
+            <label style="margin-top:12px">OBS Browser Source URL</label>
+            <div class="row"><input type="text" id="overlayUrlInput" readonly style="flex:1" /><button class="btn ghost" id="overlayCopyUrl">Copy</button></div>
+            <div id="overlayStatus" class="muted" style="margin-top:8px">Overlay not checked yet</div>
+            <iframe id="overlayPreview" style="width:100%; height:220px; border:1px solid var(--border); border-radius:10px; margin-top:10px; background:transparent" title="overlay preview"></iframe>
+          </div>
         </div>
       </section>
 
@@ -2079,7 +2084,8 @@
           <h3>☁ Cloud Sync <span class="muted" style="font-size:.72rem">(optional — self-hosted)</span></h3>
           <div class="muted" style="font-size:.75rem;margin-bottom:8px">Sync your Local Favorites to a self-hosted <code>kitsunexus-server</code> so they follow you to other devices. Nothing is sent anywhere unless you connect below.</div>
           <div id="cloudSyncDisconnected">
-            <div class="row"><input type="text" id="cloudSyncUrl" placeholder="https://your-server.example.com" style="flex:1" /><button class="btn" id="cloudSyncConnect">Connect…</button></div>
+            <div class="row"><input type="text" id="cloudSyncUrl" placeholder="https://your-server.example.com" value="https://kitsunexus.nekosunevr.co.uk" style="flex:1" /><button class="btn" id="cloudSyncConnect">Connect…</button></div>
+            <div class="muted" style="font-size:.75rem;margin-top:4px">Defaults to the official KitsuNexus server — clear this and enter your own URL if you're self-hosting.</div>
           </div>
           <div id="cloudSyncPairing" style="display:none;margin-top:10px">
             <div class="muted" style="font-size:.8rem">Enter this code on your server's <code>/pair</code> page:</div>
@@ -2236,7 +2242,9 @@
         <div class="card">
           <h3>🖥 OBS overlay</h3>
           <div class="muted" style="line-height:1.8">
-            Enable it in Integrations, then add the shown URL as a Browser Source in OBS.
+            Hosted by your KitsuNexus server, not this app — pair a device in Settings ▸ Cloud
+            Sync, then open the Overlay tab for your account's URL and add it as a Browser
+            Source in OBS. It updates automatically while KitsuNexus is running.
           </div>
         </div>
 
@@ -2269,6 +2277,7 @@
               <button class="btn ghost" data-ext="https://github.com/NekoSuneProjects/KitsuNexus">📦 Repository</button>
               <button class="btn ghost" data-ext="https://github.com/NekoSuneProjects/KitsuNexus/releases">⬇ Releases</button>
               <button class="btn ghost" data-ext="https://github.com/NekoSuneProjects/KitsuNexus/issues">🐞 Report an issue</button>
+              <button class="btn ghost" data-ext="https://discord.gg/vMW78yTG6s">💬 Discord — Support / Help / Suggestions</button>
             </div>
           </div>
           <div class="card">

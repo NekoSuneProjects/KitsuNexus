@@ -18,13 +18,14 @@ function cfg () {
     // back up favorites without also uploading their whole play history, or vice versa.
     historyEnabled: !!settings.get('cloudSync.historyEnabled', false),
     historyLastSyncAt: settings.get('cloudSync.historyLastSyncAt', 0),
+    overlayUrl: settings.get('cloudSync.overlayUrl', ''),
   }
 }
 
 function isPaired () { const c = cfg(); return !!(c.baseUrl && c.token) }
 function status () {
   const c = cfg()
-  return { paired: isPaired(), baseUrl: c.baseUrl, enabled: c.enabled, lastSyncAt: c.lastSyncAt, historyEnabled: c.historyEnabled, historyLastSyncAt: c.historyLastSyncAt, role: settings.get('cloudSync.role', '') }
+  return { paired: isPaired(), baseUrl: c.baseUrl, enabled: c.enabled, lastSyncAt: c.lastSyncAt, historyEnabled: c.historyEnabled, historyLastSyncAt: c.historyLastSyncAt, role: settings.get('cloudSync.role', ''), overlayUrl: c.overlayUrl }
 }
 
 // The KitsuNexus account role (owner/user) of whoever this device is paired to — cached from
@@ -85,6 +86,7 @@ function disconnect () {
   settings.set('cloudSync.historyEnabled', false)
   settings.set('cloudSync.historyLastSyncAt', 0)
   settings.set('cloudSync.role', '')
+  settings.set('cloudSync.overlayUrl', '')
   return { ok: true }
 }
 
@@ -147,4 +149,77 @@ async function syncWorldHistory () {
   } finally { syncingHistory = false }
 }
 
-module.exports = { status, startPairing, pollPairing, disconnect, setEnabled, setHistoryEnabled, syncNow, syncWorldHistory, isPaired, refreshMe, isOwner }
+// Push the current "now playing" snapshot to this account's overlay (kitsunexus-server's public
+// /overlay/<id> page) — replaces the old local overlay HTTP server. `getContext` is the same
+// media-provider function (modules/media/nowPlaying's getNowPlaying) the local overlay used to
+// poll directly; last-write-wins server-side, so it's fine if multiple paired devices push.
+async function pushOverlay (getContext) {
+  const c = cfg()
+  if (!c.baseUrl || !c.token) return { ok: false, error: 'Not connected to a server' }
+  try {
+    const media = await getContext()
+    const res = await fetch(`${c.baseUrl}/api/overlay/push`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${c.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(media || {}),
+    })
+    if (res.status === 401) { disconnect(); return { ok: false, error: 'Device was disconnected on the server — pair again.' } }
+    if (!res.ok) return { ok: false, error: `Push failed (${res.status})` }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: 'Could not reach server: ' + err.message }
+  }
+}
+
+// Fetches (and caches) this account's public overlay URL — cached so the Settings ▸ Overlay
+// page has something to show instantly, refreshed from the server whenever that page is opened.
+async function getOverlayUrl () {
+  const c = cfg()
+  if (!c.baseUrl || !c.token) return { ok: false, error: 'Not connected to a server' }
+  try {
+    const res = await fetch(`${c.baseUrl}/api/overlay/mine`, { headers: { Authorization: `Bearer ${c.token}` } })
+    const data = await res.json()
+    if (res.status === 401) { disconnect(); return { ok: false, error: 'Device was disconnected on the server — pair again.' } }
+    if (!res.ok || !data.ok) return { ok: false, error: data.error || `Server returned ${res.status}` }
+    settings.set('cloudSync.overlayUrl', data.url)
+    return { ok: true, url: data.url }
+  } catch (err) { return { ok: false, error: 'Could not reach server: ' + err.message } }
+}
+
+// Pushes the locally-computed Community Rank up to the server, which is what actually backs a
+// real cross-user leaderboard (a single install's own local rankDb.js sqlite file can only ever
+// have one row — itself) and drives Discord role sync (kitsunexus-server's services/
+// discordRankSync.js) if this account is linked to Discord there.
+async function pushRank (rankKey, finalScore, tier) {
+  const c = cfg()
+  if (!c.baseUrl || !c.token) return { ok: false, error: 'Not connected to a server' }
+  try {
+    const res = await fetch(`${c.baseUrl}/api/ranks/sync`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${c.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rankKey, finalScore, tier }),
+    })
+    if (res.status === 401) { disconnect(); return { ok: false, error: 'Device was disconnected on the server — pair again.' } }
+    if (!res.ok) return { ok: false, error: `Push failed (${res.status})` }
+    return await res.json()
+  } catch (err) {
+    return { ok: false, error: 'Could not reach server: ' + err.message }
+  }
+}
+
+// The real leaderboard — server-side across every user who's ever pushed a rank, unlike the
+// old local-only one (modules/ranks/rankDb.js's leaderboard()) which could only ever list the
+// single account on this one install.
+async function getLeaderboard (limit) {
+  const c = cfg()
+  if (!c.baseUrl || !c.token) return { ok: false, error: 'Not connected to a server' }
+  try {
+    const res = await fetch(`${c.baseUrl}/api/ranks/leaderboard${limit ? `?limit=${encodeURIComponent(limit)}` : ''}`, { headers: { Authorization: `Bearer ${c.token}` } })
+    const data = await res.json()
+    if (res.status === 401) { disconnect(); return { ok: false, error: 'Device was disconnected on the server — pair again.' } }
+    if (!res.ok || !data.ok) return { ok: false, error: data.error || `Server returned ${res.status}` }
+    return data
+  } catch (err) { return { ok: false, error: 'Could not reach server: ' + err.message } }
+}
+
+module.exports = { status, startPairing, pollPairing, disconnect, setEnabled, setHistoryEnabled, syncNow, syncWorldHistory, isPaired, refreshMe, isOwner, pushOverlay, getOverlayUrl, pushRank, getLeaderboard }

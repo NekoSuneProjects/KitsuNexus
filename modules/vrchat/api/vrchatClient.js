@@ -125,6 +125,13 @@ async function call (name, options, fallback, message) {
     if (success(value)) return { ok: true, data: value.data, response: value.response, status: value.response && value.response.status }
     return { ok: false, error: errorOf(value, message), data: value && value.data, status: value && value.response && value.response.status }
   } catch (e) {
+    // The vrchat SDK only tries to JSON-parse a response body once it's already confirmed a
+    // 2xx status (its request() only calls response.json() inside `if (response.ok)`), so a
+    // SyntaxError landing here means the request itself succeeded but VRChat sent back an
+    // empty/non-JSON body — seen on e.g. PUT /avatars/:id/select, which doesn't reliably
+    // return one. Treat that as success rather than surfacing a confusing "Unexpected end of
+    // JSON input"/"is not valid JSON" error for an action that actually went through.
+    if (e instanceof SyntaxError) return { ok: true, data: undefined }
     return { ok: false, error: (e && e.message) || message || 'VRChat API request failed', status: e && e.response && e.response.status }
   }
 }

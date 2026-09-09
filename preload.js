@@ -10,12 +10,10 @@ window.electronAPI = {
   updateOscPort: port => ipcRenderer.send('updateOscPort', port),
   updateOscTargets: targets => ipcRenderer.send('updateOscTargets', targets),
 
-  // now playing / overlay
+  // now playing / overlay (overlay page itself is hosted by kitsunexus-server — see cloudSyncOverlayUrl below)
   getNowPlaying: () => ipcRenderer.invoke('getNowPlaying'),
   nowPlayingSources: () => ipcRenderer.invoke('nowPlaying:sources'),
   nowPlayingSetSource: value => ipcRenderer.invoke('nowPlaying:setSource', value),
-  getOverlayState: () => ipcRenderer.invoke('getOverlayState'),
-  updateOverlaySettings: s => ipcRenderer.invoke('updateOverlaySettings', s),
 
   // component + network stats
   statsStart: ms => ipcRenderer.invoke('stats:start', ms),
@@ -252,6 +250,8 @@ window.electronAPI = {
   cloudSyncSetHistoryEnabled: enabled => ipcRenderer.invoke('cloudsync:setHistoryEnabled', enabled),
   cloudSyncHistoryNow: () => ipcRenderer.invoke('cloudsync:syncHistoryNow'),
   cloudSyncIsOwner: () => ipcRenderer.invoke('cloudsync:isOwner'),
+  cloudSyncRefreshMe: () => ipcRenderer.invoke('cloudsync:refreshMe'),
+  cloudSyncOverlayUrl: () => ipcRenderer.invoke('cloudsync:overlayUrl'),
   vrchatMessages: type => ipcRenderer.invoke('vrchat:messages', type),
   vrchatUpdateMessage: (type, slot, message) => ipcRenderer.invoke('vrchat:updateMessage', { type, slot, message }),
   vrchatGroupGalleries: id => ipcRenderer.invoke('vrchat:groupGalleries', id),

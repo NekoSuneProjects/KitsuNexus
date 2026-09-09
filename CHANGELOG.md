@@ -5,6 +5,62 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.77] - 2026-09-09
+
+### Changed
+- **OBS Overlay moved server-side.** The local HTTP overlay server (127.0.0.1, OBS Browser
+  Source) is gone — the overlay now lives on your paired `kitsunexus-server` at a public,
+  unguessable `/overlay/<id>` URL for your account, kept fed by a lightweight push every 5s
+  instead of the app serving it directly. Settings ▸ Cloud Sync's Overlay tab shows your
+  account's URL (with a copy button) once paired; style/box-background are just query params on
+  that URL now. Requires pairing to a server — there's no local-only overlay anymore.
+- **Community Rank leaderboard is now server-side.** The old leaderboard could only ever show
+  your own single row, since each install has its own isolated local database — it's not a
+  leaderboard without a server to aggregate across users. Ranks now push to your paired
+  `kitsunexus-server` on every "Refresh my rank", and the in-app leaderboard reads the real
+  cross-user list from there (falls back to the old local-only list if unpaired).
+- Settings ▸ Cloud Sync's server URL field now defaults to the official KitsuNexus server —
+  clear it and enter your own URL if you're self-hosting.
+
+### Fixed
+- **Now Playing / Spotify detection failing entirely.** Root cause was two stacked bugs in the
+  Windows media-session PowerShell query: reading a WinRT thumbnail stream's `.Size` through
+  PowerShell's late-bound COM interop is unreliable and highly variable in timing, and calling
+  `.Dispose()` on the raw stream/reader COM objects threw on every single poll (silently caught,
+  but still cost seconds each time). Removed native thumbnail extraction entirely — album art
+  now comes solely from the existing Deezer/iTunes lookup, which was already reliable — and
+  raised the detection timeout to actually cover the real, measured latency of a WinRT session
+  query (previously tight enough to kill an otherwise-working query in progress).
+- **Now Playing progress bar/timestamp feeling laggy/stale.** They only updated once per (slow,
+  PowerShell-based) poll. Now ticked locally every second from the last poll's cached data using
+  simple time-math — no extra PowerShell calls, no extra load, just a smooth-feeling clock/bar
+  between polls.
+- **Local Favorites "Open" not showing details for avatars/worlds/groups/friends.** The Favorites
+  page's "Open" button used the Local Favorite's own database row id instead of the actual
+  VRChat id, so it looked up the wrong thing every time for anything saved locally (official
+  favorites, whose row id already is the VRChat id, weren't affected).
+- **"✗ JSON failed to parse" on Wear.** `PUT /avatars/:id/select` doesn't reliably return a JSON
+  body, so the VRChat SDK's response parser threw even though the avatar swap had already
+  succeeded. That specific parse failure (only possible after a successful HTTP response) is now
+  treated as success instead of a false error.
+- **`[statusPush] backend rejected status push: 401` spamming forever.** A stale/expired Discord
+  session token made this retry every 20s indefinitely with no backoff. It now stops after one
+  401, clears the dead session, and tells you to log in again instead of silently failing forever.
+- **Community Ranks: avatar uploads always showing 0.** Only counted avatars marked *public* —
+  but keeping your main/personal avatars private is completely normal, so this scored almost
+  everyone at 0 regardless of how many they'd actually uploaded. Now counts every avatar you own.
+- **Community Ranks: "Years active" stuck near 0 for long-time VRChat accounts.** It was purely
+  a local-history proxy, so a brand-new KitsuNexus install had nothing to show no matter how long
+  the account had actually played VRChat. Now blends in half-weight credit from VRChat account
+  age, so long-time accounts aren't penalized on day one; real local play history still overtakes
+  it naturally with continued use.
+- **Community Ranks: event participation had no way to ever register.** Now auto-detected from
+  real VRChat Group instance visits (not just any public/friends instance of a world some group
+  happens to use for hangouts), deduped per world+group+day to prevent farming.
+- **Community Ranks: local-history stats were silently discarded on every recompute.** The
+  derived years-active/event stats computed during sync were being thrown away before the score
+  was actually calculated, due to a stale re-fetch — fixed by passing them straight through.
+
 ## [1.0.76] - 2026-09-09
 
 ### Added

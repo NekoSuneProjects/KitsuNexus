@@ -52,6 +52,21 @@ const SECONDS_PER_MONTH = SECONDS_PER_YEAR / 12
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x))
 const sat = (n, cap, k) => cap * (1 - Math.exp(-Math.max(0, n) / k))
 
+// "Years active" is normally a hard-to-fake proxy built from KitsuNexus's own local play
+// history (§2.2) — but that means it's stuck at 0 for anyone who just installed the app,
+// regardless of how long they've actually played VRChat (their history predates the app having
+// anything to log). Blend in half-weight credit from VRChat account tenure so long-time VRChat
+// accounts aren't stuck at 0 on day one; local history overtakes this naturally with real
+// continued play once it actually exceeds the join-date credit. Used both for scoring
+// (computeScore) and for the Veteran/Legend "years active" gates below, so the two stay
+// consistent with each other.
+function effectiveActiveYears (s, nowSec) {
+  const now = nowSec || Math.floor(Date.now() / 1000)
+  const yearsSinceJoin = s.vrcJoinDate ? (now - s.vrcJoinDate) / SECONDS_PER_YEAR : 0
+  const joinCredit = Math.max(0, yearsSinceJoin) * 0.5
+  return Math.max(s.activeYears || 0, joinCredit)
+}
+
 function creatorScore (s, nowSec) {
   const daysSinceLast = s.lastPublishAt
     ? Math.max(0, (nowSec - s.lastPublishAt) / 86400)
@@ -73,10 +88,10 @@ function computeScore (stats, nowSec) {
 
   const breakdown = {
     joinAge: clamp(yearsSinceJoin * 25, 0, MAX.joinAge),
-    yearsActive: clamp(sat(s.activeYears || 0, MAX.yearsActive, 3), 0, MAX.yearsActive),
+    yearsActive: clamp(sat(effectiveActiveYears(s, now), MAX.yearsActive, 3), 0, MAX.yearsActive),
     accountAge: clamp(monthsInstalled * 2.1, 0, MAX.accountAge),
     worldUploads: clamp(sat(s.publishedWorlds || 0, MAX.worldUploads, 4), 0, MAX.worldUploads),
-    avatarUploads: clamp(sat(s.publicAvatars || 0, MAX.avatarUploads, 6), 0, MAX.avatarUploads),
+    avatarUploads: clamp(sat(s.avatarUploads || 0, MAX.avatarUploads, 6), 0, MAX.avatarUploads),
     creatorActivity: clamp(creatorScore(s, now), 0, MAX.creatorActivity),
     contributions: clamp(s.contributionPoints || 0, 0, MAX.contributions),
     events: clamp(sat(s.verifiedEvents || 0, MAX.events, 8), 0, MAX.events),
@@ -98,7 +113,8 @@ function computeScore (stats, nowSec) {
     derived: {
       yearsSinceJoin: +yearsSinceJoin.toFixed(2),
       monthsInstalled: +monthsInstalled.toFixed(1),
-      activeYears: s.activeYears || 0
+      activeYears: s.activeYears || 0,
+      effectiveActiveYears: +effectiveActiveYears(s, now).toFixed(2)
     }
   }
 }
@@ -107,13 +123,13 @@ function veteranGates (stats, score) {
   const s = stats || {}
   const meaningfulCreation =
     (s.publishedWorlds || 0) >= 2 ||
-    (s.publicAvatars || 0) >= 5 ||
+    (s.avatarUploads || 0) >= 5 ||
     score.breakdown.creatorActivity >= 60
   const involvement = (s.contributionPoints || 0) >= 40 || (s.verifiedEvents || 0) >= 8
   return [
     { key: 'score', ok: score.finalScore >= 800, need: 'score ≥ 800' },
     { key: 'join_age', ok: yearsJoined(s) >= 3, need: 'VRChat join age ≥ 3y' },
-    { key: 'years_active', ok: (s.activeYears || 0) >= 2, need: '≥ 2 active years' },
+    { key: 'years_active', ok: effectiveActiveYears(s) >= 2, need: '≥ 2 active years' },
     { key: 'creation', ok: meaningfulCreation, need: '≥2 worlds OR ≥5 avatars OR creatorActivity ≥ 60' },
     { key: 'involvement', ok: involvement, need: '≥40 contribution pts OR ≥8 events' },
     { key: 'reputation', ok: (s.repNet || 0) >= 0, need: 'reputation not net-negative' },
@@ -123,11 +139,11 @@ function veteranGates (stats, score) {
 
 function legendGates (stats, score) {
   const s = stats || {}
-  const sigAvatars = (s.publicAvatars || 0) >= 15 || (s.totalFavourites || 0) >= 1000
+  const sigAvatars = (s.avatarUploads || 0) >= 15 || (s.totalFavourites || 0) >= 1000
   return [
     { key: 'score', ok: score.finalScore >= 950, need: 'score ≥ 950' },
     { key: 'join_age', ok: yearsJoined(s) >= 5, need: 'VRChat join age ≥ 5y' },
-    { key: 'years_active', ok: (s.activeYears || 0) >= 4, need: '≥ 4 active years' },
+    { key: 'years_active', ok: effectiveActiveYears(s) >= 4, need: '≥ 4 active years' },
     { key: 'worlds', ok: (s.publishedWorlds || 0) >= 5, need: '≥ 5 published, used worlds' },
     { key: 'avatars', ok: sigAvatars, need: '≥15 avatars OR ≥1000 favourites' },
     { key: 'leadership', ok: !!s.leadershipDocumented, need: 'documented community leadership' },

@@ -25,6 +25,10 @@ const state = {
   inWorld: false,
   worldId: '',
   instanceId: '',
+  // Set only when the instance is an actual VRChat Group instance (instanceId carries a
+  // ~group(grp_...) tag) — a real signal that this wasn't just a random public/friends
+  // instance, unlike being in a popular hangout world some group happens to also use.
+  groupId: '',
   worldName: '',
   userId: '',
   userDisplayName: '',
@@ -71,11 +75,13 @@ function emit () {
 // Parse a single log line and fold any world/user info into state.
 // Returns true if something relevant changed.
 function processLine (line) {
-  // "[Behaviour] Joining wrld_xxxx-...:12345~region(use)~nonce(...)"
+  // "[Behaviour] Joining wrld_xxxx-...:12345~region(use)~nonce(...)" — a Group instance's id
+  // additionally carries a "~group(grp_xxxx)" tag (VRChat's own instance-type marker).
   let m = line.match(/Joining (wrld_[^\s:]+):(\S+)/)
   if (m) {
     state.worldId = m[1]
     state.instanceId = m[2]
+    state.groupId = (m[2].match(/~group\(([^)]+)\)/) || [])[1] || ''
     state.inWorld = true
     playerSet.clear(); playerMap.clear(); syncPlayers() // new instance — radar resets
     return true
@@ -110,6 +116,7 @@ function processLine (line) {
     state.inWorld = false
     state.worldId = ''
     state.instanceId = ''
+    state.groupId = ''
     state.worldName = ''
     playerSet.clear(); playerMap.clear(); syncPlayers()
     return true

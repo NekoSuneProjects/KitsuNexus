@@ -295,16 +295,25 @@ function upsertAvatar (userDbId, a = {}) {
   [userDbId, a.vrcAvatarId, a.name || '', a.contentHash || '', a.isPublic ? 1 : 0, a.favourites || 0, a.publishedAt ?? null, now()])
 }
 
-// De-duplicated public counts + adoption + recency, for the engine.
+// De-duplicated counts + adoption + recency, for the engine.
+//
+// Worlds still require published+public (§4.1) — an unpublished/private world isn't really a
+// contribution anyone else can see or use. Avatars deliberately do NOT filter on is_public:
+// unlike worlds, keeping your own avatar private is completely normal VRChat behavior (most
+// people never mark their main/personal avatars public), so requiring "public" here just meant
+// nearly everyone who has genuinely uploaded avatars still scored 0. avatar_statistics only
+// ever contains avatars returned by GET /avatars?user=me in the first place (modules/ranks/
+// index.js's syncSelf), so every row already legitimately represents something this account
+// uploaded — counting all of them is the correct "avatar uploads" signal.
 function contentStats (userDbId) {
   const publishedWorlds = scalar('SELECT COUNT(DISTINCT COALESCE(NULLIF(content_hash,\'\'), vrc_world_id)) AS v FROM world_statistics WHERE user_id=:u AND is_published=1 AND is_public=1', { ':u': userDbId }) || 0
-  const publicAvatars = scalar('SELECT COUNT(DISTINCT COALESCE(NULLIF(content_hash,\'\'), vrc_avatar_id)) AS v FROM avatar_statistics WHERE user_id=:u AND is_public=1', { ':u': userDbId }) || 0
+  const avatarUploads = scalar('SELECT COUNT(DISTINCT COALESCE(NULLIF(content_hash,\'\'), vrc_avatar_id)) AS v FROM avatar_statistics WHERE user_id=:u', { ':u': userDbId }) || 0
   const worldFav = scalar('SELECT COALESCE(SUM(favourites),0) AS v FROM world_statistics WHERE user_id=:u', { ':u': userDbId }) || 0
   const avatarFav = scalar('SELECT COALESCE(SUM(favourites),0) AS v FROM avatar_statistics WHERE user_id=:u', { ':u': userDbId }) || 0
   const lastPublishAt = scalar(`SELECT MAX(p) AS v FROM (
       SELECT MAX(COALESCE(published_at, updated_at)) AS p FROM world_statistics WHERE user_id=:u
       UNION ALL SELECT MAX(COALESCE(published_at, updated_at)) FROM avatar_statistics WHERE user_id=:u)`, { ':u': userDbId })
-  return { publishedWorlds, publicAvatars, totalFavourites: worldFav + avatarFav, lastPublishAt: lastPublishAt || null }
+  return { publishedWorlds, avatarUploads, totalFavourites: worldFav + avatarFav, lastPublishAt: lastPublishAt || null }
 }
 
 // ---- reputation ----------------------------------------------------------

@@ -33,6 +33,10 @@ async function init (userDataDir) {
   db.run('CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts)')
   // Migrate older DBs that predate world_id (Cloud Sync's world-visit history sync).
   try { db.run('ALTER TABLE events ADD COLUMN world_id TEXT') } catch (_) { /* column already exists */ }
+  // Migrate older DBs that predate group_id (Community Ranks' auto-detected event
+  // participation — only set on a 'world' row when that instance was a real VRChat Group
+  // instance, per modules/vrchat/world/vrchatWorld.js).
+  try { db.run('ALTER TABLE events ADD COLUMN group_id TEXT') } catch (_) { /* column already exists */ }
   // Cap the events table so db.export() stays fast (keep most recent 8000).
   try { db.run('DELETE FROM events WHERE id NOT IN (SELECT id FROM events ORDER BY ts DESC LIMIT 8000)') } catch (_) {}
   db.run(`CREATE TABLE IF NOT EXISTS notifications (
@@ -106,10 +110,13 @@ function persist () {
 // `worldId` (wrld_… ) is only meaningful for type 'world' — used by Cloud Sync's world-visit
 // history sync (modules/favorites/cloudSync.js) since `world` here is usually the world NAME,
 // not an ID (that's what VRChat's own log file gives us for join/leave events).
-function log (type, name, detail, world, worldId) {
+// `groupId` (grp_… ) is only meaningful for type 'world' too — set when the instance was a
+// real VRChat Group instance (Community Ranks' auto-detected event participation, see
+// autoEventCount() below), left blank for a plain public/friends/invite instance.
+function log (type, name, detail, world, worldId, groupId) {
   if (!db) return
-  db.run('INSERT INTO events (ts,type,name,detail,world,world_id) VALUES (?,?,?,?,?,?)',
-    [Date.now(), String(type), name || '', detail || '', world || '', worldId || ''])
+  db.run('INSERT INTO events (ts,type,name,detail,world,world_id,group_id) VALUES (?,?,?,?,?,?,?)',
+    [Date.now(), String(type), name || '', detail || '', world || '', worldId || '', groupId || ''])
   persist()
 }
 
@@ -136,6 +143,23 @@ function listWorldVisitsSince (ts) {
   while (stmt.step()) out.push(stmt.getAsObject())
   stmt.free()
   return out
+}
+
+// Distinct (world, group, calendar day) combinations where a 'world' visit carried a group_id —
+// Community Ranks' auto-detected "event participation" (modules/ranks/index.js). Deliberately
+// requires an actual VRChat Group instance, not just any visit to a world some group happens to
+// use for hangouts, and dedupes per day so repeatedly rejoining/leaving the same instance can't
+// be farmed into unlimited credit — rejoining the SAME world+group later the SAME day is free,
+// but a genuinely different day (i.e. presumably a different event) counts again.
+function countGroupInstanceVisits () {
+  if (!db) return 0
+  return scalar("SELECT COUNT(*) AS v FROM (SELECT DISTINCT world_id, group_id, date(ts/1000, 'unixepoch') AS d FROM events WHERE type = 'world' AND group_id != '')")
+}
+function scalar (sql) {
+  const st = db.prepare(sql)
+  const v = st.step() ? st.getAsObject().v : 0
+  st.free()
+  return v || 0
 }
 
 // Folds a world visit pulled from cloud sync into local history (so History shows visits made
@@ -190,4 +214,4 @@ async function importVrcx (filePath) {
 
 function close () { try { if (db) { fs.writeFileSync(dbPath, Buffer.from(db.export())) } } catch (_) {} }
 
-module.exports = { init, log, list, listWorldVisitsSince, mergeWorldVisit, clear, clearType, close, importVrcx, upsertNotif, listNotifs, unreadNotifCount, markAllNotifsRead, removeNotif, reconcileNotifs, clearNotifs }
+module.exports = { init, log, list, listWorldVisitsSince, mergeWorldVisit, countGroupInstanceVisits, clear, clearType, close, importVrcx, upsertNotif, listNotifs, unreadNotifCount, markAllNotifsRead, removeNotif, reconcileNotifs, clearNotifs }

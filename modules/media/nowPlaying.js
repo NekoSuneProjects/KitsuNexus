@@ -63,24 +63,16 @@ const MEDIA_SESSION_SCRIPT = [
   '$props = Await-WinRt ($session.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])',
   '$playback = $session.GetPlaybackInfo()',
   '$timeline = $session.GetTimelineProperties()',
+  // Native thumbnail extraction (props.Thumbnail.OpenReadAsync()) used to live here. Removed:
+  // reading that WinRT stream's .Size through PowerShell's late-bound COM interop is unreliable
+  // — measured anywhere from ~2s to blowing the whole script's timeout budget, and calling
+  // .Dispose() on the raw stream/reader COM objects throws ("does not contain a method named
+  // 'Dispose'", since System.__ComObject doesn't expose IDisposable through late binding) on
+  // every single poll. artworkLookup.js's Deezer/iTunes lookup (normalizeMedia, in this same
+  // file) already fills in artwork from title/artist with a real, bounded 3.5s timeout — that's
+  // the only artwork source now, and it's the reliable one.
   '$image = ""',
   '$imageMime = ""',
-  'if ($null -ne $props.Thumbnail) {',
-  '  try {',
-  '    $stream = Await-WinRt ($props.Thumbnail.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])',
-  '    if ($stream.Size -gt 0 -and $stream.Size -lt 5242880) {',
-  '      $reader = [Windows.Storage.Streams.DataReader]::new($stream)',
-  '      Await-WinRt ($reader.LoadAsync([uint32]$stream.Size)) ([uint32]) | Out-Null',
-  '      $bytes = New-Object byte[] ([int]$stream.Size)',
-  '      $reader.ReadBytes($bytes)',
-  '      $imageMime = $stream.ContentType',
-  '      if ([string]::IsNullOrWhiteSpace($imageMime)) { $imageMime = "image/jpeg" }',
-  '      $image = "data:" + $imageMime + ";base64," + [Convert]::ToBase64String($bytes)',
-  '      $reader.Dispose()',
-  '    }',
-  '    $stream.Dispose()',
-  '  } catch {}',
-  '}',
   '@{',
   '  found = $true',
   '  sessions = @($list)',
@@ -269,9 +261,15 @@ function getNowPlaying () {
       'powershell.exe',
       ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', MEDIA_SESSION_SCRIPT],
       {
-        // Slower PCs need longer for the WinRT + PowerShell cold start; 5s was
-        // timing out and showing "No media detected" on otherwise-working systems.
-        timeout: 9000,
+        // WinRT session/media-properties queries through PowerShell are inherently slow and
+        // highly variable — measured 8-13s+ on a normal, otherwise-idle Windows 10 machine with
+        // Spotify actively playing, even after removing the (separately fixed) thumbnail-read
+        // step. 5s, then 9s, both still timed out regularly and showed "No media detected" on
+        // otherwise-working systems; this is deliberately generous rather than "fast but wrong".
+        // Safe to be this long: getNowPlaying() already dedupes concurrent calls via `inFlight`
+        // and caches the result for cacheTtlMs, so a slow call just gets reused across the
+        // renderer's 10s poll interval instead of piling up duplicate PowerShell processes.
+        timeout: 18000,
         windowsHide: true,
         maxBuffer: 8 * 1024 * 1024,
         // Preferred source passed safely via env (no script string interpolation).

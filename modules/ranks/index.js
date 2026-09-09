@@ -116,6 +116,11 @@ async function syncSelf () {
 
   // Record the active-years proxy by stashing it on the user via recompute input.
   user._activeYears = activeYearsFromHistory(gamelog)
+  // Auto-detected event participation (§4.3-adjacent, but automatic rather than host-token
+  // verified): a real VRChat Group instance visit, deduped per world+group+day — see
+  // gamelog.countGroupInstanceVisits() for why a group instance specifically, not just any
+  // visit to a world some group happens to also use for casual hangouts.
+  user._autoEvents = gamelog.countGroupInstanceVisits()
   return user
 }
 
@@ -128,12 +133,15 @@ function collectStats (user) {
     vrcJoinDate: user.vrc_join_date,
     activeYears: user._activeYears || 0,
     publishedWorlds: content.publishedWorlds,
-    publicAvatars: content.publicAvatars,
+    avatarUploads: content.avatarUploads,
     totalFavourites: content.totalFavourites,
     lastPublishAt: content.lastPublishAt,
     distinctPublishMonths24: 0, // refined below when raw rows are available
     contributionPoints: db.verifiedContributionPoints(user.id),
-    verifiedEvents: db.verifiedEventCredit(user.id),
+    // Auto-detected group-instance visits (see syncSelf) plus any host-token/telemetry-verified
+    // attendance recorded through the optional rankApi event-attendance endpoint — the two are
+    // independent credit sources, so both count if both happen to apply.
+    verifiedEvents: (user._autoEvents || 0) + db.verifiedEventCredit(user.id),
     repNet: db.reputationNet(user.id),
     recognitionTier: user.recognition_tier || 0,
     leadershipDocumented: !!user.leadership_documented,
@@ -151,7 +159,11 @@ function collectStats (user) {
  */
 function recompute (nsaUserId, opts = {}) {
   if (!ready) return null
-  const user = db.getUser(nsaUserId)
+  // Prefer a caller-supplied user (e.g. refreshSelfRank passing syncSelf()'s return value) — it
+  // carries derived-from-history stats (_activeYears, _autoEvents) that a fresh DB fetch can't,
+  // since those aren't persisted as columns. Falls back to a normal fetch for callers that
+  // never ran syncSelf() first (rankApi's staff-triggered recompute/sanction endpoints).
+  const user = opts.user || db.getUser(nsaUserId)
   if (!user) return null
 
   const stats = collectStats(user)

@@ -641,10 +641,16 @@ function nowPlayingNeeded () {
     ($('nowplaying') && $('nowplaying').offsetParent !== null) ||
     ($('spotiOscEnable') && $('spotiOscEnable').checked)
 }
+// The last media object a real poll returned — mediaProgressInfo() already extrapolates
+// progressMs forward from its `fetchedAt` timestamp, so re-rendering from this cached object on
+// a fast local tick (see tickNowPlayingProgress below) gives a smooth, real-time-feeling bar/
+// clock between the slow PowerShell polls, with zero extra process spawns or IPC calls.
+let lastNowPlayingMedia = null
 async function refreshNowPlaying () {
   if (!nowPlayingNeeded()) return
   try {
     const m = await api.getNowPlaying()
+    lastNowPlayingMedia = m
     renderNowPlaying(m)
     publishSpotiState(m)
     const song = buildSong(m)
@@ -667,11 +673,25 @@ async function refreshNowPlaying () {
     }
     // Feed the Discord presence (it shows 🎵 song when no world line is up).
     if (discordConnected) api.discordLive({ nowPlaying: (m && m.found && song) ? song : '' })
-  } catch (err) { renderNowPlaying({ found: false }) }
+  } catch (err) { lastNowPlayingMedia = null; renderNowPlaying({ found: false }) }
 }
-// Now Playing spawns a PowerShell query, so poll gently (every 10s). It still
-// runs while minimised so the chatbox stays current in VR.
+// Now Playing spawns a PowerShell query (slow — measured several seconds even on a normal PC,
+// see modules/media/nowPlaying.js), so poll gently (every 10s). It still runs while minimised so
+// the chatbox stays current in VR.
 setInterval(refreshNowPlaying, 10000)
+
+// Ticks the progress bar/timestamp (and chatbox {songtime}/{songprogress}/{songbar} placeholders)
+// every second using ONLY the last poll's cached data — no PowerShell, no IPC call, just local
+// time-math and a DOM/text update, so this can't add PC/app load no matter how often it runs.
+function tickNowPlayingProgress () {
+  const m = lastNowPlayingMedia
+  if (!nowPlayingNeeded() || !m || !m.found) return
+  const progress = mediaProgressInfo(m)
+  setText('nowPlayingTime', progress.time ? `${progress.progress} / ${progress.duration}` : 'No timeline available')
+  if ($('nowPlayingProgress')) $('nowPlayingProgress').style.width = `${Math.round(progress.pct * 100)}%`
+  composer.update({ songTime: progress.time, songProgress: progress.progress, songDuration: progress.duration, songBar: progress.bar })
+}
+setInterval(tickNowPlayingProgress, 1000)
 
 /* ---------------- OSC settings ---------------- */
 function getSendPort () { const p = parseInt($('portInput').value, 10); return Number.isFinite(p) ? p : 9000 }
@@ -3068,6 +3088,12 @@ $('discordIdentityLogout').addEventListener('click', async () => {
   await api.discordIdentityLogout()
   setText('discordIdentityOut', 'Not logged in')
 })
+// main.js clears the stored session and fires this once the Activity status push gets a 401
+// back — surface it instead of leaving the settings page silently claiming "Logged in".
+api.on('discord:sessionExpired', () => {
+  setText('discordIdentityOut', 'Discord session expired — log in again')
+  toast('<b>Discord session expired</b><br>Log in with Discord again in Settings to resume the Activity status push.')
+})
 
 $('botStart').addEventListener('click', async () => {
   setText('botOut', 'Connecting…')
@@ -3809,6 +3835,10 @@ function dmInfo (rows) { return `<div class="um-sec">Info</div><div class="um-in
 // KitsuNexus account role from cloudSync, never the VRChat account) which always gets it for
 // testing/dev purposes.
 async function canLocalFavAvatars () {
+  // The cached role isOwner() reads is only refreshed periodically (main.js) — refresh it here
+  // too so a stale/never-populated cache (e.g. right after pairing existed before this role
+  // check did) doesn't wrongly deny the owner's own device.
+  try { await api.cloudSyncRefreshMe() } catch (_) {}
   try { if (await api.cloudSyncIsOwner()) return true } catch (_) {}
   try { const me = await api.vrchatStatus(); return !!(me && me.ok && Array.isArray(me.user.tags) && me.user.tags.includes('system_supporter')) } catch (_) { return false }
 }
@@ -4845,7 +4875,10 @@ $('favImport').addEventListener('click', () => {
 
 /* ---------------- Favorites page (official + Local Favorites) ---------------- */
 const favState = { source: 'official', type: 'all', selected: new Set() }
-function favCard ({ id, kind, name, image, note, collection, cloudBadge, removeAttr }) {
+// `id` is this row's own identity for selection/remove/edit actions (a Local Favorite's DB row
+// id for local rows, same as vrchatId for official ones); `vrchatId` is the real VRChat id to
+// open in a detail modal — those two differ for local rows, so "Open" must use vrchatId, not id.
+function favCard ({ id, vrchatId, kind, name, image, note, collection, cloudBadge, removeAttr }) {
   const kindIcon = kind === 'world' ? '🌐' : kind === 'avatar' ? '🧍' : kind === 'group' ? '👥' : '👤'
   return `<div class="fav-card" data-fav-id="${id}">
     <div class="fav-thumb-wrap">
@@ -4859,7 +4892,7 @@ function favCard ({ id, kind, name, image, note, collection, cloudBadge, removeA
       ${note ? `<div class="fav-note" title="${esc(note)}">📝 ${esc(note)}</div>` : ''}
       ${collection ? `<div class="fav-collection">${esc(collection)}</div>` : ''}
       <div class="fav-actions">
-        <button class="btn ghost fav-open" data-type="${kind}" data-id="${id}">Open</button>
+        <button class="btn ghost fav-open" data-type="${kind}" data-id="${vrchatId}">Open</button>
         ${removeAttr}
       </div>
     </div>
@@ -4867,7 +4900,7 @@ function favCard ({ id, kind, name, image, note, collection, cloudBadge, removeA
 }
 function favLocalCard (f) {
   return favCard({
-    id: f.id, kind: f.type, name: f.display_name || f.vrchat_id, image: f.image_url, note: f.note, collection: f.collection,
+    id: f.id, vrchatId: f.vrchat_id, kind: f.type, name: f.display_name || f.vrchat_id, image: f.image_url, note: f.note, collection: f.collection,
     removeAttr: `<button class="btn ghost fav-edit-note" data-id="${f.id}">Edit</button><button class="btn danger fav-remove-local" data-id="${f.id}">Remove</button>`
   })
 }
@@ -4875,7 +4908,7 @@ function favLocalCard (f) {
 // "Worlds1") — carried over as the Local Favorite's "collection" if the user moves it to Cloud.
 function favOfficialCard (f, type, inCloud, groupLabel) {
   return favCard({
-    id: f.id, kind: type, name: f.name || f.id, image: f.image, note: '', collection: '', cloudBadge: inCloud,
+    id: f.id, vrchatId: f.id, kind: type, name: f.name || f.id, image: f.image, note: '', collection: '', cloudBadge: inCloud,
     removeAttr: `<button class="btn ghost fav-move-cloud" data-type="${type}" data-id="${f.id}" data-name="${esc(f.name || f.id)}" data-image="${esc(f.image || '')}" data-group="${esc(groupLabel || '')}" title="Save to Local/Cloud Favorites and remove from VRChat's official list, to free up a favorite slot">☁ Move to Cloud</button><button class="btn danger fav-remove-official" data-id="${f.id}">Unfavorite</button>`
   })
 }
@@ -5232,18 +5265,46 @@ api.on('discord:update', s => {
   })
 })
 
-/* ---------------- overlay ---------------- */
-function renderOverlay (state) {
-  $('overlayUrlInput').value = state?.url || ''
-  if (state?.running) { setText('overlayStatus', `Overlay running at ${state.url}`); $('overlayPreview').src = state.url }
-  else { setText('overlayStatus', 'Overlay server is off'); $('overlayPreview').src = 'about:blank' }
+/* ---------------- overlay (hosted by kitsunexus-server — Settings ▸ Cloud Sync must be paired) ---------------- */
+// Style/box-background are just query params (?style=...&bg=...) on the server's overlay URL —
+// nothing to save server-side for them, so changing either just rebuilds the shown URL.
+function overlayUrlWithParams (baseUrl) {
+  if (!baseUrl) return ''
+  const style = $('overlayStyleSelect').value
+  const bg = $('overlayBgSelect').value
+  const params = new URLSearchParams()
+  if (style && style !== 'default') params.set('style', style)
+  if (bg && bg !== 'solid') params.set('bg', bg)
+  const qs = params.toString()
+  return qs ? `${baseUrl}?${qs}` : baseUrl
 }
-async function applyOverlay () {
-  const s = { enabled: $('enableOverlay').checked, port: parseInt($('overlayPortInput').value, 10), style: $('overlayStyleSelect').value, boxBg: $('overlayBgSelect').value }
-  await api.saveSetting('overlayEnabled', s.enabled); await api.saveSetting('overlayPort', s.port); await api.saveSetting('overlayStyle', s.style); await api.saveSetting('overlayBoxBg', s.boxBg)
-  try { renderOverlay(await api.updateOverlaySettings(s)) } catch (err) { setText('overlayStatus', 'Overlay error: ' + err.message) }
+async function refreshOverlayUi () {
+  if (!(await api.cloudSyncStatus()).paired) {
+    $('overlayNotPaired').style.display = ''
+    $('overlayPaired').style.display = 'none'
+    return
+  }
+  $('overlayNotPaired').style.display = 'none'
+  $('overlayPaired').style.display = ''
+  setText('overlayStatus', 'Loading your overlay URL…')
+  const r = await api.cloudSyncOverlayUrl()
+  if (!r.ok) { setText('overlayStatus', 'Error: ' + r.error); return }
+  applyOverlay(r.url)
 }
-;['enableOverlay', 'overlayStyleSelect', 'overlayPortInput', 'overlayBgSelect'].forEach(id => $(id).addEventListener('change', applyOverlay))
+function applyOverlay (baseUrl) {
+  const url = overlayUrlWithParams(baseUrl)
+  $('overlayUrlInput').value = url
+  $('overlayPreview').src = url || 'about:blank'
+  setText('overlayStatus', 'Add this URL as an OBS Browser Source. Updates every few seconds while KitsuNexus is running.')
+}
+$('overlayStyleSelect').addEventListener('change', () => { api.saveSetting('overlayStyle', $('overlayStyleSelect').value); refreshOverlayUi() })
+$('overlayBgSelect').addEventListener('change', () => { api.saveSetting('overlayBoxBg', $('overlayBgSelect').value); refreshOverlayUi() })
+$('overlayCopyUrl').addEventListener('click', async () => {
+  if (!$('overlayUrlInput').value) return
+  await navigator.clipboard.writeText($('overlayUrlInput').value)
+  toast('Overlay URL copied.')
+})
+document.querySelector('.navbtn[data-tab="overlay"]').addEventListener('click', refreshOverlayUi)
 
 /* ---------------- boot ---------------- */
 async function init () {
@@ -5482,9 +5543,6 @@ async function init () {
   await setupAiProviders()
   await setupTranslator()
   $('liveTypingTranslate').checked = await api.getSetting('liveTypingTranslate', false)
-  $('overlayEnabled') // overlay restore
-  $('enableOverlay').checked = await api.getSetting('overlayEnabled', true)
-  $('overlayPortInput').value = await api.getSetting('overlayPort', 39530)
   $('overlayStyleSelect').value = await api.getSetting('overlayStyle', 'default')
   $('overlayBgSelect').value = await api.getSetting('overlayBoxBg', 'solid')
   { const ea = await api.getSetting('essAudioReactive', false); essAudioReactive = ea; if ($('essAudio')) $('essAudio').checked = ea }
@@ -5492,7 +5550,7 @@ async function init () {
   if ($('enableReceive').checked) startOscReceiver(getRecvPort(), (a, args) => logLine(`IN  ${a} ${args.join(',')}`))
   if (katEnabled) startKat()
   if (avatarScalingEnabled) startAvatarScaling()
-  try { renderOverlay(await api.getOverlayState()) } catch (_) {}
+  try { await refreshOverlayUi() } catch (_) {}
 
   // ---- Startup / auto-start ----
   const as = await api.getSetting('autostart', {})
