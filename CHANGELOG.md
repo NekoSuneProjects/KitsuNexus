@@ -5,6 +5,29 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.76] - 2026-09-09
+
+### Added
+- **VRC+ gate on avatar Local Favorites.** Local Favorites for avatars now requires the logged-in
+  VRChat account to have an active VRC+ subscription (checked via the `system_supporter` tag on
+  the account), mirroring VRChat's own avatar-favorites gating. The project owner's own paired
+  device always bypasses this — `kitsunexus-server` gained `GET /api/me` (device-token
+  authenticated) so a paired desktop app can read the KitsuNexus account `role` it's paired to;
+  the Electron app caches that role (`cloudSync.role`, refreshed right after pairing) and skips
+  the VRC+ check when it's `'owner'`. This is a KitsuNexus-account check, unrelated to the
+  VRChat account itself — non-owner users still need real VRC+ regardless of pairing. Applies to
+  the "☆ Local Favorite" button on the avatar detail modal, "Add to Local Favorites by ID", and
+  all three "☁ Move to Cloud" flows (single/per-group/bulk-selected) on the Favorites page.
+
+### Fixed
+- **Favorite avatars/worlds all dumped into one group.** The Favorites page showed every
+  favorited avatar under "avatars1" (and every world under "worlds1") even when VRChat had
+  them split across several groups (e.g. "Animations AVI", "My Friends AVI"). Root cause:
+  `/worlds/favorites` and `/avatars/favorites` return the World/Avatar objects themselves,
+  which don't carry a favorite-group field, so the group always fell back to the default.
+  The actual group tag lives on the plain Favorite record from `/favorites`, so that's now
+  fetched in parallel and merged in by id (matching VRCX's approach) — all groups now render.
+
 ## [1.0.75] - 2026-09-08
 
 ### Added

@@ -251,6 +251,7 @@ window.electronAPI = {
   cloudSyncNow: () => ipcRenderer.invoke('cloudsync:syncNow'),
   cloudSyncSetHistoryEnabled: enabled => ipcRenderer.invoke('cloudsync:setHistoryEnabled', enabled),
   cloudSyncHistoryNow: () => ipcRenderer.invoke('cloudsync:syncHistoryNow'),
+  cloudSyncIsOwner: () => ipcRenderer.invoke('cloudsync:isOwner'),
   vrchatMessages: type => ipcRenderer.invoke('vrchat:messages', type),
   vrchatUpdateMessage: (type, slot, message) => ipcRenderer.invoke('vrchat:updateMessage', { type, slot, message }),
   vrchatGroupGalleries: id => ipcRenderer.invoke('vrchat:groupGalleries', id),

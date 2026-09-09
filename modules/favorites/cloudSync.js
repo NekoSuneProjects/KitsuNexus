@@ -24,8 +24,26 @@ function cfg () {
 function isPaired () { const c = cfg(); return !!(c.baseUrl && c.token) }
 function status () {
   const c = cfg()
-  return { paired: isPaired(), baseUrl: c.baseUrl, enabled: c.enabled, lastSyncAt: c.lastSyncAt, historyEnabled: c.historyEnabled, historyLastSyncAt: c.historyLastSyncAt }
+  return { paired: isPaired(), baseUrl: c.baseUrl, enabled: c.enabled, lastSyncAt: c.lastSyncAt, historyEnabled: c.historyEnabled, historyLastSyncAt: c.historyLastSyncAt, role: settings.get('cloudSync.role', '') }
 }
+
+// The KitsuNexus account role (owner/user) of whoever this device is paired to — cached from
+// GET /api/me so app features that check "is this the project owner" (e.g. the VRC+ gate on
+// avatar Local Favorites) work offline between syncs without re-hitting the server every time.
+// This is a KitsuNexus-server account role, unrelated to the VRChat account's own VRC+ status.
+async function refreshMe () {
+  const c = cfg()
+  if (!c.baseUrl || !c.token) return { ok: false, error: 'Not connected to a server' }
+  try {
+    const r = await fetch(`${c.baseUrl}/api/me`, { headers: { Authorization: `Bearer ${c.token}` } })
+    const data = await r.json()
+    if (r.status === 401) { disconnect(); return { ok: false, error: 'Device was disconnected on the server — pair again.' } }
+    if (!r.ok || !data.ok) return { ok: false, error: data.error || `Server returned ${r.status}` }
+    settings.set('cloudSync.role', data.role || '')
+    return { ok: true, role: data.role, displayName: data.displayName }
+  } catch (err) { return { ok: false, error: 'Could not reach server: ' + err.message } }
+}
+function isOwner () { return isPaired() && settings.get('cloudSync.role', '') === 'owner' }
 
 async function startPairing (baseUrl, deviceName) {
   const url = String(baseUrl || '').replace(/\/+$/, '')
@@ -52,6 +70,7 @@ async function pollPairing () {
       settings.set('cloudSync.token', data.token)
       settings.set('cloudSync.enabled', true)
       settings.set('cloudSync.lastSyncAt', 0)
+      refreshMe().catch(() => {})
       return { ok: true, paired: true }
     }
     return { ok: true, paired: false, expired: !!data.expired }
@@ -65,6 +84,7 @@ function disconnect () {
   settings.set('cloudSync.lastSyncAt', 0)
   settings.set('cloudSync.historyEnabled', false)
   settings.set('cloudSync.historyLastSyncAt', 0)
+  settings.set('cloudSync.role', '')
   return { ok: true }
 }
 
@@ -127,4 +147,4 @@ async function syncWorldHistory () {
   } finally { syncingHistory = false }
 }
 
-module.exports = { status, startPairing, pollPairing, disconnect, setEnabled, setHistoryEnabled, syncNow, syncWorldHistory, isPaired }
+module.exports = { status, startPairing, pollPairing, disconnect, setEnabled, setHistoryEnabled, syncNow, syncWorldHistory, isPaired, refreshMe, isOwner }

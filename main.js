@@ -1456,6 +1456,7 @@ ipcMain.handle('cloudsync:setEnabled', (e, enabled) => cloudSync.setEnabled(enab
 ipcMain.handle('cloudsync:syncNow', () => cloudSync.syncNow())
 ipcMain.handle('cloudsync:setHistoryEnabled', (e, enabled) => cloudSync.setHistoryEnabled(enabled))
 ipcMain.handle('cloudsync:syncHistoryNow', () => cloudSync.syncWorldHistory())
+ipcMain.handle('cloudsync:isOwner', () => cloudSync.isOwner())
 
 // Let the user relocate the local-favorites DB file (e.g. onto a synced drive).
 ipcMain.handle('localfav:choosePath', async () => {

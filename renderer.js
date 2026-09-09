@@ -3804,6 +3804,14 @@ $('dmActions').addEventListener('click', async e => {
   setTimeout(() => { b.textContent = orig }, 2500)
 })
 function dmInfo (rows) { return `<div class="um-sec">Info</div><div class="um-info">${rows.filter(r => r[1] !== '' && r[1] != null).map(r => `<div><span>${esc(r[0])}</span><b>${esc(r[1])}</b></div>`).join('')}</div>` }
+// Local Favorites on avatars mirrors VRChat's own VRC+ gate on extra avatar favorite slots —
+// free accounts can't use it, except the project owner's own paired device (checked against the
+// KitsuNexus account role from cloudSync, never the VRChat account) which always gets it for
+// testing/dev purposes.
+async function canLocalFavAvatars () {
+  try { if (await api.cloudSyncIsOwner()) return true } catch (_) {}
+  try { const me = await api.vrchatStatus(); return !!(me && me.ok && Array.isArray(me.user.tags) && me.user.tags.includes('system_supporter')) } catch (_) { return false }
+}
 // Shared Local Favorite button wiring for the world/avatar detail modal (#dmLocalFav).
 // Local Favorites are independent of VRChat's own API — works for worlds/avatars regardless
 // of official favorite status, and supports a personal note.
@@ -3821,6 +3829,7 @@ async function bindDmLocalFav (type, id, name, image) {
       const row = (list || []).find(f => f.vrchat_id === id)
       if (row && await confirmDialog(`Remove "${name || id}" from Local Favorites?`)) await api.localFavRemove(row.id)
     } else {
+      if (type === 'avatar' && !(await canLocalFavAvatars())) { toast('<b>VRC+ required</b><br>Local Favorites for avatars needs an active VRChat Plus subscription.'); return }
       const note = await promptDialog(`Note for "${name || id}" (optional)`, '')
       if (note === null) return
       await api.localFavAdd({ type, vrchatId: id, displayName: name || '', imageUrl: image || '', note })
@@ -5002,11 +5011,14 @@ $('favBulkMoveCloud').addEventListener('click', async () => {
   if (!cards.length) return
   if (!await confirmDialog(`Move ${cards.length} selected favorite(s) to Local/Cloud Favorites and remove them from VRChat (frees up those slots)?`)) return
   $('favBulkMoveCloud').disabled = true
+  let blocked = 0
   for (const c of cards) {
-    await moveOfficialToCloud(c.dataset.type, c.dataset.id, c.dataset.name, c.dataset.image, c.dataset.group)
+    const r = await moveOfficialToCloud(c.dataset.type, c.dataset.id, c.dataset.name, c.dataset.image, c.dataset.group)
+    if (!r.ok) blocked++
     await new Promise(res => setTimeout(res, 350))
   }
   $('favBulkMoveCloud').disabled = false
+  if (blocked) toast(`<b>VRC+ required</b><br>${blocked} avatar favorite(s) skipped — Local Favorites for avatars needs an active VRChat Plus subscription.`)
   loadFavoritesPage()
 })
 // Local/Cloud → back onto VRChat's official favorites ("restoring" a slot), for whatever's
@@ -5067,7 +5079,8 @@ $('favPageBody').addEventListener('click', async e => {
   if (moveCloud) {
     const { type, id, name, image, group } = moveCloud.dataset
     if (await confirmDialog(`Save "${name}" to Local/Cloud Favorites and remove it from VRChat's official favorites (frees up a favorite slot)?`)) {
-      await moveOfficialToCloud(type, id, name, image, group)
+      const r = await moveOfficialToCloud(type, id, name, image, group)
+      if (!r.ok) toast('<b>VRC+ required</b><br>Local Favorites for avatars needs an active VRChat Plus subscription.')
       loadFavoritesPage()
     }
     return
@@ -5079,22 +5092,28 @@ $('favPageBody').addEventListener('click', async e => {
     if (!cards.length) return
     if (!await confirmDialog(`Move all ${cards.length} favorite(s) in "${group}" to Local/Cloud Favorites and remove them from VRChat (frees up those slots)?`)) return
     moveGroupCloud.disabled = true; moveGroupCloud.textContent = 'Moving…'
+    let blocked = 0
     for (const c of cards) {
-      await moveOfficialToCloud(c.dataset.type, c.dataset.id, c.dataset.name, c.dataset.image, c.dataset.group)
+      const r = await moveOfficialToCloud(c.dataset.type, c.dataset.id, c.dataset.name, c.dataset.image, c.dataset.group)
+      if (!r.ok) blocked++
       await new Promise(res => setTimeout(res, 350)) // stay friendly to VRChat's rate limit
     }
+    if (blocked) toast(`<b>VRC+ required</b><br>${blocked} avatar favorite(s) skipped — Local Favorites for avatars needs an active VRChat Plus subscription.`)
     loadFavoritesPage()
   }
 })
 async function moveOfficialToCloud (type, id, name, image, groupLabel) {
+  if (type === 'avatar' && !(await canLocalFavAvatars())) return { ok: false, error: 'VRC+ required for avatars' }
   await api.localFavAdd({ type, vrchatId: id, displayName: name, imageUrl: image, note: `Moved from VRChat (${groupLabel || 'favorites'})`, collection: groupLabel || 'default' })
   await api.vrchatRemoveFav(id)
+  return { ok: true }
 }
 $('favAddBtn').addEventListener('click', async () => {
   const type = $('favAddType').value
   const id = $('favAddId').value.trim()
   const note = $('favAddNote').value
   if (!id) { setText('favAddOut', 'Enter an ID first.'); return }
+  if (type === 'avatar' && !(await canLocalFavAvatars())) { setText('favAddOut', 'VRC+ required: Local Favorites for avatars needs an active VRChat Plus subscription.'); return }
   setText('favAddOut', 'Looking up…')
   let displayName = id, imageUrl = ''
   try {

@@ -305,8 +305,26 @@ async function removeFavorite (favoriteId) { const list = await core.request('GE
 async function getMyWorlds () { const r = await core.request('GET', '/worlds', { user: 'me', releaseStatus: 'all', n: 100, sort: 'updated', order: 'descending' }, undefined, 'Could not load worlds'); return r.ok && Array.isArray(r.data) ? { ok: true, worlds: r.data.map(w => ({ id: w.id, name: w.name, image: w.thumbnailImageUrl || w.imageUrl, visits: w.visits, favorites: w.favorites, releaseStatus: w.releaseStatus })) } : { ok: false, error: r.error } }
 async function getMyAvatars () { const r = await core.request('GET', '/avatars', { releaseStatus: 'all', user: 'me', n: 50, sort: 'updated', order: 'descending' }, undefined, 'Could not load avatars'); return r.ok && Array.isArray(r.data) ? { ok: true, avatars: r.data.map(a => ({ id: a.id, name: a.name, image: a.thumbnailImageUrl || a.imageUrl, releaseStatus: a.releaseStatus })) } : { ok: false, error: r.error } }
 async function getMutualFriends (id) { const r = await core.request('GET', `/users/${encodeURIComponent(id)}/mutuals`, { n: 100 }, undefined, 'Could not load mutual friends'); if (r.status === 403) return { ok: false, off: true, error: 'This user has Shared Connections turned off.' }; return r.ok && Array.isArray(r.data) ? { ok: true, friends: r.data.map(pickFriend) } : { ok: false, error: r.error } }
-async function getFavoriteWorlds () { const r = await core.request('GET', '/worlds/favorites', { n: 100 }, undefined, 'Could not load favorites'); return r.ok && Array.isArray(r.data) ? { ok: true, worlds: r.data.map(w => ({ id: w.id, name: w.name, image: w.thumbnailImageUrl || w.imageUrl, visits: w.visits, favorites: w.favorites, group: w.favoriteGroup || Array.isArray(w.favoriteGroups) && w.favoriteGroups[0] || 'worlds1' })) } : { ok: false, error: r.error } }
-async function getFavoriteAvatars () { const r = await core.request('GET', '/avatars/favorites', { n: 100 }, undefined, 'Could not load favorite avatars'); return r.ok && Array.isArray(r.data) ? { ok: true, avatars: r.data.map(a => ({ id: a.id, name: a.name, image: a.thumbnailImageUrl || a.imageUrl, releaseStatus: a.releaseStatus, group: a.favoriteGroup || Array.isArray(a.favoriteGroups) && a.favoriteGroups[0] || 'avatars1' })) } : { ok: false, error: r.error } }
+// The /worlds/favorites and /avatars/favorites endpoints return the World/Avatar objects
+// themselves, which don't carry which favorite group (tags1/2/3...) each one is filed under —
+// so without this, every item silently fell back to the default group ("worlds1"/"avatars1")
+// and the other groups looked empty even though VRChat had items in them. The group tag only
+// exists on the plain Favorite record from /favorites, so fetch that in parallel and merge by id
+// (same approach VRCX uses).
+async function favoriteGroupTags (type, fallback) {
+  const r = await core.request('GET', '/favorites', { type, n: 100 }, undefined, 'Could not load favorites')
+  const tags = {}
+  if (r.ok && Array.isArray(r.data)) for (const f of r.data) tags[f.favoriteId] = (f.tags && f.tags[0]) || fallback
+  return tags
+}
+async function getFavoriteWorlds () {
+  const [favRes, tags] = await Promise.all([core.request('GET', '/worlds/favorites', { n: 100 }, undefined, 'Could not load favorites'), favoriteGroupTags('world', 'worlds1')])
+  return favRes.ok && Array.isArray(favRes.data) ? { ok: true, worlds: favRes.data.map(w => ({ id: w.id, name: w.name, image: w.thumbnailImageUrl || w.imageUrl, visits: w.visits, favorites: w.favorites, group: tags[w.id] || w.favoriteGroup || Array.isArray(w.favoriteGroups) && w.favoriteGroups[0] || 'worlds1' })) } : { ok: false, error: favRes.error }
+}
+async function getFavoriteAvatars () {
+  const [favRes, tags] = await Promise.all([core.request('GET', '/avatars/favorites', { n: 100 }, undefined, 'Could not load favorite avatars'), favoriteGroupTags('avatar', 'avatars1')])
+  return favRes.ok && Array.isArray(favRes.data) ? { ok: true, avatars: favRes.data.map(a => ({ id: a.id, name: a.name, image: a.thumbnailImageUrl || a.imageUrl, releaseStatus: a.releaseStatus, group: tags[a.id] || a.favoriteGroup || Array.isArray(a.favoriteGroups) && a.favoriteGroups[0] || 'avatars1' })) } : { ok: false, error: favRes.error }
+}
 async function getFavoriteGroups (type = 'world') { const r = await core.request('GET', '/favorite/groups', { type, n: 25 }, undefined, 'Could not load favorite groups'); return r.ok && Array.isArray(r.data) ? { ok: true, groups: r.data.map(g => ({ name: g.name, displayName: g.displayName })) } : { ok: false, error: r.error } }
 async function getMyGroups () { let id = core.getCurrentUserId(); if (!id) { const u = await fetchUser(); if (!u.ok) return u; id = core.getCurrentUserId() } return getUserGroups(id) }
 async function getGroupEvents (id) { const r = await core.request('GET', `/groups/${encodeURIComponent(id)}/events`, { n: 20 }, undefined, 'Could not list events'); const a = r.ok ? (Array.isArray(r.data) ? r.data : r.data && r.data.results || []) : []; return r.ok ? { ok: true, events: a.map(e => ({ id: e.id, title: e.title || e.name, startsAt: e.startsAt || e.startTime, description: e.description, groupId: id })) } : { ok: false, error: r.error } }
