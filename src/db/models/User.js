@@ -12,8 +12,10 @@ const User = sequelize.define('User', {
   isStub: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   // 'owner' = the account that ran /setup, OR the first account ever to sign in via ZITADEL
   // if no owner exists yet. Public registration (email/password or SSO) otherwise only ever
-  // creates role 'user'.
-  role: { type: DataTypes.ENUM('owner', 'user'), allowNull: false, defaultValue: 'user' },
+  // creates role 'user'. 'admin' is owner-assigned only (routes/admin.js's set-role action) —
+  // same access as 'owner' everywhere requireAdmin gates, minus owner-only actions like that
+  // role change itself and banning another owner.
+  role: { type: DataTypes.ENUM('owner', 'admin', 'user'), allowNull: false, defaultValue: 'user' },
   // ZITADEL SSO identity — the stable (issuer, sub) pair from the verified ID token, per
   // routes/zitadelAuth.js. Never resolve an account by email alone for SSO (emails can be
   // unverified or reused); this pair is the only thing trusted for "is this the same person".
@@ -26,6 +28,11 @@ const User = sequelize.define('User', {
   // plain ALTER TABLE ADD COLUMN (see db/index.js's backfillOverlayIds) — every account still
   // ends up with one, just not atomically with the column's creation.
   overlayId: { type: DataTypes.STRING, allowNull: true, unique: true },
+  // Saved OBS overlay preferences (routes/dashboard.js's overlay panel) — the default style/box
+  // background baked into the overlay page (routes/overlay.js) whenever the URL is used without
+  // its own ?style=/?bg= query override.
+  overlayStyle: { type: DataTypes.STRING, allowNull: false, defaultValue: 'default' },
+  overlayBoxBg: { type: DataTypes.STRING, allowNull: false, defaultValue: 'solid' },
 })
 
 module.exports = User

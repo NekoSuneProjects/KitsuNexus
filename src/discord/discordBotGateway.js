@@ -10,7 +10,7 @@
 // Ported from NekoSuneAPPS/server/src/discordBotGateway.js — logic unchanged, only the
 // config import path and the "NekoSuneAPPS" → "KitsuNexus" audit-log wording differ.
 
-const { Client, GatewayIntentBits, Events, PermissionFlagsBits } = require('discord.js')
+const { Client, GatewayIntentBits, Events, PermissionFlagsBits, ActivityType } = require('discord.js')
 const config = require('../config')
 const authorizedGuilds = require('./authorizedGuilds')
 
@@ -19,6 +19,8 @@ let ready = false
 let lastError = null
 let retryTimer = null
 let retryDelayMs = 0
+let statusTimer = null
+let statusIndex = 0
 
 // Guards against a real race: Discord adds the bot to the guild (firing
 // GuildCreate over the gateway) as part of the SAME consent click that then
@@ -45,18 +47,57 @@ async function enforceWhitelist (guild) {
   try { await guild.leave() } catch (err) { console.warn('[discordBotGateway] failed to leave guild:', err.message) }
 }
 
+// Rotating "Watching …" presence — nothing sensitive, just aggregate counts: how many guilds
+// the bot is in, and how many distinct accounts have a paired desktop app (i.e. people actually
+// using KitsuNexus, not just registered on the website). Recomputed on every rotation rather
+// than cached, so the numbers stay live without a separate refresh mechanism.
+const STATUS_ROTATE_MS = 30_000
+async function statusTexts () {
+  const guildCount = client ? client.guilds.cache.size : 0
+  let userCount = 0
+  try {
+    // Lazy-required like the GuildBanAdd handler above — avoids a require() cycle with db/index.js.
+    const { Device } = require('../db')
+    userCount = await Device.count({ where: { status: 'paired' }, distinct: true, col: 'userId' })
+  } catch (_) { /* DB not ready yet, or this call raced startup — just skip this rotation */ }
+  return [
+    `${guildCount} ${guildCount === 1 ? 'guild' : 'guilds'} connected`,
+    `${userCount} ${userCount === 1 ? 'person' : 'people'} using KitsuNexus`,
+  ]
+}
+async function rotateStatus () {
+  if (!client || !ready || !client.user) return
+  const texts = await statusTexts()
+  const text = texts[statusIndex % texts.length]
+  statusIndex = (statusIndex + 1) % texts.length
+  try { client.user.setActivity(text, { type: ActivityType.Watching }) } catch (_) {}
+}
+function startStatusRotation () {
+  clearInterval(statusTimer)
+  rotateStatus()
+  statusTimer = setInterval(rotateStatus, STATUS_ROTATE_MS)
+}
+function stopStatusRotation () {
+  clearInterval(statusTimer)
+  statusTimer = null
+}
+
 async function start () {
   if (!config.discordBotToken) throw new Error('DISCORD_BOT_TOKEN not set — Discord bot disabled')
   // A retried attempt (startWithRetry) leaves the previous failed client instance and its
   // listeners/socket dangling otherwise.
   if (client) { try { client.destroy() } catch (_) {} }
+  stopStatusRotation()
   ready = false
   client = new Client({
     // GuildModeration is what actually delivers GuildBanAdd over the gateway — without it the
     // event below silently never fires, no error, nothing to notice until someone asks "why
     // didn't banning them on Discord also erase their KitsuNexus data?".
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildModeration],
-    presence: { status: 'invisible', activities: [] }
+    // 'invisible' here (ported as-is from NekoSuneAPPS/server) made the bot show offline in
+    // every guild it's in — fine for a background integration nobody's meant to notice, but not
+    // for the official guild where members should be able to see it's actually running.
+    presence: { status: 'online', activities: [{ name: 'starting up…', type: ActivityType.Watching }] }
   })
   client.once(Events.ClientReady, () => {
     ready = true
@@ -64,6 +105,7 @@ async function start () {
     // Retroactive sweep, e.g. after this whitelist was added to an
     // already-running bot, or if the authorized-guilds data volume was lost.
     for (const guild of client.guilds.cache.values()) enforceWhitelist(guild)
+    startStatusRotation()
   })
   // Fires the moment the bot is added to any guild, authorized or not —
   // delayed so /oauth2/discord/authorize-bot's callback has a chance to win.
@@ -120,6 +162,10 @@ async function startWithRetry () {
 }
 
 function isReady () { return ready }
+// Whether the bot is CURRENTLY sitting in this guild right now — different from "authorized"
+// (authorizedGuilds.isAuthorized), which just means it's allowed to be; the bot could've been
+// kicked, or the guild deleted, without that whitelist entry ever being cleaned up.
+function isInGuild (guildId) { return !!(client && client.guilds.cache.has(guildId)) }
 function getLastError () { return lastError }
 
 // Used by /settings/discord's "Remove" action: revoking a guild in
@@ -244,4 +290,4 @@ async function banFromOfficialGuild (discordUserId, reason) {
   await guild.members.ban(discordUserId, { reason: reason || 'Banned from KitsuNexus' })
 }
 
-module.exports = { start, startWithRetry, isReady, getLastError, getUserVoiceState, getChannelRoster, setMute, setDeaf, leaveGuild, hasManagePermission, setMemberRankRole, banFromOfficialGuild }
+module.exports = { start, startWithRetry, isReady, isInGuild, getLastError, getUserVoiceState, getChannelRoster, setMute, setDeaf, leaveGuild, hasManagePermission, setMemberRankRole, banFromOfficialGuild }

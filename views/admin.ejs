@@ -1,122 +1,229 @@
-<section class="dash">
-  <h1 style="font-size:1.6rem;margin:0 0 4px">🛡 Admin</h1>
-  <p class="muted" style="margin:0 0 24px">Server-wide overview — visible to owners/admins only.</p>
+<div class="shell">
+  <nav class="shell-sidebar" id="shellNav">
+    <button class="shell-nav-btn" data-panel="overview"><span class="ico">📈</span> Overview</button>
+    <button class="shell-nav-btn" data-panel="users"><span class="ico">👥</span> Users</button>
+    <button class="shell-nav-btn" data-panel="discord"><span class="ico">💜</span> Discord</button>
+    <button class="shell-nav-btn" data-panel="leaderboard"><span class="ico">🏅</span> Leaderboard</button>
+    <button class="shell-nav-btn" data-panel="banned"><span class="ico">🚫</span> Banned</button>
+    <button class="shell-nav-btn" data-panel="apikeys"><span class="ico">🔑</span> API keys</button>
+  </nav>
 
-  <div class="dash-grid">
-    <div class="feature-card">
-      <h3>📈 Totals</h3>
-      <div class="stat-row"><span>Users</span><b><%= totals.users %></b></div>
-      <div class="stat-row"><span>Devices</span><b><%= totals.devices %></b></div>
-      <div class="stat-row"><span>Favorites</span><b><%= totals.favorites %></b></div>
-    </div>
-
-    <div class="feature-card">
-      <h3>🖥 Server</h3>
-      <div class="stat-row"><span>Uptime</span><b><%= Math.floor(server.uptimeSeconds / 3600) %>h <%= Math.floor((server.uptimeSeconds % 3600) / 60) %>m</b></div>
-      <div class="stat-row"><span>Node</span><b><%= server.nodeVersion %></b></div>
-      <div class="stat-row"><span>Database size</span><b><%= (server.dbSizeBytes / 1024).toFixed(1) %> KB</b></div>
-      <div class="stat-row"><span>Site URL</span><b style="font-size:.78rem"><%= server.siteUrl %></b></div>
-    </div>
-
-    <div class="feature-card">
-      <h3>💜 Discord bot</h3>
-      <div class="stat-row"><span>Configured</span><b><%= discord.configured ? 'Yes' : 'No' %></b></div>
-      <div class="stat-row"><span>Gateway</span><b><%= discord.botReady ? '🟢 Connected' : '⚪ Offline' %></b></div>
-      <div class="stat-row"><span>Authorized guilds</span><b><%= discord.authorizedGuilds %></b></div>
-      <% if (!discord.botReady && discord.lastError) { %>
-        <p class="muted" style="font-size:.72rem;margin:8px 0 0;line-height:1.5;word-break:break-word">⚠ <%= discord.lastError %></p>
-      <% } %>
-    </div>
-  </div>
-
-  <h2 style="font-size:1.1rem;margin:28px 0 10px">👥 Users</h2>
-  <div class="device-list">
-    <% users.forEach(u => { %>
-      <div class="device-row">
-        <div>
-          <b><%= u.displayName || u.email || '(stub)' %></b>
-          <span class="muted" style="font-size:.78rem">
-            <%= u.role %><% if (u.isStub) { %> · unclaimed stub<% } %>
-            <% if (u.email) { %> · <%= u.email %><% } %>
-            · <%= u.deviceCount %> device(s) · <%= u.favoriteCount %> favorite(s)
-          </span>
+  <div class="shell-content">
+    <section class="shell-panel" data-panel="overview">
+      <h1 style="font-size:1.6rem;margin:0 0 4px">🛡 Admin</h1>
+      <p class="muted" style="margin:0 0 24px">Server-wide overview — visible to owners/admins only.</p>
+      <div class="dash-grid">
+        <div class="feature-card">
+          <h3>📈 Totals</h3>
+          <div class="stat-row"><span>Users</span><b><%= totals.users %></b></div>
+          <div class="stat-row"><span>Devices</span><b><%= totals.devices %></b></div>
+          <div class="stat-row"><span>Favorites</span><b><%= totals.favorites %></b></div>
+          <div class="stat-row"><span>World visits synced</span><b><%= totals.worldVisits %></b></div>
+          <div class="stat-row"><span>Share links</span><b><%= totals.shareLinks %></b></div>
+          <div class="stat-row"><span>Cached worlds/avatars</span><b><%= totals.cachedEntities %></b></div>
+          <div class="stat-row"><span>Ranked users</span><b><%= totals.rankedUsers %></b></div>
         </div>
-        <div class="row" style="align-items:center;gap:10px">
-          <span class="muted" style="font-size:.75rem"><%= new Date(u.createdAt).toLocaleDateString() %></span>
-          <% if (!u.isStub && u.role !== 'owner') { %>
-            <form method="post" action="/admin/users/<%= u.id %>/ban" class="ban-form">
-              <input type="hidden" name="reason" class="ban-reason" />
-              <button class="btn danger" type="submit" style="padding:6px 14px;font-size:.8rem">Ban &amp; erase</button>
-            </form>
+
+        <div class="feature-card">
+          <h3>🖥 Server</h3>
+          <div class="stat-row"><span>Uptime</span><b><%= Math.floor(server.uptimeSeconds / 3600) %>h <%= Math.floor((server.uptimeSeconds % 3600) / 60) %>m</b></div>
+          <div class="stat-row"><span>Node</span><b><%= server.nodeVersion %></b></div>
+          <div class="stat-row"><span>Database size</span><b><%= (server.dbSizeBytes / 1024).toFixed(1) %> KB</b></div>
+          <div class="stat-row"><span>Site URL</span><b style="font-size:.78rem"><%= server.siteUrl %></b></div>
+        </div>
+
+        <div class="feature-card">
+          <h3>💜 Discord bot</h3>
+          <div class="stat-row"><span>Configured</span><b><%= discord.configured ? 'Yes' : 'No' %></b></div>
+          <div class="stat-row"><span>Gateway</span><b><%= discord.botReady ? '🟢 Connected' : '⚪ Offline' %></b></div>
+          <div class="stat-row"><span>Authorized guilds</span><b><%= guilds.length %></b></div>
+          <% if (!discord.botReady && discord.lastError) { %>
+            <p class="muted" style="font-size:.72rem;margin:8px 0 0;line-height:1.5;word-break:break-word">⚠ <%= discord.lastError %></p>
           <% } %>
         </div>
       </div>
-    <% }) %>
+    </section>
+
+    <section class="shell-panel" data-panel="users">
+      <h1 style="font-size:1.4rem;margin:0 0 16px">👥 Users</h1>
+      <div class="device-list">
+        <% users.forEach(u => { %>
+          <div class="device-row">
+            <div>
+              <b><%= u.displayName || u.email || '(stub)' %></b>
+              <span class="muted" style="font-size:.78rem">
+                <%= u.role %><% if (u.isStub) { %> · unclaimed stub<% } %>
+                <% if (u.email) { %> · <%= u.email %><% } %>
+                · <%= u.deviceCount %> device(s) · <%= u.favoriteCount %> favorite(s)
+              </span>
+            </div>
+            <div class="row" style="align-items:center;gap:10px">
+              <span class="muted" style="font-size:.75rem"><%= new Date(u.createdAt).toLocaleDateString() %></span>
+              <% if (!u.isStub) { %>
+                <form method="post" action="/admin/users/<%= u.id %>/set-role" class="row" style="gap:4px">
+                  <select name="role" onchange="this.form.requestSubmit()" style="font-size:.75rem;padding:4px 6px;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:6px">
+                    <option value="user" <%= u.role === 'user' ? 'selected' : '' %>>user</option>
+                    <option value="admin" <%= u.role === 'admin' ? 'selected' : '' %>>admin</option>
+                    <option value="owner" <%= u.role === 'owner' ? 'selected' : '' %>>owner</option>
+                  </select>
+                </form>
+              <% } %>
+              <% if (!u.isStub && u.role !== 'owner') { %>
+                <form method="post" action="/admin/users/<%= u.id %>/delete" onsubmit="return confirm('Delete this account and all its data? This does NOT ban them — they can register again. This cannot be undone.')">
+                  <button class="btn ghost" type="submit" style="padding:6px 14px;font-size:.8rem">Delete</button>
+                </form>
+                <form method="post" action="/admin/users/<%= u.id %>/ban" class="ban-form">
+                  <input type="hidden" name="reason" class="ban-reason" />
+                  <button class="btn danger" type="submit" style="padding:6px 14px;font-size:.8rem">Ban &amp; erase</button>
+                </form>
+              <% } %>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+      <p class="muted" style="font-size:.75rem;margin-top:10px"><b>Delete</b> just removes the account — use it for test/unwanted accounts. <b>Ban &amp; erase</b> is for harassment/abuse: same erasure, plus the email/Discord id is permanently blocked from registering again.</p>
+      <script>
+        document.querySelectorAll('.ban-form').forEach(f => f.addEventListener('submit', e => {
+          const reason = prompt('Reason for permanent ban (required — this also erases their account data):')
+          if (!reason) { e.preventDefault(); return }
+          if (!confirm('Permanently ban this account and erase all its data? This cannot be undone.')) { e.preventDefault(); return }
+          f.querySelector('.ban-reason').value = reason
+        }))
+      </script>
+    </section>
+
+    <section class="shell-panel" data-panel="discord">
+      <h1 style="font-size:1.4rem;margin:0 0 16px">💜 Discord bot &amp; guilds</h1>
+      <% if (!guilds.length) { %>
+        <p class="muted">No guilds authorized yet — a user links Discord and runs "Add bot to another server" from Settings ▸ Discord.</p>
+      <% } else { %>
+        <div class="device-list">
+          <% guilds.forEach(g => { %>
+            <div class="device-row">
+              <div>
+                <b><%= g.id %></b><% if (g.isOfficial) { %> <span class="badge live" style="margin:0">Official</span><% } %>
+                <span class="muted" style="font-size:.78rem;display:block">
+                  <%= g.inBot ? '🟢 Bot present' : '⚪ Bot not currently in guild' %>
+                  · authorized <%= new Date(g.authorizedAt).toLocaleDateString() %>
+                  <% if (g.rankRoles.length) { %> · <%= g.rankRoles.length %> rank role(s) mapped<% } %>
+                </span>
+              </div>
+              <% if (!g.isOfficial) { %>
+                <form method="post" action="/admin/guilds/<%= g.id %>/revoke" onsubmit="return confirm('Remove the bot from this guild? Its rank-role mapping stays configured in case it rejoins.')">
+                  <button class="btn danger" type="submit" style="padding:6px 14px;font-size:.8rem">Remove bot</button>
+                </form>
+              <% } %>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+      <p class="muted" style="font-size:.78rem;margin-top:14px">
+        The official guild's rank-role mapping is configured via <code>DISCORD_RANK_ROLES</code>
+        in <code>.env</code>, not here. Other guilds' admins configure their own mapping from
+        their own Settings ▸ Discord page.
+      </p>
+    </section>
+
+    <section class="shell-panel" data-panel="leaderboard">
+      <h1 style="font-size:1.4rem;margin:0 0 16px">🏅 Community Rank leaderboard</h1>
+      <% if (!leaderboard.length) { %>
+        <p class="muted">No one has synced a Community Rank to this server yet.</p>
+      <% } else { %>
+        <div class="device-list">
+          <% leaderboard.forEach(e => { %>
+            <div class="device-row">
+              <span>#<%= e.position %> <b><%= e.displayName %></b></span>
+              <span class="muted"><%= e.rankKey.replace('_', ' ') %> · <%= e.finalScore %></span>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+    </section>
+
+    <section class="shell-panel" data-panel="banned">
+      <h1 style="font-size:1.4rem;margin:0 0 16px">🚫 Banned identities</h1>
+      <% if (!bannedIdentities.length) { %>
+        <p class="muted">No permanent bans on record.</p>
+      <% } else { %>
+        <div class="device-list">
+          <% bannedIdentities.forEach(b => { %>
+            <div class="device-row">
+              <div>
+                <b><%= b.email || b.discordId || '(unknown)' %></b>
+                <span class="muted" style="font-size:.78rem">
+                  <% if (b.email && b.discordId) { %>email + Discord<% } %>
+                  <% if (b.reason) { %> · <%= b.reason %><% } %>
+                </span>
+              </div>
+              <span class="muted" style="font-size:.75rem"><%= new Date(b.createdAt).toLocaleDateString() %></span>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+    </section>
+
+    <section class="shell-panel" data-panel="apikeys">
+      <h1 style="font-size:1.4rem;margin:0 0 16px">🔑 API keys</h1>
+      <p class="muted" style="font-size:.85rem;margin:-6px 0 14px">
+        For pulling <code>GET /api/worlds/feed</code> into an external service you own — e.g. an
+        avatar/world search site — as plain JSON of worlds you've favorited or visited. Not a
+        public API: anyone holding a key can read your worlds feed, so keep it like a password.
+      </p>
+
+      <% if (newApiKey) { %>
+        <div class="pair-result ok" style="max-width:none;margin-bottom:14px">
+          New key created — copy it now, it won't be shown again:<br>
+          <code style="user-select:all;word-break:break-all"><%= newApiKey %></code>
+        </div>
+      <% } %>
+
+      <% if (!apiKeys.length) { %>
+        <p class="muted">No API keys yet.</p>
+      <% } else { %>
+        <div class="device-list">
+          <% apiKeys.forEach(k => { %>
+            <div class="device-row">
+              <div>
+                <b><%= k.label %></b>
+                <span class="muted" style="font-size:.78rem">
+                  Created <%= new Date(k.createdAt).toLocaleDateString() %>
+                  <% if (k.lastUsedAt) { %> · last used <%= new Date(k.lastUsedAt).toLocaleString() %><% } else { %> · never used<% } %>
+                </span>
+              </div>
+              <form method="post" action="/admin/api-keys/<%= k.id %>/revoke" onsubmit="return confirm('Revoke this API key? Anything using it will stop working immediately.')">
+                <button class="btn danger" type="submit" style="padding:6px 14px;font-size:.8rem">Revoke</button>
+              </form>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <form method="post" action="/admin/api-keys" class="row" style="margin-top:12px">
+        <input type="text" name="label" placeholder="Label (e.g. Avatar Search Site)" style="max-width:260px" />
+        <button class="btn primary" type="submit">Generate new key</button>
+      </form>
+    </section>
   </div>
-  <script>
-    document.querySelectorAll('.ban-form').forEach(f => f.addEventListener('submit', e => {
-      const reason = prompt('Reason for permanent ban (required — this also erases their account data):')
-      if (!reason) { e.preventDefault(); return }
-      if (!confirm('Permanently ban this account and erase all its data? This cannot be undone.')) { e.preventDefault(); return }
-      f.querySelector('.ban-reason').value = reason
-    }))
-  </script>
+</div>
 
-  <% if (bannedIdentities.length) { %>
-    <h2 style="font-size:1.1rem;margin:28px 0 10px">🚫 Banned identities</h2>
-    <div class="device-list">
-      <% bannedIdentities.forEach(b => { %>
-        <div class="device-row">
-          <div>
-            <b><%= b.email || b.discordId || '(unknown)' %></b>
-            <span class="muted" style="font-size:.78rem">
-              <% if (b.email && b.discordId) { %>email + Discord<% } %>
-              <% if (b.reason) { %> · <%= b.reason %><% } %>
-            </span>
-          </div>
-          <span class="muted" style="font-size:.75rem"><%= new Date(b.createdAt).toLocaleDateString() %></span>
-        </div>
-      <% }) %>
-    </div>
-  <% } %>
-
-  <h2 style="font-size:1.1rem;margin:28px 0 10px">🔑 API keys</h2>
-  <p class="muted" style="font-size:.85rem;margin:-6px 0 14px">
-    For pulling <code>GET /api/worlds/feed</code> into an external service you own — e.g. an
-    avatar/world search site — as plain JSON of worlds you've favorited or visited. Not a
-    public API: anyone holding a key can read your worlds feed, so keep it like a password.
-  </p>
-
-  <% if (newApiKey) { %>
-    <div class="pair-result ok" style="max-width:none;margin-bottom:14px">
-      New key created — copy it now, it won't be shown again:<br>
-      <code style="user-select:all;word-break:break-all"><%= newApiKey %></code>
-    </div>
-  <% } %>
-
-  <% if (!apiKeys.length) { %>
-    <p class="muted">No API keys yet.</p>
-  <% } else { %>
-    <div class="device-list">
-      <% apiKeys.forEach(k => { %>
-        <div class="device-row">
-          <div>
-            <b><%= k.label %></b>
-            <span class="muted" style="font-size:.78rem">
-              Created <%= new Date(k.createdAt).toLocaleDateString() %>
-              <% if (k.lastUsedAt) { %> · last used <%= new Date(k.lastUsedAt).toLocaleString() %><% } else { %> · never used<% } %>
-            </span>
-          </div>
-          <form method="post" action="/admin/api-keys/<%= k.id %>/revoke" onsubmit="return confirm('Revoke this API key? Anything using it will stop working immediately.')">
-            <button class="btn danger" type="submit" style="padding:6px 14px;font-size:.8rem">Revoke</button>
-          </form>
-        </div>
-      <% }) %>
-    </div>
-  <% } %>
-
-  <form method="post" action="/admin/api-keys" class="row" style="margin-top:12px">
-    <input type="text" name="label" placeholder="Label (e.g. Avatar Search Site)" style="max-width:260px" />
-    <button class="btn primary" type="submit">Generate new key</button>
-  </form>
-</section>
+<script>
+  (function () {
+    const nav = document.getElementById('shellNav')
+    const buttons = [...nav.querySelectorAll('.shell-nav-btn')]
+    const panels = [...document.querySelectorAll('.shell-panel')]
+    function show (name) {
+      const valid = buttons.some(b => b.dataset.panel === name)
+      const target = valid ? name : (buttons[0] && buttons[0].dataset.panel)
+      buttons.forEach(b => b.classList.toggle('active', b.dataset.panel === target))
+      panels.forEach(p => p.classList.toggle('active', p.dataset.panel === target))
+    }
+    nav.addEventListener('click', e => {
+      const b = e.target.closest('.shell-nav-btn'); if (!b) return
+      history.replaceState(null, '', '#' + b.dataset.panel)
+      show(b.dataset.panel)
+    })
+    // A newly-created API key (form posts back to this same page) should land back on that
+    // panel, not silently reset to Overview.
+    show(<%- JSON.stringify(newApiKey ? 'apikeys' : null) %> || (location.hash || '').replace('#', ''))
+  })()
+</script>

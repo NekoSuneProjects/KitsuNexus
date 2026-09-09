@@ -62,4 +62,10 @@ module.exports = {
   // server's own SITE_URL + the fixed callback path below, but can be overridden if the two differ.
   zitadelRedirectUri: process.env.ZITADEL_REDIRECT_URI || `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/+$/, '')}/auth/zitadel/callback`,
   zitadelScopes: process.env.ZITADEL_SCOPES || 'openid profile email',
+  // Turns OFF local email/password entirely — /setup, /register, /login all redirect straight
+  // to ZITADEL. The first person to ever log in via SSO still becomes the owner automatically
+  // (routes/zitadelAuth.js already does this when no owner exists yet), so there's no separate
+  // "create the owner" step to worry about losing. Only takes effect when zitadelEnabled is
+  // also true — meaningless (and ignored) otherwise, since there'd be nowhere to redirect to.
+  zitadelOnly: process.env.ZITADEL_ONLY === 'true',
 }

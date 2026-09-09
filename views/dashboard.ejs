@@ -1,56 +1,258 @@
-<section class="dash">
-  <h1 style="font-size:1.6rem;margin:0 0 4px">📊 Dashboard</h1>
-  <p class="muted" style="margin:0 0 24px">Signed in as <b><%= user.displayName || user.email %></b> (<%= user.role %>)</p>
+<div class="shell">
+  <nav class="shell-sidebar" id="shellNav">
+    <button class="shell-nav-btn" data-panel="overview"><span class="ico">📊</span> Overview</button>
+    <button class="shell-nav-btn" data-panel="favorites"><span class="ico">⭐</span> Favorites</button>
+    <button class="shell-nav-btn" data-panel="devices"><span class="ico">🔗</span> Devices</button>
+    <button class="shell-nav-btn" data-panel="discord"><span class="ico">💜</span> Discord</button>
+    <button class="shell-nav-btn" data-panel="overlay"><span class="ico">🖥</span> Overlay</button>
+    <button class="shell-nav-btn" data-panel="share"><span class="ico">🔀</span> Share</button>
+    <button class="shell-nav-btn" data-panel="rank"><span class="ico">🏅</span> Community Rank</button>
+    <button class="shell-nav-btn" data-panel="danger"><span class="ico">⚠</span> Danger zone</button>
+  </nav>
 
-  <div class="dash-grid">
-    <div class="feature-card">
-      <h3>⭐ Favorites</h3>
-      <div class="stat-row"><span>Total</span><b><%= favoriteCount %></b></div>
-      <div class="stat-row"><span>👤 Friends</span><b><%= byType.friend %></b></div>
-      <div class="stat-row"><span>🌐 Worlds</span><b><%= byType.world %></b></div>
-      <div class="stat-row"><span>🧍 Avatars</span><b><%= byType.avatar %></b></div>
-      <% if (byCollection.length) { %>
-        <div class="um-sec" style="margin-top:10px">Collections</div>
-        <% byCollection.forEach(([name, count]) => { %>
-          <div class="stat-row"><span><%= name %></span><b><%= count %></b></div>
-        <% }) %>
-      <% } %>
-    </div>
-
-    <div class="feature-card">
-      <h3>💜 Discord</h3>
-      <% if (discordLink) { %>
-        <div class="stat-row"><span>Linked as</span><b><%= discordLink.discordUsername || discordLink.discordId %></b></div>
-      <% } else { %>
-        <p class="muted" style="font-size:.85rem;margin:0">Not linked.</p>
-      <% } %>
-      <div class="row" style="margin-top:8px"><a class="btn ghost" href="/settings/discord" style="padding:6px 14px;font-size:.8rem">Manage</a></div>
-    </div>
-  </div>
-
-  <h2 style="font-size:1.1rem;margin:28px 0 10px">🔗 Connected devices</h2>
-  <% if (!devices.length) { %>
-    <p class="muted">No devices paired yet — go to Settings ▸ ☁ Cloud Sync in the app and connect to this server.</p>
-  <% } else { %>
-    <div class="device-list">
-      <% devices.forEach(d => { %>
-        <div class="device-row">
-          <div>
-            <b><%= d.name %></b>
-            <span class="muted" style="font-size:.78rem">
-              <%= d.status === 'paired' ? '🟢 Connected' : '🟡 Pending' %>
-              <% if (d.lastSeenAt) { %> · last seen <%= new Date(d.lastSeenAt).toLocaleString() %><% } %>
-            </span>
-          </div>
-          <form method="post" action="/dashboard/devices/<%= d.id %>/revoke" onsubmit="return confirm('Revoke access for &quot;' + <%- JSON.stringify(d.name) %> + '&quot;? It will need to be paired again.')">
-            <button class="btn danger" type="submit" style="padding:6px 14px;font-size:.8rem">Revoke</button>
-          </form>
+  <div class="shell-content">
+    <section class="shell-panel" data-panel="overview">
+      <h1 style="font-size:1.6rem;margin:0 0 4px">📊 Overview</h1>
+      <p class="muted" style="margin:0 0 24px">Signed in as <b><%= user.displayName || user.email %></b> (<%= user.role %>)</p>
+      <div class="dash-grid">
+        <div class="feature-card">
+          <h3>⭐ Favorites</h3>
+          <div class="stat-row"><span>Total</span><b><%= favoriteCount %></b></div>
         </div>
-      <% }) %>
-    </div>
-  <% } %>
+        <div class="feature-card">
+          <h3>🔗 Devices</h3>
+          <div class="stat-row"><span>Paired</span><b><%= devices.filter(d => d.status === 'paired').length %></b></div>
+        </div>
+        <div class="feature-card">
+          <h3>🌐 World history</h3>
+          <div class="stat-row"><span>Visits synced</span><b><%= worldVisitCount %></b></div>
+        </div>
+        <div class="feature-card">
+          <h3>🔀 Share links</h3>
+          <div class="stat-row"><span>Created</span><b><%= shareLinks.length %></b></div>
+        </div>
+      </div>
+    </section>
 
-  <h2 style="font-size:1.1rem;margin:28px 0 10px">⚠ Danger zone</h2>
-  <p class="muted" style="font-size:.85rem;margin:0 0 8px">Permanently delete your account and all data tied to it. See the <a href="/privacy">Privacy Policy</a>.</p>
-  <a class="btn danger" href="/dashboard/delete-account" style="padding:6px 14px;font-size:.8rem">Delete my account</a>
-</section>
+    <section class="shell-panel" data-panel="favorites">
+      <h1 style="font-size:1.4rem;margin:0 0 16px">⭐ Favorites</h1>
+      <div class="dash-grid" style="margin-bottom:20px">
+        <div class="feature-card">
+          <h3>By type</h3>
+          <div class="stat-row"><span>Total</span><b><%= favoriteCount %></b></div>
+          <div class="stat-row"><span>👤 Friends</span><b><%= byType.friend %></b></div>
+          <div class="stat-row"><span>🌐 Worlds</span><b><%= byType.world %></b></div>
+          <div class="stat-row"><span>🧍 Avatars</span><b><%= byType.avatar %></b></div>
+          <div class="stat-row"><span>👥 Groups</span><b><%= byType.group %></b></div>
+        </div>
+        <% if (byCollection.length) { %>
+          <div class="feature-card">
+            <h3>By collection</h3>
+            <% byCollection.forEach(([name, count]) => { %>
+              <div class="stat-row"><span><%= name %></span><b><%= count %></b></div>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+
+      <div class="row" style="gap:8px;margin-bottom:14px" id="favTypeTabs">
+        <% ['friend', 'world', 'avatar', 'group'].forEach(t => { %>
+          <a class="btn <%= favType === t ? 'primary' : 'ghost' %>" style="padding:6px 14px;font-size:.8rem" href="/dashboard?favType=<%= t %>&favPage=1#favorites"><%= t.charAt(0).toUpperCase() + t.slice(1) %>s (<%= byType[t] %>)</a>
+        <% }) %>
+      </div>
+
+      <% if (!favoritePage.length) { %>
+        <p class="muted">No <%= favType %> favorites yet.</p>
+      <% } else { %>
+        <div class="device-list">
+          <% favoritePage.forEach(f => { %>
+            <div class="device-row">
+              <div class="row" style="align-items:center;gap:10px">
+                <% if (f.imageUrl) { %><img src="<%= f.imageUrl %>" referrerpolicy="no-referrer" style="width:36px;height:36px;object-fit:cover;border-radius:8px" /><% } %>
+                <div>
+                  <b><%= f.displayName || f.vrchatId %></b>
+                  <span class="muted" style="font-size:.78rem;display:block"><%= f.collection %><% if (f.note) { %> · <%= f.note %><% } %></span>
+                </div>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+        <% if (favTotalPages > 1) { %>
+          <div class="row" style="gap:8px;margin-top:14px;align-items:center">
+            <% if (favPage > 1) { %><a class="btn ghost" style="padding:6px 14px;font-size:.8rem" href="/dashboard?favType=<%= favType %>&favPage=<%= favPage - 1 %>#favorites">← Prev</a><% } %>
+            <span class="muted" style="font-size:.8rem">Page <%= favPage %> of <%= favTotalPages %></span>
+            <% if (favPage < favTotalPages) { %><a class="btn ghost" style="padding:6px 14px;font-size:.8rem" href="/dashboard?favType=<%= favType %>&favPage=<%= favPage + 1 %>#favorites">Next →</a><% } %>
+          </div>
+        <% } %>
+      <% } %>
+    </section>
+
+    <section class="shell-panel" data-panel="devices">
+      <h1 style="font-size:1.4rem;margin:0 0 16px">🔗 Connected devices</h1>
+      <% if (!devices.length) { %>
+        <p class="muted">No devices paired yet — go to Settings ▸ ☁ Cloud Sync in the app and connect to this server.</p>
+      <% } else { %>
+        <div class="device-list">
+          <% devices.forEach(d => { %>
+            <div class="device-row">
+              <div>
+                <b><%= d.name %></b>
+                <span class="muted" style="font-size:.78rem">
+                  <%= d.status === 'paired' ? '🟢 Connected' : '🟡 Pending' %>
+                  <% if (d.lastSeenAt) { %> · last seen <%= new Date(d.lastSeenAt).toLocaleString() %><% } %>
+                </span>
+              </div>
+              <form method="post" action="/dashboard/devices/<%= d.id %>/revoke" onsubmit="return confirm('Revoke access for &quot;' + <%- JSON.stringify(d.name) %> + '&quot;? It will need to be paired again.')">
+                <button class="btn danger" type="submit" style="padding:6px 14px;font-size:.8rem">Revoke</button>
+              </form>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+    </section>
+
+    <section class="shell-panel" data-panel="discord">
+      <h1 style="font-size:1.4rem;margin:0 0 16px">💜 Discord</h1>
+      <div class="feature-card" style="max-width:420px">
+        <% if (discordLink) { %>
+          <h3>🟢 Linked as <%= discordLink.discordUsername || discordLink.discordId %></h3>
+        <% } else { %>
+          <h3>Not linked</h3>
+          <p class="muted" style="font-size:.85rem;margin:0">Link Discord for Community Rank role sync and voice controls.</p>
+        <% } %>
+        <a class="btn ghost" href="/settings/discord" style="align-self:flex-start;margin-top:8px">Manage</a>
+      </div>
+    </section>
+
+    <section class="shell-panel" data-panel="overlay">
+      <h1 style="font-size:1.4rem;margin:0 0 16px">🖥 OBS Overlay</h1>
+      <% if (!overlayUrl) { %>
+        <p class="muted">Not available yet — restart the server once to generate your overlay id.</p>
+      <% } else { %>
+        <p class="muted" style="font-size:.85rem">Add this as an OBS Browser Source. The KitsuNexus app pushes your "now playing" info to it automatically while it's running.</p>
+        <div class="row"><input type="text" readonly value="<%= overlayUrl %>" style="flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text)" id="overlayUrlBox" /><button class="btn ghost" id="overlayCopyBtn">Copy</button></div>
+
+        <h3 style="font-size:.95rem;margin:20px 0 10px">Appearance</h3>
+        <form method="post" action="/dashboard/overlay-settings" style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+          <div>
+            <label style="font-size:.78rem;display:block;margin-bottom:4px">Style</label>
+            <select name="style" style="background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px">
+              <% ['default', 'bash', 'discord', 'macos', 'windows', 'soundcloud', 'youtube'].forEach(s => { %>
+                <option value="<%= s %>" <%= overlayStyle === s ? 'selected' : '' %>><%= s %></option>
+              <% }) %>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:.78rem;display:block;margin-bottom:4px">Box background</label>
+            <select name="boxBg" style="background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px">
+              <% ['solid', 'thin', 'hidden'].forEach(b => { %>
+                <option value="<%= b %>" <%= overlayBoxBg === b ? 'selected' : '' %>><%= b %></option>
+              <% }) %>
+            </select>
+          </div>
+          <button class="btn primary" type="submit" style="padding:8px 18px;font-size:.85rem">Save</button>
+        </form>
+      <% } %>
+    </section>
+
+    <section class="shell-panel" data-panel="share">
+      <h1 style="font-size:1.4rem;margin:0 0 16px">🔀 Share</h1>
+      <p class="muted" style="font-size:.85rem;margin:0 0 16px">
+        Turn a favorited world or avatar into a private link — anyone with the URL can view it
+        and, from their own paired device, save a copy into their own Favorites. The link itself
+        is a long, unguessable code (not literal encryption, but nobody can find or reach it
+        without the URL you give them), and never exposes anything about your account.
+      </p>
+
+      <h3 style="font-size:.95rem;margin:0 0 10px">Your share links</h3>
+      <% if (!shareLinks.length) { %>
+        <p class="muted">None yet — create one below.</p>
+      <% } else { %>
+        <div class="device-list" style="margin-bottom:24px">
+          <% shareLinks.forEach(s => { %>
+            <div class="device-row">
+              <div>
+                <b><%= s.type %></b> <span class="muted" style="font-size:.78rem"><%= s.vrchatId %></span>
+                <span class="muted" style="font-size:.78rem;display:block;word-break:break-all"><%= s.url %><% if (s.revoked) { %> · revoked<% } %></span>
+              </div>
+              <% if (!s.revoked) { %>
+                <form method="post" action="/dashboard/share/<%= s.id %>/revoke" onsubmit="return confirm('Revoke this share link? It will stop working immediately.')">
+                  <button class="btn danger" type="submit" style="padding:6px 14px;font-size:.8rem">Revoke</button>
+                </form>
+              <% } %>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <h3 style="font-size:.95rem;margin:0 0 10px">Create a new share link</h3>
+      <% if (!shareableFavorites.length) { %>
+        <p class="muted">Favorite a world or avatar first — only worlds/avatars can be shared.</p>
+      <% } else { %>
+        <div class="device-list">
+          <% shareableFavorites.forEach(f => { %>
+            <div class="device-row">
+              <div class="row" style="align-items:center;gap:10px">
+                <% if (f.imageUrl) { %><img src="<%= f.imageUrl %>" referrerpolicy="no-referrer" style="width:36px;height:36px;object-fit:cover;border-radius:8px" /><% } %>
+                <div>
+                  <b><%= f.displayName || f.vrchatId %></b>
+                  <span class="muted" style="font-size:.78rem;display:block"><%= f.type %></span>
+                </div>
+              </div>
+              <form method="post" action="/dashboard/share">
+                <input type="hidden" name="type" value="<%= f.type %>" />
+                <input type="hidden" name="vrchatId" value="<%= f.vrchatId %>" />
+                <button class="btn ghost" type="submit" style="padding:6px 14px;font-size:.8rem">Share</button>
+              </form>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+    </section>
+
+    <section class="shell-panel" data-panel="rank">
+      <h1 style="font-size:1.4rem;margin:0 0 16px">🏅 Community Rank</h1>
+      <% if (!rankScore) { %>
+        <p class="muted">No rank synced yet — enable Community Ranks in the app (Settings) and hit "Refresh my rank" once paired to this server.</p>
+      <% } else { %>
+        <div class="feature-card" style="max-width:360px">
+          <h3><%= rankScore.rankKey.replace('_', ' ') %></h3>
+          <div class="stat-row"><span>Score</span><b><%= rankScore.finalScore %> / 1000</b></div>
+          <div class="stat-row"><span>Last synced</span><b style="font-size:.78rem"><%= new Date(rankScore.updatedAt).toLocaleString() %></b></div>
+        </div>
+      <% } %>
+    </section>
+
+    <section class="shell-panel" data-panel="danger">
+      <h1 style="font-size:1.4rem;margin:0 0 16px">⚠ Danger zone</h1>
+      <p class="muted" style="font-size:.85rem;margin:0 0 8px">Permanently delete your account and all data tied to it. See the <a href="/privacy">Privacy Policy</a>.</p>
+      <a class="btn danger" href="/dashboard/delete-account" style="padding:6px 14px;font-size:.8rem">Delete my account</a>
+    </section>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const nav = document.getElementById('shellNav')
+    const buttons = [...nav.querySelectorAll('.shell-nav-btn')]
+    const panels = [...document.querySelectorAll('.shell-panel')]
+    function show (name) {
+      const valid = buttons.some(b => b.dataset.panel === name)
+      const target = valid ? name : (buttons[0] && buttons[0].dataset.panel)
+      buttons.forEach(b => b.classList.toggle('active', b.dataset.panel === target))
+      panels.forEach(p => p.classList.toggle('active', p.dataset.panel === target))
+    }
+    nav.addEventListener('click', e => {
+      const b = e.target.closest('.shell-nav-btn'); if (!b) return
+      history.replaceState(null, '', '#' + b.dataset.panel)
+      show(b.dataset.panel)
+    })
+    show((location.hash || '').replace('#', ''))
+    const copyBtn = document.getElementById('overlayCopyBtn')
+    if (copyBtn) copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(document.getElementById('overlayUrlBox').value)
+      copyBtn.textContent = 'Copied!'
+      setTimeout(() => { copyBtn.textContent = 'Copy' }, 1500)
+    })
+  })()
+</script>

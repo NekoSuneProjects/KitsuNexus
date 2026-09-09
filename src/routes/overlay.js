@@ -59,10 +59,10 @@ router.get('/overlay/:overlayId', asyncHandler(async (req, res) => {
   const user = await User.findOne({ where: { overlayId: req.params.overlayId } })
   if (!user) return res.status(404).send('Unknown overlay — check the URL from Settings ▸ Cloud Sync.')
   res.setHeader('Cache-Control', 'no-store')
-  res.type('html').send(createOverlayHtml(req.params.overlayId))
+  res.type('html').send(createOverlayHtml(req.params.overlayId, user.overlayStyle, user.overlayBoxBg))
 }))
 
-function createOverlayHtml (overlayId) {
+function createOverlayHtml (overlayId, defaultStyle, defaultBg) {
   return `<!doctype html>
 <html>
 <head>
@@ -155,13 +155,16 @@ function createOverlayHtml (overlayId) {
     const overlayId = ${JSON.stringify(overlayId)};
     const styles = ${JSON.stringify(overlayStyles)};
     const boxBgOptions = ${JSON.stringify(boxBackgrounds)};
+    const defaultStyle = ${JSON.stringify(overlayStyles.includes(defaultStyle) ? defaultStyle : 'default')};
+    const defaultBg = ${JSON.stringify(boxBackgrounds.includes(defaultBg) ? defaultBg : 'solid')};
     const root = document.getElementById('overlay-root');
     const params = new URLSearchParams(location.search);
 
-    // ?style=<name> and ?bg=solid|thin|hidden — set by the app when it shows you this URL,
-    // editable by hand too. No server-side "default style" setting anymore; it's all in the URL.
+    // ?style=<name> and ?bg=solid|thin|hidden override the saved default (Dashboard ▸ Overlay)
+    // for this one viewer — handy for e.g. a stream layout that wants a different look without
+    // changing your saved preference.
     function boxBgClass() {
-      const v = boxBgOptions.includes(params.get('bg')) ? params.get('bg') : 'solid';
+      const v = boxBgOptions.includes(params.get('bg')) ? params.get('bg') : defaultBg;
       return (v && v !== 'solid') ? ' bg-' + v : '';
     }
 
@@ -194,7 +197,7 @@ function createOverlayHtml (overlayId) {
     function getStyle(media) {
       const requested = params.get('style');
       if (styles.includes(requested)) return requested;
-      return styles.includes(media.overlayStyle) ? media.overlayStyle : 'default';
+      return styles.includes(media.overlayStyle) ? media.overlayStyle : defaultStyle;
     }
 
     function getArt(media) {

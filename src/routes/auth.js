@@ -11,8 +11,23 @@ const router = express.Router()
 async function ownerExists () { return !!(await User.findOne({ where: { role: 'owner' } })) }
 
 // Every auth page also offers ZITADEL SSO as an alternative when it's configured (see
-// routes/zitadelAuth.js) — this is additive, not a replacement for email/password.
+// routes/zitadelAuth.js) — this is additive, not a replacement for email/password, UNLESS
+// zitadelOnly is set, in which case local email/password is turned off entirely below.
 const withSso = extra => ({ zitadelEnabled: config.zitadelEnabled, ...extra })
+
+// zitadelOnly redirects every local auth route straight to SSO — /setup's "create the owner"
+// step becomes unnecessary too, since the first ZITADEL login auto-becomes owner
+// (routes/zitadelAuth.js). Only takes effect once ZITADEL is actually usable (config.zitadelOnly
+// already implies zitadelEnabled, checked in config.js's own comment, but re-checked here since
+// a half-configured ZITADEL — enabled but missing endpoint/client id — would otherwise redirect
+// straight into a 503 with no way back in).
+function requireLocalAuthAllowed (req, res, next) {
+  if (config.zitadelOnly && config.zitadelEnabled) return res.redirect('/auth/zitadel/login')
+  next()
+}
+// Scoped to just the local-auth routes below — NOT /logout, which must always work regardless
+// of auth mode.
+router.use(['/setup', '/register', '/login'], requireLocalAuthAllowed)
 
 // First-run wizard — creates the single Owner account. Locked once an owner exists; public
 // registration (role: 'user') is a separate route below.
