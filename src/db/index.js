@@ -9,25 +9,53 @@ const ApiKey = require('./models/ApiKey')
 const STUB_USER_ID = '00000000-0000-0000-0000-000000000001'
 
 async function init () {
-  // alter:true while the schema is still actively changing (no migrations yet) — fine for a
-  // single self-hosted instance, but swap to real migrations before this handles other people's data.
+  // No formal migration framework yet (fine for a single self-hosted instance) — but we do NOT
+  // use sync({ alter: true }): on SQLite, "alter" a column by rebuilding the whole table via
+  // CREATE + INSERT SELECT + DROP + RENAME, which both risks data loss if it's interrupted
+  // partway and fails outright once another table (Device, Favorite, DiscordLink, WorldVisit,
+  // ApiKey) holds a foreign key into it, since SQLite won't DROP a table something still
+  // references. Plain sync() only CREATEs tables that don't exist yet — it never touches an
+  // existing table — and addMissingColumns() below handles new model fields with plain,
+  // non-destructive ALTER TABLE ADD COLUMN statements instead.
   await dropStaleBackupTables()
-  await sequelize.sync({ alter: true })
+  await sequelize.sync()
+  await addMissingColumns()
   await ensureStubUser()
 }
 
-// sequelize's SQLite alter strategy rebuilds a changed table via CREATE TABLE <Table>_backup,
-// INSERT INTO <Table>_backup SELECT ... FROM <Table>, then DROP + RENAME. If the process is
-// killed between the CREATE and the final RENAME (e.g. crashed/restarted mid-sync), the backup
-// table survives with a copy of the old data still in it. The next boot's alter then tries to
-// INSERT into that same leftover table again and hits a duplicate primary key, crash-looping
-// forever. Clear out any such leftovers before syncing so a crash mid-migration is recoverable.
+// Leftover from old deploys that ran sync({ alter: true }) before this version: if that process
+// crashed mid-rebuild, a `<Table>_backup` table can be left behind with stale data in it,
+// tripping up anything that later touches the real table. Harmless to keep clearing this even
+// though nothing creates these tables anymore.
 async function dropStaleBackupTables () {
   const [tables] = await sequelize.query(
     "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE '%\\_backup' ESCAPE '\\'"
   )
   for (const { name } of tables) {
     await sequelize.query(`DROP TABLE IF EXISTS \`${name}\``)
+  }
+}
+
+// Adds any model field that isn't yet a column on its table — e.g. oidcIssuer/oidcSub/role
+// added after Users already existed in deployed databases. Only ever ADDs columns, via plain
+// ALTER TABLE ADD COLUMN (SQLite supports this natively, no table rebuild involved); it never
+// alters or drops an existing column, so it can't lose data or hit the foreign-key DROP problem
+// above. A `unique: true` field is added without the inline UNIQUE (SQLite disallows a UNIQUE
+// column in ADD COLUMN) and gets an equivalent unique index instead.
+async function addMissingColumns () {
+  const queryInterface = sequelize.getQueryInterface()
+  for (const model of Object.values(sequelize.models)) {
+    const tableName = model.getTableName()
+    const existingColumns = await queryInterface.describeTable(tableName)
+    for (const attribute of Object.values(model.getAttributes())) {
+      const columnName = attribute.field || attribute.fieldName
+      if (existingColumns[columnName]) continue
+      const { unique, ...columnDef } = attribute
+      await queryInterface.addColumn(tableName, columnName, columnDef)
+      if (unique) {
+        await queryInterface.addIndex(tableName, [columnName], { unique: true })
+      }
+    }
   }
 }
 
