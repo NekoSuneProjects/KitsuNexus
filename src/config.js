@@ -11,6 +11,18 @@ module.exports = {
   siteUrl: process.env.SITE_URL || 'http://localhost:8080',
   jwtSecret: process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex'),
 
+  // Express's trust proxy setting — controls which X-Forwarded-* headers get believed for
+  // req.ip. Needed so express-rate-limit (src/index.js) rate-limits by real client IP instead
+  // of the reverse proxy's IP; without it (default false), every request behind a proxy looks
+  // like it comes from the same IP and shares one rate-limit bucket. Defaults to 1 (trust
+  // exactly one hop) since the normal deployment is a single reverse proxy in front of this
+  // server — bump it or set to false if that topology changes.
+  trustProxy: process.env.TRUST_PROXY === undefined ? 1 : (
+    process.env.TRUST_PROXY === 'false' ? false : (
+      isNaN(Number(process.env.TRUST_PROXY)) ? process.env.TRUST_PROXY : Number(process.env.TRUST_PROXY)
+    )
+  ),
+
   // Discord bot integration — optional. Unlike the old standalone NekoSuneAPPS/server (which
   // required these to even boot), this server has other jobs (accounts, Favorites sync) that
   // must keep working with no Discord app configured at all — src/index.js only starts the bot

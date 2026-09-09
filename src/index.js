@@ -24,6 +24,10 @@ const discordBotGateway = require('./discord/discordBotGateway')
 
 const app = express()
 
+// Must be set before express-rate-limit below, otherwise req.ip is the reverse proxy's
+// address for every request and everyone shares one rate-limit bucket.
+app.set('trust proxy', config.trustProxy)
+
 app.use(helmet({
   // The hero banner/logo are same-origin static files, but keep this permissive enough
   // for inline <style> in views/layout.ejs — tighten once real user input touches pages.
