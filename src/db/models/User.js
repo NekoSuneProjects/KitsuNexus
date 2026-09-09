@@ -19,6 +19,13 @@ const User = sequelize.define('User', {
   // unverified or reused); this pair is the only thing trusted for "is this the same person".
   oidcIssuer: { type: DataTypes.STRING, allowNull: true },
   oidcSub: { type: DataTypes.STRING, allowNull: true, unique: true },
+  // Public, unguessable id for this account's OBS overlay (routes/overlay.js) — the
+  // /overlay/:overlayId page and its /api/overlay/:overlayId/now-playing feed are public (no
+  // login), so this doubles as the access control: whoever has the URL can view it, nobody can
+  // guess it. Nullable because it can't be backfilled with a per-row random value through a
+  // plain ALTER TABLE ADD COLUMN (see db/index.js's backfillOverlayIds) — every account still
+  // ends up with one, just not atomically with the column's creation.
+  overlayId: { type: DataTypes.STRING, allowNull: true, unique: true },
 })
 
 module.exports = User

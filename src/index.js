@@ -11,7 +11,12 @@ const pairingRoutes = require('./routes/pairing')
 const meRoutes = require('./routes/me')
 const favoritesSyncRoutes = require('./routes/favoritesSync')
 const historySyncRoutes = require('./routes/historySync')
+const entityCacheRoutes = require('./routes/entityCache')
+const shareRoutes = require('./routes/share')
+const overlayRoutes = require('./routes/overlay')
+const ranksSyncRoutes = require('./routes/ranksSync')
 const ownerApiRoutes = require('./routes/ownerApi')
+const legalRoutes = require('./routes/legal')
 const authRoutes = require('./routes/auth')
 const dashboardRoutes = require('./routes/dashboard')
 const adminRoutes = require('./routes/admin')
@@ -66,7 +71,12 @@ app.use(pairingRoutes)
 app.use(meRoutes)
 app.use(favoritesSyncRoutes)
 app.use(historySyncRoutes)
+app.use(entityCacheRoutes)
+app.use(shareRoutes)
+app.use(overlayRoutes)
+app.use(ranksSyncRoutes)
 app.use(ownerApiRoutes)
+app.use(legalRoutes)
 
 app.use((req, res) => res.status(404).render('404', { title: 'Not found — KitsuNexus' }))
 
@@ -85,9 +95,7 @@ db.init()
     // keep working with no Discord app configured at all, or if the bot token is bad/Discord
     // is briefly unreachable — a login retry shouldn't take the whole site down with it.
     if (config.discordBotToken) {
-      discordBotGateway.start().catch(err => {
-        console.error('[discord] bot gateway failed to start (will not retry automatically):', err.message)
-      })
+      discordBotGateway.startWithRetry()
     } else {
       console.log('[discord] DISCORD_BOT_TOKEN not set — Discord bot disabled (website + Favorites sync still work).')
     }

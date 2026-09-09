@@ -1,0 +1,29 @@
+<section class="auth-page">
+  <div class="auth-card" style="max-width:480px">
+    <% if (error) { %>
+      <div class="auth-icon">🔗</div>
+      <h1>Link not found</h1>
+      <p class="auth-sub">
+        <% if (error === 'expired') { %>This share link has expired.
+        <% } else if (error === 'revoked') { %>This share link was revoked by whoever created it.
+        <% } else { %>This share link doesn't exist — check the URL you were given.<% } %>
+      </p>
+    <% } else { %>
+      <% if (entity && entity.imageUrl) { %>
+        <img src="<%= entity.imageUrl %>" alt="" style="width:100%;max-width:320px;border-radius:10px;margin:0 auto 14px;display:block" />
+      <% } %>
+      <div class="auth-icon"><%= link.type === 'avatar' ? '🧑‍🎨' : '🌐' %></div>
+      <h1><%= (entity && entity.name) || link.vrchatId %></h1>
+      <% if (entity && entity.authorName) { %><p class="auth-sub">by <%= entity.authorName %></p><% } %>
+      <% if (entity && entity.visibility === 'private') { %>
+        <p class="auth-sub" style="color:#e0a030">⚠ This <%= link.type %> is currently private on VRChat.</p>
+      <% } else if (entity && entity.visibility === 'deleted') { %>
+        <p class="auth-sub" style="color:#e05050">⚠ This <%= link.type %> has been deleted from VRChat.</p>
+      <% } %>
+      <% if (entity && entity.description) { %><p class="auth-sub"><%= entity.description %></p><% } %>
+      <p class="auth-sub" style="font-family:monospace;opacity:.7"><%= link.vrchatId %></p>
+      <p class="auth-sub">Open KitsuNexus, pair your device, and use "Claim shared item" to add this to your own Favorites.</p>
+    <% } %>
+    <div class="auth-links"><a href="/">← KitsuNexus</a></div>
+  </div>
+</section>

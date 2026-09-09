@@ -4,15 +4,20 @@ const config = require('../config')
 const { exchangeCodeForDiscordUser, exchangeActivityCode, issueBearerToken } = require('../discord/discordOAuth')
 const authorizedGuilds = require('../discord/authorizedGuilds')
 const { DiscordLink } = require('../db')
+const { isBanned } = require('../services/banUser')
 const session = require('../auth/session')
 const requireAuth = require('../middleware/requireAuth')
 const asyncHandler = require('../utils/asyncHandler')
 
 const router = express.Router()
 
-// View Channels + Connect + Mute Members + Deafen Members — same bitmask as
-// the Electron app's per-user bring-your-own-bot invite link.
-const BOT_PERMISSIONS = (1024 | 1048576 | 4194304 | 8388608).toString()
+// View Channels + Connect + Mute Members + Deafen Members + Manage Roles + Ban Members.
+// Manage Roles (268435456) and Ban Members (4) were added for Community Ranks Discord role
+// sync (services/discordRankSync.js) and the harassment ban-and-erase path (services/
+// banUser.js) — a guild authorized before those existed will need to re-run
+// /oauth2/discord/authorize-bot (or the server owner can grant the role manually in Discord) to
+// pick up the new permissions; Discord doesn't retroactively upgrade an existing bot invite.
+const BOT_PERMISSIONS = (1024 | 1048576 | 4194304 | 8388608 | 268435456 | 4).toString()
 
 // Short-lived CSRF state cache for browser-redirect flows. Tracks WHICH flow
 // issued each state so the callback below knows where to send the browser
@@ -109,6 +114,9 @@ router.get('/oauth2/discord/callback', asyncHandler(async (req, res) => {
   const existing = await DiscordLink.findOne({ where: { discordId: discordUser.id } })
   if (existing && existing.userId !== payload.sub) {
     return res.status(409).send('That Discord account is already linked to a different KitsuNexus account.')
+  }
+  if (await isBanned({ discordId: discordUser.id })) {
+    return res.status(403).send('This Discord account is not permitted to link on this server.')
   }
   await DiscordLink.upsert({
     userId: payload.sub,

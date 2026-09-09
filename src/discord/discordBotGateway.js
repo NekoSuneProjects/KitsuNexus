@@ -16,6 +16,9 @@ const authorizedGuilds = require('./authorizedGuilds')
 
 let client = null
 let ready = false
+let lastError = null
+let retryTimer = null
+let retryDelayMs = 0
 
 // Guards against a real race: Discord adds the bot to the guild (firing
 // GuildCreate over the gateway) as part of the SAME consent click that then
@@ -32,8 +35,11 @@ const JOIN_GRACE_MS = 15_000
 
 // Only /oauth2/discord/authorize-bot is allowed to let a guild keep the bot —
 // leave anything else, whether it's a guild added before this whitelist
-// existed or one added via a leaked raw invite link.
+// existed or one added via a leaked raw invite link. The official KitsuNexus
+// guild (config.discordOfficialGuildId) is exempt regardless of how the bot
+// got there or whether it's in the persisted whitelist file at all.
 async function enforceWhitelist (guild) {
+  if (config.discordOfficialGuildId && guild.id === config.discordOfficialGuildId) return
   if (authorizedGuilds.isAuthorized(guild.id)) return
   console.warn(`[discordBotGateway] leaving unauthorized guild "${guild.name}" (${guild.id}) — never went through /oauth2/discord/authorize-bot`)
   try { await guild.leave() } catch (err) { console.warn('[discordBotGateway] failed to leave guild:', err.message) }
@@ -41,8 +47,15 @@ async function enforceWhitelist (guild) {
 
 async function start () {
   if (!config.discordBotToken) throw new Error('DISCORD_BOT_TOKEN not set — Discord bot disabled')
+  // A retried attempt (startWithRetry) leaves the previous failed client instance and its
+  // listeners/socket dangling otherwise.
+  if (client) { try { client.destroy() } catch (_) {} }
+  ready = false
   client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers],
+    // GuildModeration is what actually delivers GuildBanAdd over the gateway — without it the
+    // event below silently never fires, no error, nothing to notice until someone asks "why
+    // didn't banning them on Discord also erase their KitsuNexus data?".
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildModeration],
     presence: { status: 'invisible', activities: [] }
   })
   client.once(Events.ClientReady, () => {
@@ -55,12 +68,59 @@ async function start () {
   // Fires the moment the bot is added to any guild, authorized or not —
   // delayed so /oauth2/discord/authorize-bot's callback has a chance to win.
   client.on(Events.GuildCreate, guild => setTimeout(() => enforceWhitelist(guild), JOIN_GRACE_MS))
+  // A staff member banning someone directly on Discord (for harassment, etc.) should have the
+  // same effect as banning them through /admin — permanently ban + erase their KitsuNexus data
+  // too, if that Discord identity happens to be linked to an account. Lazy-required to avoid a
+  // require() cycle (banUser -> this file, for the reverse "ban them on Discord too" direction).
+  client.on(Events.GuildBanAdd, async ban => {
+    try {
+      const { DiscordLink } = require('../db')
+      const link = await DiscordLink.findOne({ where: { discordId: ban.user.id } })
+      if (!link) return
+      const { banUser } = require('../services/banUser')
+      console.log(`[discordBotGateway] linked account banned on Discord (guild ${ban.guild.id}) — erasing KitsuNexus data for user ${link.userId}`)
+      await banUser(link.userId, `Banned on Discord in guild ${ban.guild.id}`, `discord:${ban.guild.id}`)
+    } catch (err) { console.warn('[discordBotGateway] guildBanAdd auto-erase failed:', err.message) }
+  })
   client.on(Events.Error, err => console.warn('[discordBotGateway] error:', err.message))
-  await client.login(config.discordBotToken)
+  try {
+    await client.login(config.discordBotToken)
+  } catch (err) {
+    // "Used disallowed intents" is by far the most common reason this fails on a first setup —
+    // this bot requests GuildMembers and GuildModeration, both of which Discord treats as
+    // privileged and OFF by default; they have to be turned on for this specific application at
+    // https://discord.com/developers/applications, under Bot ▸ Privileged Gateway Intents
+    // ("Server Members Intent"). A bad/regenerated token is the other common cause.
+    if (err && /disallowed intents/i.test(err.message)) {
+      throw new Error('Discord rejected the bot\'s intents — enable "Server Members Intent" (and "Guild Moderation" if shown) for this bot at https://discord.com/developers/applications ▸ your app ▸ Bot ▸ Privileged Gateway Intents, then it will pick this up on its next automatic retry.')
+    }
+    throw err
+  }
   return client
 }
 
+// Keeps retrying instead of giving up forever after one failure (a bad token or missing
+// privileged intent used to mean the bot silently stayed dead until the process was restarted
+// — see startWithRetry below). Exponential backoff, capped at 5 minutes, reset to the initial
+// delay on any successful login.
+const RETRY_INITIAL_MS = 30_000
+const RETRY_MAX_MS = 5 * 60_000
+async function startWithRetry () {
+  try {
+    await start()
+    lastError = null
+    retryDelayMs = 0
+  } catch (err) {
+    lastError = err.message
+    console.error(`[discordBotGateway] failed to start (retrying in ${Math.round((retryDelayMs || RETRY_INITIAL_MS) / 1000)}s):`, err.message)
+    retryDelayMs = retryDelayMs ? Math.min(retryDelayMs * 2, RETRY_MAX_MS) : RETRY_INITIAL_MS
+    clearTimeout(retryTimer)
+    retryTimer = setTimeout(startWithRetry, retryDelayMs)
+  }
+}
+
 function isReady () { return ready }
+function getLastError () { return lastError }
 
 // Used by /settings/discord's "Remove" action: revoking a guild in
 // authorizedGuilds.js only updates the persisted list — this is what
@@ -152,4 +212,36 @@ async function setDeaf (guildId, userId, deaf) {
   } catch (err) { return { ok: false, error: err.message } }
 }
 
-module.exports = { start, isReady, getUserVoiceState, getChannelRoster, setMute, setDeaf, leaveGuild, hasManagePermission }
+// Community Ranks role sync (services/discordRankSync.js): removes every OTHER configured
+// rank role the member currently holds in this guild, then adds the one for their new rank
+// (skips the add if `addRoleId` is null, e.g. no mapping configured for that rank yet). Doing
+// the remove+add together, rather than just adding, is what makes an upgrade/downgrade actually
+// swap the badge instead of piling up every rank they've ever held.
+async function setMemberRankRole (guildId, discordUserId, addRoleId, allRankRoleIds) {
+  const guild = client && client.guilds.cache.get(guildId)
+  if (!guild) return { ok: false, error: 'Bot is not in that guild' }
+  const member = await guild.members.fetch(discordUserId).catch(() => null)
+  if (!member) return { ok: false, error: 'Member not found in guild' }
+  const toRemove = allRankRoleIds.filter(id => id !== addRoleId && member.roles.cache.has(id))
+  for (const roleId of toRemove) {
+    await member.roles.remove(roleId, 'KitsuNexus Community Rank changed').catch(() => {})
+  }
+  if (addRoleId && !member.roles.cache.has(addRoleId)) {
+    await member.roles.add(addRoleId, 'KitsuNexus Community Rank').catch(() => {})
+  }
+  return { ok: true }
+}
+
+// Bans a Discord identity from the official KitsuNexus guild only (config.discordOfficialGuildId)
+// — used by services/banUser.js. Deliberately scoped to just that one guild, not every guild
+// the bot happens to be authorized in: a self-hoster's own guild shouldn't have someone banned
+// on it just because they got permanently banned from the official one. Best-effort — requires
+// the bot to actually hold Ban Members there; silently skipped otherwise (logged by the caller).
+async function banFromOfficialGuild (discordUserId, reason) {
+  if (!client || !config.discordOfficialGuildId) return
+  const guild = client.guilds.cache.get(config.discordOfficialGuildId)
+  if (!guild) return
+  await guild.members.ban(discordUserId, { reason: reason || 'Banned from KitsuNexus' })
+}
+
+module.exports = { start, startWithRetry, isReady, getLastError, getUserVoiceState, getChannelRoster, setMute, setDeaf, leaveGuild, hasManagePermission, setMemberRankRole, banFromOfficialGuild }

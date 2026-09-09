@@ -16,6 +16,7 @@
     <nav>
       <a href="https://github.com/NekoSuneProjects/KitsuNexus" target="_blank" rel="noopener">GitHub</a>
       <a href="https://github.com/NekoSuneProjects/KitsuNexus/releases" target="_blank" rel="noopener">Download</a>
+      <a href="https://discord.gg/vMW78yTG6s" target="_blank" rel="noopener">Discord</a>
       <% if (typeof currentUser !== 'undefined' && currentUser) { %>
         <a href="/dashboard">Dashboard</a>
         <% if (currentUser.role === 'owner' || currentUser.role === 'admin') { %>
@@ -33,7 +34,7 @@
 
   <footer class="site-footer">
     <p>KitsuNexus is an independent, community project. Not affiliated with VRChat, Discord, or any third party.</p>
-    <p>&copy; <%= new Date().getFullYear() %> NekoSuneVR &amp; the KitsuNexus community.</p>
+    <p>&copy; <%= new Date().getFullYear() %> NekoSuneVR &amp; the KitsuNexus community. <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="https://discord.gg/vMW78yTG6s" target="_blank" rel="noopener">Support / Discord</a></p>
   </footer>
 </body>
 </html>

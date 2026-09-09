@@ -1,12 +1,13 @@
 const express = require('express')
 const fs = require('fs')
-const { User, Device, Favorite, ApiKey, sequelize } = require('../db')
+const { User, Device, Favorite, ApiKey, BannedIdentity, sequelize } = require('../db')
 const requireAdmin = require('../middleware/requireAdmin')
 const asyncHandler = require('../utils/asyncHandler')
 const config = require('../config')
 const { generateToken, hashToken } = require('../auth/deviceToken')
 const { guildCount } = require('../discord/authorizedGuilds')
-const { isReady: isDiscordBotReady } = require('../discord/discordBotGateway')
+const { isReady: isDiscordBotReady, getLastError: discordLastError } = require('../discord/discordBotGateway')
+const { banUser } = require('../services/banUser')
 
 const router = express.Router()
 
@@ -19,6 +20,7 @@ async function renderAdmin (req, res, { newApiKey = null } = {}) {
   const devicesByUser = Object.fromEntries(deviceCounts.map(r => [r.userId, r.count]))
   const favoritesByUser = Object.fromEntries(favoriteCounts.map(r => [r.userId, r.count]))
   const apiKeys = await ApiKey.findAll({ where: { userId: req.user.id }, order: [['createdAt', 'DESC']] })
+  const bannedIdentities = await BannedIdentity.findAll({ order: [['createdAt', 'DESC']] })
 
   let dbSizeBytes = 0
   try { dbSizeBytes = fs.statSync(sequelize.options.storage).size } catch (_) {}
@@ -43,10 +45,12 @@ async function renderAdmin (req, res, { newApiKey = null } = {}) {
     discord: {
       configured: !!config.discordBotToken,
       botReady: isDiscordBotReady(),
+      lastError: discordLastError(),
       authorizedGuilds: guildCount(),
     },
     apiKeys,
     newApiKey,
+    bannedIdentities,
   })
 }
 
@@ -65,6 +69,20 @@ router.post('/admin/api-keys', requireAdmin, asyncHandler(async (req, res) => {
 
 router.post('/admin/api-keys/:id/revoke', requireAdmin, asyncHandler(async (req, res) => {
   await ApiKey.destroy({ where: { id: req.params.id, userId: req.user.id } })
+  res.redirect('/admin')
+}))
+
+// Permanent ban + full data erasure (see PRIVACY.md/TOS.md's harassment provision, and
+// services/banUser.js) — refuses to ban an owner (demote them first) or the stub placeholder
+// account. Also bans them from Discord if they're linked, best-effort.
+router.post('/admin/users/:id/ban', requireAdmin, asyncHandler(async (req, res) => {
+  const target = await User.findByPk(req.params.id)
+  if (!target) return res.redirect('/admin')
+  if (target.isStub) return res.redirect('/admin')
+  if (target.role === 'owner') {
+    return res.status(400).send('Cannot ban an owner account — demote them to a regular user first.')
+  }
+  await banUser(target.id, (req.body && req.body.reason) || null, req.user.id)
   res.redirect('/admin')
 }))
 

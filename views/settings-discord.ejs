@@ -40,6 +40,22 @@
           </div>
         <% }) %>
       </div>
+
+      <% guilds.filter(g => g.canManage).forEach(g => { %>
+        <h3 style="font-size:.95rem;margin:20px 0 6px">🏅 Community Rank roles — <%= g.id %></h3>
+        <p class="muted" style="font-size:.78rem;margin:0 0 8px">
+          Paste each Discord role's id (enable Developer Mode in Discord, right-click the role
+          in Server Settings ▸ Roles ▸ Copy Role ID). Leave blank for a rank you don't want a
+          role for. Requires the bot to have <b>Manage Roles</b> in this server, and its own
+          role positioned above the ones listed here.
+        </p>
+        <form method="post" action="/settings/discord/guilds/<%= g.id %>/rank-roles" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px 14px">
+          <% g.rankRoles.forEach(r => { %>
+            <div><label style="font-size:.78rem;display:block;margin-bottom:2px"><%= r.label %></label><input type="text" name="<%= r.key %>" value="<%= r.roleId %>" placeholder="Role ID" style="width:100%" /></div>
+          <% }) %>
+          <div style="align-self:end"><button class="btn primary" type="submit" style="padding:6px 14px;font-size:.8rem">Save</button></div>
+        </form>
+      <% }) %>
     <% } %>
     <div class="row" style="margin-top:14px"><a class="btn ghost" href="/oauth2/discord/authorize-bot">➕ Add bot to another server</a></div>
   <% } %>

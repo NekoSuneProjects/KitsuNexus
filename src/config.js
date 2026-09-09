@@ -33,6 +33,20 @@ module.exports = {
   discordBotToken: process.env.DISCORD_BOT_TOKEN || '',
   discordRedirectUri: process.env.DISCORD_REDIRECT_URI || '',
   discordInviteUrl: process.env.DISCORD_INVITE_URL || '',
+  // The official KitsuNexus Discord server — exempted from authorizedGuilds.js's whitelist
+  // enforcement (discordBotGateway.js normally leaves any guild that was never added through
+  // /oauth2/discord/authorize-bot) and the only guild services/banUser.js's Discord-side ban
+  // ever touches, regardless of what other guilds the bot happens to be in.
+  discordOfficialGuildId: process.env.DISCORD_OFFICIAL_GUILD_ID || '',
+  // Discord role id -> Community Rank mapping for the official guild above, keyed by role id
+  // (not rank key), e.g.
+  // DISCORD_RANK_ROLES={"123456789012345678":"veteran","234567890123456789":"legend"}.
+  // Re-synced with db/index.js's syncOfficialRankRolesFromEnv on every boot — ENV is the
+  // source of truth for this one guild; self-hosters configure their own guilds through
+  // Settings ▸ Discord instead (db/models/GuildRankRole).
+  discordRankRoles: (() => {
+    try { return JSON.parse(process.env.DISCORD_RANK_ROLES || '{}') } catch (_) { return {} }
+  })(),
   // Electron's local OAuth loopback — fixed, matches modules/oauth/providers/discordIdentity.js's
   // established port/path convention in the KitsuNexus desktop app.
   electronLoopbackRedirect: 'http://localhost:3737/oauth2/discord/callback',

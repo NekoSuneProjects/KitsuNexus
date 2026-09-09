@@ -4,6 +4,7 @@ const { User, Device, Favorite, STUB_USER_ID } = require('../db')
 const session = require('../auth/session')
 const asyncHandler = require('../utils/asyncHandler')
 const config = require('../config')
+const { isBanned } = require('../services/banUser')
 
 const router = express.Router()
 
@@ -27,9 +28,11 @@ router.post('/setup', asyncHandler(async (req, res) => {
   if (!email || !password) return fail('Email and password are required.')
   if (password.length < 8) return fail('Password must be at least 8 characters.')
   if (password !== confirmPassword) return fail('Passwords do not match.')
+  const normalizedOwnerEmail = String(email).trim().toLowerCase()
+  if (await isBanned({ email: normalizedOwnerEmail })) return fail('This email is not permitted to register on this server.')
 
   const passwordHash = await bcrypt.hash(password, 12)
-  const owner = await User.create({ email: String(email).trim().toLowerCase(), passwordHash, displayName: displayName || 'Owner', role: 'owner', isStub: false })
+  const owner = await User.create({ email: normalizedOwnerEmail, passwordHash, displayName: displayName || 'Owner', role: 'owner', isStub: false })
 
   // Anything paired/favorited before the owner existed was attached to the stub account —
   // hand it all over now instead of losing it.
@@ -58,6 +61,7 @@ router.post('/register', asyncHandler(async (req, res) => {
 
   const normalizedEmail = String(email).trim().toLowerCase()
   if (await User.findOne({ where: { email: normalizedEmail } })) return fail('An account with that email already exists.')
+  if (await isBanned({ email: normalizedEmail })) return fail('This email is not permitted to register on this server.')
 
   const passwordHash = await bcrypt.hash(password, 12)
   const user = await User.create({ email: normalizedEmail, passwordHash, displayName: displayName || normalizedEmail.split('@')[0], role: 'user', isStub: false })

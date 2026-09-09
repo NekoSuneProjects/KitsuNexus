@@ -1,0 +1,19 @@
+<section class="auth-page">
+  <div class="auth-card">
+    <div class="auth-icon">⚠</div>
+    <h1>Delete your account</h1>
+    <p class="auth-sub">
+      This permanently erases your account, paired devices, Favorites, world-visit history,
+      Discord link, share links, and overlay status — see the
+      <a href="/privacy">Privacy Policy</a> for exactly what's removed. This cannot be undone.
+    </p>
+    <% if (error) { %><div class="pair-result err" style="max-width:none;margin-bottom:14px"><%= error %></div><% } %>
+    <form method="post" action="/dashboard/delete-account" class="auth-form" style="align-items:center">
+      <label style="font-size:.8rem">Type <b>DELETE</b> to confirm</label>
+      <input type="text" name="confirm" placeholder="DELETE" autocomplete="off" autofocus required
+        style="text-align:center;letter-spacing:.15em;text-transform:uppercase" />
+      <button class="btn danger" type="submit">Permanently delete my account</button>
+    </form>
+    <div class="auth-links"><a href="/dashboard">← Back to dashboard</a></div>
+  </div>
+</section>

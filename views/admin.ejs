@@ -23,6 +23,9 @@
       <div class="stat-row"><span>Configured</span><b><%= discord.configured ? 'Yes' : 'No' %></b></div>
       <div class="stat-row"><span>Gateway</span><b><%= discord.botReady ? '🟢 Connected' : '⚪ Offline' %></b></div>
       <div class="stat-row"><span>Authorized guilds</span><b><%= discord.authorizedGuilds %></b></div>
+      <% if (!discord.botReady && discord.lastError) { %>
+        <p class="muted" style="font-size:.72rem;margin:8px 0 0;line-height:1.5;word-break:break-word">⚠ <%= discord.lastError %></p>
+      <% } %>
     </div>
   </div>
 
@@ -38,10 +41,44 @@
             · <%= u.deviceCount %> device(s) · <%= u.favoriteCount %> favorite(s)
           </span>
         </div>
-        <span class="muted" style="font-size:.75rem"><%= new Date(u.createdAt).toLocaleDateString() %></span>
+        <div class="row" style="align-items:center;gap:10px">
+          <span class="muted" style="font-size:.75rem"><%= new Date(u.createdAt).toLocaleDateString() %></span>
+          <% if (!u.isStub && u.role !== 'owner') { %>
+            <form method="post" action="/admin/users/<%= u.id %>/ban" class="ban-form">
+              <input type="hidden" name="reason" class="ban-reason" />
+              <button class="btn danger" type="submit" style="padding:6px 14px;font-size:.8rem">Ban &amp; erase</button>
+            </form>
+          <% } %>
+        </div>
       </div>
     <% }) %>
   </div>
+  <script>
+    document.querySelectorAll('.ban-form').forEach(f => f.addEventListener('submit', e => {
+      const reason = prompt('Reason for permanent ban (required — this also erases their account data):')
+      if (!reason) { e.preventDefault(); return }
+      if (!confirm('Permanently ban this account and erase all its data? This cannot be undone.')) { e.preventDefault(); return }
+      f.querySelector('.ban-reason').value = reason
+    }))
+  </script>
+
+  <% if (bannedIdentities.length) { %>
+    <h2 style="font-size:1.1rem;margin:28px 0 10px">🚫 Banned identities</h2>
+    <div class="device-list">
+      <% bannedIdentities.forEach(b => { %>
+        <div class="device-row">
+          <div>
+            <b><%= b.email || b.discordId || '(unknown)' %></b>
+            <span class="muted" style="font-size:.78rem">
+              <% if (b.email && b.discordId) { %>email + Discord<% } %>
+              <% if (b.reason) { %> · <%= b.reason %><% } %>
+            </span>
+          </div>
+          <span class="muted" style="font-size:.75rem"><%= new Date(b.createdAt).toLocaleDateString() %></span>
+        </div>
+      <% }) %>
+    </div>
+  <% } %>
 
   <h2 style="font-size:1.1rem;margin:28px 0 10px">🔑 API keys</h2>
   <p class="muted" style="font-size:.85rem;margin:-6px 0 14px">
