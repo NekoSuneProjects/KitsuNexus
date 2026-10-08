@@ -130,7 +130,7 @@ jobs:
     # Same self-hosted Linux box used for the build legs. NOTE: this job
     # relies on gh, jq, curl and awk - make sure they're installed there, or
     # the VirusTotal/Discord/changelog steps will fail.
-    runs-on: [self-hosted, Linux, docker, buildx]
+    runs-on: [self-hosted, neko-lite]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
