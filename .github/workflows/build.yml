@@ -28,11 +28,11 @@ jobs:
           - artifact: linux-x64
             os_family: linux
             arch: x64
-            runner: [self-hosted, Linux, docker, buildx]
+            runner: [self-hosted, neko-build]
           - artifact: linux-arm64
             os_family: linux
             arch: arm64
-            runner: [self-hosted, Linux, docker, buildx]
+            runner: [self-hosted, neko-build]
 
     steps:
       - name: Checkout
