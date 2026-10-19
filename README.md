@@ -240,7 +240,8 @@ registered Windows runner; the `neko-build` Linux runner handles Linux builds.
 The default build keeps no Actions artifacts. Select **Upload artifacts** to keep
 downloadable builds for one day. To publish installers directly to a GitHub Release,
 select **Publish release** and enter an existing tag matching the app's version
-(such as `v1.0.78`); the workflow temporarily uses one-day Actions artifacts to
+(such as `v1.0.78`, which must already exist on GitHub, not just locally);
+the workflow temporarily uses one-day Actions artifacts to
 pass installers between jobs. Commits and tags never start builds automatically.
 
 The backend has a separate **Build KitsuNexus Server Docker** workflow in Actions.

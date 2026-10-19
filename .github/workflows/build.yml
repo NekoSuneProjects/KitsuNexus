@@ -128,7 +128,7 @@ jobs:
         if: ${{ inputs.publish_release || inputs.upload_artifacts }}
         uses: actions/upload-artifact@v4
         with:
-          name: KitsuNexus-${{ matrix.artifact }}
+          name: KitsuNexus-${{ matrix.platform }}
           retention-days: 1
           path: |
             dist/*.exe
