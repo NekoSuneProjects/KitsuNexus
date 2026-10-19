@@ -103,18 +103,10 @@
       "maintainer": "NekoSuneVR <nekosunevr@nekosunevr.co.uk>",
       "target": [
         {
-          "target": "AppImage",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
+          "target": "AppImage"
         },
         {
-          "target": "tar.gz",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
+          "target": "tar.gz"
         }
       ],
       "files": [
