@@ -24,7 +24,7 @@ const https = require('https')
 const { spawn, execFile } = require('child_process')
 
 const UPDATE_PAYLOAD_ENV = 'KITSUNEXUS_UPDATE_PAYLOAD'
-const UPDATER_ACK_TIMEOUT_MS = 45000
+const UPDATER_ACK_TIMEOUT_MS = 135000
 const NSIS_OPERATION_TIMEOUT_MS = 300000
 const STARTUP_LOG = path.join(os.tmpdir(), 'KitsuNexus-updater-startup.log')
 
@@ -67,7 +67,7 @@ function parseUpdatePayload (argv, env = process.env) {
 
 const args = parseUpdatePayload(process.argv.slice(app.isPackaged ? 1 : 2))
 delete process.env[UPDATE_PAYLOAD_ENV]
-const { url, exe: exePath, name: fileName = 'KitsuNexus-Update.exe', version = '', pid, readyToken } = args
+const { url, exe: exePath, name: fileName = 'KitsuNexus-Update.exe', version = '', pid, readyToken, signalDir } = args
 startupLog(`payloadParsed url=${!!url} exe=${!!exePath} readyToken=${!!readyToken}`)
 
 let mainWindow = null
@@ -78,7 +78,12 @@ function send (channel, payload) {
 
 function updaterSignalPaths (token) {
   if (!/^[a-f0-9]{32}$/i.test(String(token || ''))) return null
-  const base = path.join(os.tmpdir(), `kitsunexus-updater-${token}`)
+  // Use the main app's explicitly supplied directory. Portable Electron and
+  // the installed app may have different TEMP environments on Windows.
+  const directory = typeof signalDir === 'string' && path.isAbsolute(signalDir)
+    ? signalDir
+    : os.tmpdir()
+  const base = path.join(directory, `kitsunexus-updater-${token}`)
   return { ready: `${base}.ready`, ack: `${base}.ack` }
 }
 
@@ -87,17 +92,21 @@ async function signalReadyAndWaitForAck () {
   const signals = updaterSignalPaths(readyToken)
   if (!signals) return false
   try {
+    fs.mkdirSync(path.dirname(signals.ready), { recursive: true })
     for (const file of [signals.ready, signals.ack]) {
       try { fs.unlinkSync(file) } catch (_) {}
     }
     fs.writeFileSync(signals.ready, `${process.pid}\n`, 'utf8')
-  } catch (_) {
+    startupLog(`readySignalCreated dir=${path.dirname(signals.ready)}`)
+  } catch (err) {
+    startupLog(`readySignalError ${err.message}`)
     return false
   }
 
   const deadline = Date.now() + UPDATER_ACK_TIMEOUT_MS
   while (Date.now() < deadline) {
     if (fs.existsSync(signals.ack)) {
+      startupLog('readyAckReceived')
       for (const file of [signals.ready, signals.ack]) {
         try { fs.unlinkSync(file) } catch (_) {}
       }
@@ -105,6 +114,7 @@ async function signalReadyAndWaitForAck () {
     }
     await new Promise(resolve => setTimeout(resolve, 100))
   }
+  startupLog(`readyAckTimedOut dir=${path.dirname(signals.ack)}`)
   for (const file of [signals.ready, signals.ack]) {
     try { fs.unlinkSync(file) } catch (_) {}
   }

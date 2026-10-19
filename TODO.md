@@ -1,5 +1,9 @@
 # KitsuNexus — TODO / Roadmap
 
+## Updater
+- [x] Store the standalone Windows updater under `%LOCALAPPDATA%\KitsuNexus-updater\Update.exe`, refresh by MD5 and recover from locked helper executables.
+- [x] Pass a shared ready/ack directory to the updater to avoid first-run timeouts caused by different TEMP locations.
+
 ## Community Booster integration
 - [x] Add optional local-only Spark / Glow / Nova / Constellation visuals and saved cosmetic choices, without gating standard features.
 - [x] Add LinkUp device grant client with state/PKCE checks, encrypted local credentials when available, and verified reward snapshots.

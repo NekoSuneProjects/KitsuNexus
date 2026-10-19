@@ -21,8 +21,8 @@ const REPO = 'NekoSuneProjects/KitsuNexus'
 const API = `https://api.github.com/repos/${REPO}/releases/latest`
 const RELEASES_PAGE = `https://github.com/${REPO}/releases`
 const UPDATE_PAYLOAD_ENV = 'KITSUNEXUS_UPDATE_PAYLOAD'
-const EXTERNAL_UPDATER_VERSION = '1.0.3'
-const UPDATER_READY_TIMEOUT_MS = 30000
+// Portable Electron helpers can take a while to extract on their first run.
+const UPDATER_READY_TIMEOUT_MS = 120000
 
 // Compare dotted versions; returns >0 if a>b, <0 if a<b, 0 if equal.
 function cmp (a, b) {
@@ -87,7 +87,7 @@ function localAppDataRoot () {
 
 function externalUpdaterPath () {
   if (process.platform !== 'win32') return null
-  return path.join(localAppDataRoot(), 'KitsuNexus', 'Update.exe')
+  return path.join(localAppDataRoot(), 'KitsuNexus-updater', 'Update.exe')
 }
 
 function bundledUpdaterPath () {
@@ -99,28 +99,114 @@ function bundledUpdaterPath () {
   return candidates.find(p => p && fs.existsSync(p)) || null
 }
 
-// Install the updater outside the app install directory (Discord-style under
-// %LOCALAPPDATA%) so normal app updates can replace Program Files/app-* content
-// without touching the running helper. A sidecar version marker lets a newly
-// installed KitsuNexus build refresh an older external helper before launching
-// it. If the helper is still running, the copy fails safely and is retried the
-// next time an update starts.
-function ensureExternalUpdater () {
-  if (process.platform !== 'win32') return null
-  const target = externalUpdaterPath()
-  const source = bundledUpdaterPath()
+function md5File (file) {
+  const hash = crypto.createHash('md5')
+  const buffer = Buffer.allocUnsafe(1024 * 1024)
+  const fd = fs.openSync(file, 'r')
+  try {
+    let count
+    while ((count = fs.readSync(fd, buffer, 0, buffer.length, null)) > 0) {
+      hash.update(buffer.subarray(0, count))
+    }
+  } finally {
+    fs.closeSync(fd)
+  }
+  return hash.digest('hex')
+}
+
+function cleanLegacyUpdater () {
+  const legacy = path.join(localAppDataRoot(), 'KitsuNexus', 'Update.exe')
+  // Do not remove the previous helper if Windows still has it open.
+  for (const file of [legacy, `${legacy}.version`]) {
+    try { fs.unlinkSync(file) } catch (_) {}
+  }
+}
+
+function cleanOldStagedUpdaters (directory) {
+  try {
+    for (const name of fs.readdirSync(directory)) {
+      if (/^Update-[a-f0-9]{32}\.exe$/i.test(name)) {
+        try { fs.unlinkSync(path.join(directory, name)) } catch (_) {}
+      }
+    }
+  } catch (_) {}
+}
+
+// Copy a bundled helper to a user-writable directory, outside the files that
+// NSIS will replace. Compare actual bytes on every startup, because a version
+// marker can stay the same even when CI rebuilds the updater executable.
+// Stage and verify first so an interrupted copy never damages Update.exe.
+// If Windows has locked an older running helper, launch the new staged copy
+// and retry replacing the canonical Update.exe on the next app startup.
+function ensureExternalUpdater ({ platform = process.platform, source = bundledUpdaterPath(), target = externalUpdaterPath() } = {}) {
+  if (platform !== 'win32') return null
   if (!target) return null
+  fs.mkdirSync(path.dirname(target), { recursive: true })
+  if (!source) {
+    // Existing installations used LocalAppData/KitsuNexus/Update.exe. Migrate
+    // it if the bundled copy is absent (e.g. a broken old installer).
+    const legacy = path.join(localAppDataRoot(), 'KitsuNexus', 'Update.exe')
+    source = fs.existsSync(legacy) ? legacy : null
+  }
   if (!source) return fs.existsSync(target) ? target : null
 
-  const versionMarker = `${target}.version`
-  let installedVersion = ''
-  try { installedVersion = fs.readFileSync(versionMarker, 'utf8').trim() } catch (_) {}
-  if (fs.existsSync(target) && installedVersion === EXTERNAL_UPDATER_VERSION) return target
+  const sourceHash = md5File(source)
+  if (fs.existsSync(target) && md5File(target) === sourceHash) {
+    if (target === externalUpdaterPath()) {
+      cleanLegacyUpdater()
+      cleanOldStagedUpdaters(path.dirname(target))
+    }
+    return target
+  }
 
-  fs.mkdirSync(path.dirname(target), { recursive: true })
-  fs.copyFileSync(source, target)
-  fs.writeFileSync(versionMarker, `${EXTERNAL_UPDATER_VERSION}\n`, 'utf8')
-  return target
+  // A hash-based fallback is safe to execute even while another Update.exe
+  // holds a Windows lock on the canonical path.
+  let staged = path.join(path.dirname(target), `Update-${sourceHash}.exe`)
+  if (fs.existsSync(staged) && md5File(staged) !== sourceHash) {
+    try { fs.unlinkSync(staged) } catch (_) {
+      staged = path.join(path.dirname(target), `Update-${sourceHash}-${process.pid}.exe`)
+    }
+  }
+  if (!fs.existsSync(staged) || md5File(staged) !== sourceHash) {
+    const temporary = path.join(path.dirname(target), `Update-${sourceHash}.${crypto.randomBytes(8).toString('hex')}.tmp`)
+    try {
+      fs.copyFileSync(source, temporary)
+      if (md5File(temporary) !== sourceHash) throw new Error('Updater copy failed MD5 verification')
+      fs.renameSync(temporary, staged)
+    } finally {
+      try { fs.unlinkSync(temporary) } catch (_) {}
+    }
+  }
+
+  const backup = `${target}.${crypto.randomBytes(8).toString('hex')}.old`
+  let movedOld = false
+  try {
+    if (fs.existsSync(target)) {
+      fs.renameSync(target, backup)
+      movedOld = true
+    }
+    fs.renameSync(staged, target)
+    if (md5File(target) !== sourceHash) throw new Error('Installed updater failed MD5 verification')
+    if (movedOld) { try { fs.unlinkSync(backup) } catch (_) {} }
+    if (target === externalUpdaterPath()) {
+      cleanLegacyUpdater()
+      cleanOldStagedUpdaters(path.dirname(target))
+    }
+    return target
+  } catch (err) {
+    if (movedOld) {
+      try {
+        if (fs.existsSync(target)) fs.unlinkSync(target)
+        fs.renameSync(backup, target)
+      } catch (restoreErr) {
+        throw new Error(`Updater replacement failed (${err.message}); restore failed (${restoreErr.message})`)
+      }
+    }
+    if (!fs.existsSync(staged) || md5File(staged) !== sourceHash) throw err
+    // The installed executable may still be locked by Windows.
+    console.warn(`Could not replace Update.exe; launching verified staged copy: ${err.message}`)
+    return staged
+  }
 }
 
 // Where the standalone updater helper lives, per platform/build state. Dev
@@ -143,9 +229,9 @@ function resolveUpdaterLaunch (appRootDir, isPackaged) {
   return null
 }
 
-function updaterSignalPaths (token) {
+function updaterSignalPaths (token, directory = process.platform === 'win32' ? path.dirname(externalUpdaterPath()) : os.tmpdir()) {
   if (!/^[a-f0-9]{32}$/i.test(String(token || ''))) return null
-  const base = path.join(os.tmpdir(), `kitsunexus-updater-${token}`)
+  const base = path.join(directory, `kitsunexus-updater-${token}`)
   return { ready: `${base}.ready`, ack: `${base}.ack` }
 }
 
@@ -166,21 +252,27 @@ function removeUpdaterSignals (signals) {
 function startUpdate ({ url, name, version, appRootDir, isPackaged, execPath, pid }, quitApp) {
   const launch = resolveUpdaterLaunch(appRootDir, isPackaged)
   if (!launch) throw new Error(`No update helper available for platform "${process.platform}"`)
-  if (isPackaged && process.platform === 'win32') ensureExternalUpdater()
+  if (isPackaged && process.platform === 'win32') launch.cmd = ensureExternalUpdater()
   if (isPackaged && !fs.existsSync(launch.cmd)) {
     throw new Error('Update helper is missing from this install (Update.exe not found in LocalAppData)')
   }
 
   const readyToken = crypto.randomBytes(16).toString('hex')
   const signals = updaterSignalPaths(readyToken)
+  // Pre-existing helpers used os.tmpdir(); support their handshake too when
+  // recovering from an install that did not bundle a fresh updater.
+  const legacySignals = updaterSignalPaths(readyToken, os.tmpdir())
   removeUpdaterSignals(signals)
+  removeUpdaterSignals(legacySignals)
+  fs.mkdirSync(path.dirname(signals.ready), { recursive: true })
   const payload = JSON.stringify({
     url,
     exe: execPath,
     name: name || 'KitsuNexus-Update',
     version: version || '',
     pid,
-    readyToken
+    readyToken,
+    signalDir: path.dirname(signals.ready)
   })
 
   return new Promise((resolve, reject) => {
@@ -202,6 +294,7 @@ function startUpdate ({ url, name, version, appRootDir, isPackaged, execPath, pi
       settled = true
       if (readyTimer) clearTimeout(readyTimer)
       removeUpdaterSignals(signals)
+      removeUpdaterSignals(legacySignals)
       reject(err)
     }
 
@@ -213,9 +306,10 @@ function startUpdate ({ url, name, version, appRootDir, isPackaged, execPath, pi
       const deadline = Date.now() + UPDATER_READY_TIMEOUT_MS
       const checkReady = () => {
         if (settled) return
-        if (signals && fs.existsSync(signals.ready)) {
+        const activeSignals = [signals, legacySignals].find(pair => pair && fs.existsSync(pair.ready))
+        if (activeSignals) {
           try {
-            fs.writeFileSync(signals.ack, `${process.pid}\n`, 'utf8')
+            fs.writeFileSync(activeSignals.ack, `${process.pid}\n`, 'utf8')
           } catch (err) {
             fail(new Error(`Could not acknowledge the update helper: ${err.message}`))
             return
@@ -227,7 +321,7 @@ function startUpdate ({ url, name, version, appRootDir, isPackaged, execPath, pi
           return
         }
         if (Date.now() >= deadline) {
-          fail(new Error('Update.exe started but its updater window did not become ready. KitsuNexus was left open.'))
+          fail(new Error(`Update.exe did not acknowledge startup within ${UPDATER_READY_TIMEOUT_MS / 1000} seconds. Check KitsuNexus-updater-startup.log in your temp folder.`))
           return
         }
         readyTimer = setTimeout(checkReady, 100)
@@ -263,4 +357,4 @@ async function contributors () {
   }
 }
 
-module.exports = { check, cmp, contributors, startUpdate, resolveUpdaterLaunch, ensureExternalUpdater, externalUpdaterPath, updaterSignalPaths, UPDATE_PAYLOAD_ENV, EXTERNAL_UPDATER_VERSION, RELEASES_PAGE }
+module.exports = { check, cmp, contributors, startUpdate, resolveUpdaterLaunch, ensureExternalUpdater, externalUpdaterPath, updaterSignalPaths, md5File, UPDATE_PAYLOAD_ENV, RELEASES_PAGE }

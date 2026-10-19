@@ -5,6 +5,16 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Fixed
+
+- **Windows updater failed after opening Update.exe.** The standalone helper previously used
+  TEMP-based ready/ack signals with a 30-second launcher deadline, which could time out while
+  the helper waited for acknowledgement. Both processes now use an explicit shared signal
+  directory under LocalAppData and allow time for portable extraction, with diagnostic logging.
+- **Updater executable remained stale even after being rebuilt.** The helper now lives in
+  `%LOCALAPPDATA%\KitsuNexus-updater\Update.exe`, and app startup compares actual MD5 hashes,
+  verifies a staged replacement, handles locked executables, and retires the legacy location.
+
 ### Added
 
 - **Optional Community Booster visual themes.** Settings now provides saved local
