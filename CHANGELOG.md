@@ -5,6 +5,10 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.79] - 2026-10-19
+
+This release improves Spotify Now Playing detection, source selection, and artwork lookup safety, and corrects Linux ARM64 packaging.
+
 ### Fixed
 
 - **Now Playing source switching and playback-state accuracy.** Keep a manually
