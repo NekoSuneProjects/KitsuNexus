@@ -38,9 +38,13 @@ Discord backend, which this project absorbs. Intended production domain:
   Optional — leave the `DISCORD_*` env vars blank and the site runs fine without it.
   `/settings/discord` links a Discord identity to your website account (separate from the
   Electron app's own narrower Discord bearer-token flow, which is unchanged and still works).
-- ✅ Docker (`Dockerfile` + `docker-compose.yml`) + CI (`.github/workflows/docker.yml`,
-  multi-arch `linux/amd64,linux/arm64` build on the shared self-hosted runner, same pattern as
-  `NODEJS`'s Electron build)
+- ✅ Docker (`Dockerfile` + `docker-compose.yml`) + manual CI
+  (`.github/workflows/docker.yml`). Under **Actions -> Build KitsuNexus Server
+  Docker -> Run workflow**, choose **GitHub-hosted** (`ubuntu-24.04`) or **self-hosted**
+  (`Linux`, `docker`, `buildx` runner labels). Both build `linux/amd64` and `linux/arm64`
+  from the `server` branch. Enable **Publish image** only when you want to upload the
+  `latest` and `sha-<server commit>` tags to GHCR. A build-only run stores neither
+  a registry image nor a GitHub Actions build cache.
 - ❌ Avatar-switch relay (WebSocket) — not started
 
 See the KitsuNexus repo's `TODO.md` ("☁️ Cloud backend" section) for the full plan.

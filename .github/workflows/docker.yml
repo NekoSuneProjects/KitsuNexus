@@ -1,40 +1,60 @@
-name: Build Docker image
+name: Build KitsuNexus Server Docker
 
 on:
-  push:
-    branches: [server, main]
   workflow_dispatch:
+    inputs:
+      runner_type:
+        description: 'Runner pool'
+        type: choice
+        required: true
+        default: github-hosted
+        options:
+          - github-hosted
+          - self-hosted
+      push_image:
+        description: 'Publish the AMD64/ARM64 image to GitHub Container Registry'
+        type: boolean
+        required: true
+        default: false
 
-# Needed to push to GitHub Container Registry (ghcr.io) using the built-in
-# GITHUB_TOKEN — no extra registry secrets required.
+# The package permission is used only when publishing is explicitly selected.
 permissions:
   contents: read
   packages: write
 
 jobs:
   build-and-push:
-    runs-on: [self-hosted, Linux, docker, buildx]
+    name: Build Docker (amd64 + arm64)
+    runs-on: ${{ inputs.runner_type == 'self-hosted' && fromJSON('["self-hosted","Linux","docker","buildx"]') || 'ubuntu-24.04' }}
+    timeout-minutes: 120
     steps:
-      - name: Checkout
+      # The backend lives on the server branch. This workflow also exists on
+      # the default main branch so Actions displays a Run workflow button.
+      - name: Checkout server source
         uses: actions/checkout@v4
+        with:
+          ref: server
 
       - name: Log in to GitHub Container Registry
+        if: ${{ inputs.push_image }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Tags: "latest" (always the newest build of main) plus the short commit SHA
-      # (so a specific build can be pinned/rolled back to).
-      - name: Extract image metadata
+      # Tag the actual server commit rather than the main workflow commit.
+      - name: Set image tags
         id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=raw,value=latest
-            type=sha
+        shell: bash
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          {
+            echo 'tags<<EOF'
+            echo "${image}:latest"
+            echo "${image}:sha-$(git rev-parse --short=7 HEAD)"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -42,17 +62,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Single multi-arch build on our own self-hosted box, same pattern as
-      # KitsuNexus's Linux Electron builds (NODEJS/.github/workflows/build.yml) —
-      # one machine cross-builds both architectures via QEMU instead of needing a
-      # separate arm64 runner.
-      - name: Build and push (amd64 + arm64)
+      # No image or cache is published for a build-only run.
+      - name: Build and optionally publish (amd64 + arm64)
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: true
+          push: ${{ inputs.push_image }}
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
