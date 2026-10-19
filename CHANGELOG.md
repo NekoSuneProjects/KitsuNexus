@@ -11,6 +11,24 @@ This release improves Spotify Now Playing detection, source selection, and artwo
 
 ### Fixed
 
+- **Updater shell arguments and external links needed stricter validation.**
+  Windows installer commands now reject environment-variable expansion and shell
+  metacharacters in paths. External browser URLs are parsed and checked before
+  opening, VRChat detail links encode IDs, and update-version text uses a text node.
+
+- **Release downloads accepted overly broad URLs and unsafe filenames.**
+  The desktop now launches only update assets returned by its latest release check.
+  The standalone helper validates HTTPS release URLs, allowed redirect hosts and
+  installer filenames, caps downloads, and verifies SHA-256 when GitHub supplies
+  an asset digest. Regression tests cover malicious URLs, path traversal and
+  malformed digests.
+
+- **Remote profile and release data could be inserted into unsafe renderer markup.**
+  Profile names, status text, image URLs, notifications, supporter badges,
+  contributor links and release-note hyperlinks now use HTML escaping and
+  allowed URL schemes. Twitch's OAuth callback validates a random state token;
+  Twitch and Discord desktop callbacks bind to loopback.
+
 - **Now Playing source switching and playback-state accuracy.** Keep a manually
   selected source from silently falling back to another native app, let valid
   Spotify sessions override title-based detection, and discard old media polls

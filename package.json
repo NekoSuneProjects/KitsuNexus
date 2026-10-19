@@ -78,6 +78,7 @@
         "CHANGELOG.md",
         "assets/**/*",
         "modules/**/*",
+        "updater/updateSecurity.js",
         "package.json",
         "node_modules/**/*"
       ],
@@ -120,6 +121,7 @@
         "CHANGELOG.md",
         "assets/**/*",
         "modules/**/*",
+        "updater/updateSecurity.js",
         "package.json",
         "node_modules/**/*"
       ],

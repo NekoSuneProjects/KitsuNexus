@@ -10,6 +10,7 @@ const { vkName } = require('./modules/vrchat/osc/vkCodes')
 const { oscPortsForProfileId } = require('./modules/vrchat/launcher/quickLaunch')
 const { LANGUAGES } = require('./modules/ai/languageList')
 const { ChatboxComposer } = require('./modules/vrchat/chatbox/chatboxComposer')
+const { escapeHtml, safeHttpUrl, safeImageUrl, releaseNotesHtml } = require('./modules/security/rendererContent')
 const { LiveTypingSender } = require('./modules/vrchat/chatbox/liveTyping')
 const { DEFAULT_PRESETS } = require('./modules/vrchat/status/statusModule')
 const { RealisticOscLeashController } = require('./modules/integrations/osc/leash/realisticOscLeash')
@@ -2139,7 +2140,7 @@ if ($('tonPort')) $('tonPort').addEventListener('change', e => {
 })
 
 /* ---------------- ToN Reference tab (fully native — renders from the offline cache) ---------------- */
-const tonEsc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const tonEsc = escapeHtml
 let tonCacheData = null
 let tonCat = 'achievements'
 let tonFilter = 'all' // 'all' | 'unlocked' | 'locked'
@@ -2153,7 +2154,7 @@ const tonPassesFilter = (cat, name) => tonFilter === 'all' || (tonFilter === 'un
 
 // Local cached icon (downloaded) with the remote URL as fallback; grayed when locked.
 function tonImg (e, unlocked, size) {
-  const remote = e.img || ''
+  const remote = safeImageUrl(e.img)
   let src = remote
   if (e.icon && tonCacheData && tonCacheData.iconDir) src = 'file:///' + (tonCacheData.iconDir + '/' + e.icon).replace(/\\/g, '/').replace(/^\/+/, '')
   const filter = unlocked ? '' : 'filter:grayscale(1) brightness(.45);'
@@ -2162,8 +2163,9 @@ function tonImg (e, unlocked, size) {
      style="width:${size}px;height:${size}px;border-radius:8px;object-fit:cover;flex:0 0 auto;${filter}"/>`
 }
 function tonSwatch (colors, unlocked) {
-  const c = unlocked ? ((colors && colors[0]) || '#7c5cff') : '#555'
-  return `<span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${tonEsc(c)};flex:0 0 auto"></span>`
+  const candidate = unlocked ? ((colors && colors[0]) || '#7c5cff') : '#555'
+  const c = /^#[0-9a-f]{3,8}$/i.test(String(candidate)) ? candidate : '#7c5cff'
+  return `<span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${c};flex:0 0 auto"></span>`
 }
 
 function renderTonBoard () {
@@ -2621,7 +2623,7 @@ function renderRadar (w) {
   setText('radarCount', String(players.length))
   const el = $('radarList'); if (!el) return
   if (!w || !w.inWorld) { el.textContent = 'Not in a world.' } else if (!players.length) { el.textContent = 'No other players detected.' } else {
-    el.innerHTML = players.map(p => `<div style="padding:2px 0">🧍 ${p.replace(/</g, '&lt;')}</div>`).join('')
+    el.innerHTML = players.map(p => `<div style="padding:2px 0">🧍 ${esc(p)}</div>`).join('')
   }
 }
 
@@ -3012,7 +3014,7 @@ async function loadOscCaptureSources () {
     const saved = await api.getSetting('oscApps.captureSource', '')
     const result = await api.oscAppsCaptureSources()
     const select = $('oscAppsCaptureSource')
-    select.innerHTML = '<option value="">Primary display</option>' + result.sources.map(source => `<option value="${source.id.replace(/"/g, '&quot;')}">${esc(source.name)}</option>`).join('')
+    select.innerHTML = '<option value="">Primary display</option>' + result.sources.map(source => `<option value="${esc(source.id)}">${esc(source.name)}</option>`).join('')
     const selected = result.sources.some(source => source.id === saved) ? saved : result.selected
     select.value = result.sources.some(source => source.id === selected) ? selected : ''
     await api.oscAppsSelectCaptureSource(select.value)
@@ -3267,7 +3269,7 @@ $('soundpadRandom').addEventListener('click', async () => spOut(await api.soundp
 $('soundpadRefresh').addEventListener('click', async () => {
   const r = await api.soundpadList()
   if (r.ok) {
-    $('soundpadList').innerHTML = r.list.map(x => `<div class="row" style="justify-content:space-between;padding:2px 0"><span>#${x.index} ${String(x.title).replace(/</g, '&lt;')}</span><button class="btn ghost sp-play" data-i="${x.index}" style="padding:2px 8px;font-size:.72rem">Play</button></div>`).join('') || 'Empty'
+    $('soundpadList').innerHTML = r.list.map(x => `<div class="row" style="justify-content:space-between;padding:2px 0"><span>#${esc(x.index)} ${esc(x.title)}</span><button class="btn ghost sp-play" data-i="${esc(x.index)}" style="padding:2px 8px;font-size:.72rem">Play</button></div>`).join('') || 'Empty'
     spOut({ ok: true })
   } else spOut(r)
 })
@@ -3509,7 +3511,7 @@ function fmtLocation (loc) {
   if (i.joinable && i.worldId) {
     const tl = INSTANCE_LABEL[i.type] || ''
     const cached = worldNameCache[i.worldId]
-    return `🌐 <span class="wn"${cached ? '' : ` data-world="${i.worldId}"`}>${cached ? esc(cached) : '…'}</span>${tl ? ` <span class="muted" style="font-size:.72rem">(${tl})</span>` : ''}`
+    return `🌐 <span class="wn"${cached ? '' : ` data-world="${esc(i.worldId)}"`}>${cached ? esc(cached) : '…'}</span>${tl ? ` <span class="muted" style="font-size:.72rem">(${tl})</span>` : ''}`
   }
   if (String(loc).startsWith('wrld_')) return '🌐 In a world'
   return esc(loc)
@@ -3556,10 +3558,10 @@ async function loadFriends () {
   renderPaged(el, fr, 60, f => {
     const st = friendState(f) // online (in-world) | active (website) | offline
     const dot = st === 'offline' ? '⚫' : (st === 'active' ? '🌐' : (STATUS_DOT[String(f.status || '').toLowerCase()] || '🟢'))
-    const name = String(f.displayName || '?').replace(/</g, '&lt;')
-    const desc = f.statusDescription ? ' · ' + String(f.statusDescription).replace(/</g, '&lt;') : ''
+    const name = esc(f.displayName || '?')
+    const desc = f.statusDescription ? ' · ' + esc(f.statusDescription) : ''
     const loc = st === 'active' ? 'On the website' : (st === 'offline' ? 'Offline' : fmtLocation(f.location))
-    return `<div class="fd-friend" data-id="${f.id}" style="padding:3px 0;cursor:pointer">${dot} <b>${name}</b> ${langBadges(f.languages)} ${rankPill(f.communityRank, { minTier: 4 })} — ${loc}${desc}</div>`
+    return `<div class="fd-friend" data-id="${esc(f.id)}" style="padding:3px 0;cursor:pointer">${dot} <b>${name}</b> ${langBadges(f.languages)} ${rankPill(f.communityRank, { minTier: 4 })} — ${loc}${desc}</div>`
   }, 'friendden', null, resolveWorldNames)
 }
 $('friendList').addEventListener('click', e => { const row = e.target.closest('.fd-friend'); if (row && row.dataset.id) openUserModal(row.dataset.id) })
@@ -3646,7 +3648,7 @@ async function loadGroups () {
   const el = $('eventGroups'); el.textContent = 'Loading…'
   const r = await api.vrchatGroups()
   if (!r.ok) { el.textContent = 'Error: ' + (r.error || 'failed') + ' — log in on the VRChat tab.'; return }
-  el.innerHTML = r.groups.map(g => `<label class="switch" style="margin:4px 0"><input type="checkbox" class="evgrp" data-id="${g.id}" ${trackedGroups.includes(g.id) ? 'checked' : ''}> ${String(g.name || g.id).replace(/</g, '&lt;')}</label>`).join('') || 'You are in no groups.'
+  el.innerHTML = r.groups.map(g => `<label class="switch" style="margin:4px 0"><input type="checkbox" class="evgrp" data-id="${esc(g.id)}" ${trackedGroups.includes(g.id) ? 'checked' : ''}> ${esc(g.name || g.id)}</label>`).join('') || 'You are in no groups.'
   el.querySelectorAll('.evgrp').forEach(c => c.addEventListener('change', () => {
     trackedGroups = Array.from(el.querySelectorAll('.evgrp')).filter(x => x.checked).map(x => x.dataset.id)
     api.saveSetting('eventGroups', trackedGroups); loadEvents()
@@ -3700,7 +3702,7 @@ async function loadMyContent (kind) {
   if (kind === 'avatars') {
     const r = await api.vrchatMyAvatars()
     if (!r.ok) { el.textContent = (r.error || 'Could not load') + ' — log in on the VRChat tab.'; return }
-    el.innerHTML = r.avatars.length ? `<div class="card-grid">${r.avatars.map(a => `<div class="mini-card" data-kind="avatar" data-id="${a.id}" style="cursor:pointer;flex-direction:column;align-items:stretch"><div style="display:flex;gap:9px;align-items:center"><img src="${a.image || 'assets/logo.png'}" referrerpolicy="no-referrer" loading="lazy" decoding="async" /><div style="min-width:0"><div class="nm">${esc(a.name)}</div><div class="muted" style="font-size:.72rem">${esc(a.releaseStatus || '')}</div></div></div><div class="row" style="margin-top:6px;gap:6px"><button class="btn av-switch" data-id="${a.id}" style="padding:3px 10px;font-size:.72rem">Wear</button><button class="btn danger av-del" data-id="${a.id}" data-name="${esc(a.name)}" style="padding:3px 10px;font-size:.72rem">Delete</button></div></div>`).join('')}</div>` : 'No avatars.'
+    el.innerHTML = r.avatars.length ? `<div class="card-grid">${r.avatars.map(a => `<div class="mini-card" data-kind="avatar" data-id="${esc(a.id)}" style="cursor:pointer;flex-direction:column;align-items:stretch"><div style="display:flex;gap:9px;align-items:center"><img src="${imgAttr(a.image || 'assets/logo.png')}" referrerpolicy="no-referrer" loading="lazy" decoding="async" /><div style="min-width:0"><div class="nm">${esc(a.name)}</div><div class="muted" style="font-size:.72rem">${esc(a.releaseStatus || '')}</div></div></div><div class="row" style="margin-top:6px;gap:6px"><button class="btn av-switch" data-id="${esc(a.id)}" style="padding:3px 10px;font-size:.72rem">Wear</button><button class="btn danger av-del" data-id="${esc(a.id)}" data-name="${esc(a.name)}" style="padding:3px 10px;font-size:.72rem">Delete</button></div></div>`).join('')}</div>` : 'No avatars.'
   } else {
     const r = await api.vrchatMyWorlds()
     if (!r.ok) { el.textContent = (r.error || 'Could not load') + ' — log in on the VRChat tab.'; return }
@@ -3758,7 +3760,7 @@ async function doAvatarSearch () {
   const el = $('avResults'); el.innerHTML = '<div class="muted">Searching…</div>'
   const r = await api.avatarsSearch(p.url, q, 1)
   if (!r.ok) { el.innerHTML = `<div class="muted">Error: ${esc(r.error)}</div>`; return }
-  el.innerHTML = r.avatars.length ? r.avatars.map(a => `<div class="mini-card" data-kind="avatar" data-id="${a.id}" style="cursor:pointer;flex-direction:column;align-items:stretch;padding:0;overflow:hidden"><img src="${a.image || 'assets/logo.png'}" referrerpolicy="no-referrer" loading="lazy" decoding="async" style="width:100%;height:120px;object-fit:cover" /><div style="padding:5px 7px;min-width:0"><div class="nm">${esc(a.name)}</div><div class="muted" style="font-size:.7rem">${esc(a.author || '')}</div></div></div>`).join('') : '<div class="muted">No results (or this provider’s response format isn’t recognised).</div>'
+  el.innerHTML = r.avatars.length ? r.avatars.map(a => `<div class="mini-card" data-kind="avatar" data-id="${esc(a.id)}" style="cursor:pointer;flex-direction:column;align-items:stretch;padding:0;overflow:hidden"><img src="${imgAttr(a.image || 'assets/logo.png')}" referrerpolicy="no-referrer" loading="lazy" decoding="async" style="width:100%;height:120px;object-fit:cover" /><div style="padding:5px 7px;min-width:0"><div class="nm">${esc(a.name)}</div><div class="muted" style="font-size:.7rem">${esc(a.author || '')}</div></div></div>`).join('') : '<div class="muted">No results (or this provider’s response format isn’t recognised).</div>'
 }
 $('avSearch').addEventListener('click', doAvatarSearch)
 $('avQuery').addEventListener('keydown', e => { if (e.key === 'Enter') doAvatarSearch() })
@@ -3776,9 +3778,10 @@ async function loadMessages () {
   const type = $('msgType').value
   const r = await api.vrchatMessages(type)
   if (!r.ok) { el.textContent = (r.error || 'failed') + ' — log in on the VRChat tab.'; return }
-  el.innerHTML = r.messages.map(m => `<div class="row" style="margin:6px 0"><input type="text" class="msg-in" data-slot="${m.slot}" value="${String(m.message || '').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" style="flex:1" /><button class="btn ghost msg-save" data-slot="${m.slot}" style="padding:4px 10px;font-size:.74rem">Save</button></div>`).join('') || 'No message slots.'
+  el.innerHTML = r.messages.map(m => `<div class="row" style="margin:6px 0"><input type="text" class="msg-in" data-slot="${esc(m.slot)}" value="${esc(m.message || '')}" style="flex:1" /><button class="btn ghost msg-save" data-slot="${esc(m.slot)}" style="padding:4px 10px;font-size:.74rem">Save</button></div>`).join('') || 'No message slots.'
   el.querySelectorAll('.msg-save').forEach(b => b.addEventListener('click', async () => {
-    const inp = el.querySelector(`.msg-in[data-slot="${b.dataset.slot}"]`)
+    const inp = [...el.querySelectorAll('.msg-in')].find(x => x.dataset.slot === b.dataset.slot)
+    if (!inp) return
     b.textContent = '…'
     const res = await api.vrchatUpdateMessage(type, b.dataset.slot, inp.value)
     b.textContent = res.ok ? '✓' : '✗'; setTimeout(() => { b.textContent = 'Save' }, 1500)
@@ -3795,13 +3798,13 @@ async function doSearch () {
   if (type === 'friends') {
     const ql = q.toLowerCase()
     const all = [...(rbFriendsCache.online || []), ...(rbFriendsCache.offline || [])].filter(f => String(f.displayName || '').toLowerCase().includes(ql))
-    el.innerHTML = all.length ? `<div class="card-grid">${all.map(f => `<div class="mini-card" data-kind="user" data-id="${f.id}" style="cursor:pointer"><img src="${f.image || 'assets/logo.png'}" referrerpolicy="no-referrer" loading="lazy" decoding="async" /><div style="min-width:0"><div class="nm">${esc(f.displayName)}</div><div class="muted" style="font-size:.72rem">${esc(fmtLocation(f.location))}</div></div></div>`).join('')}</div>` : 'No matching friends (open the friends panel once to load them).'
+    el.innerHTML = all.length ? `<div class="card-grid">${all.map(f => `<div class="mini-card" data-kind="user" data-id="${esc(f.id)}" style="cursor:pointer"><img src="${imgAttr(f.image || 'assets/logo.png')}" referrerpolicy="no-referrer" loading="lazy" decoding="async" /><div style="min-width:0"><div class="nm">${esc(f.displayName)}</div><div class="muted" style="font-size:.72rem">${esc(fmtLocation(f.location))}</div></div></div>`).join('')}</div>` : 'No matching friends (open the friends panel once to load them).'
     return
   }
   if (type === 'users') {
     const r = await api.vrchatSearchUsers(q)
     if (!r.ok) { el.textContent = r.error || 'Search failed'; return }
-    el.innerHTML = r.users.length ? `<div class="card-grid">${r.users.map(u => `<div class="mini-card" data-kind="user" data-id="${u.id}" style="cursor:pointer"><img src="${u.image || 'assets/logo.png'}" referrerpolicy="no-referrer" loading="lazy" decoding="async" /><div style="min-width:0"><div class="nm">${esc(u.displayName)}</div><div class="muted" style="font-size:.72rem">${esc(u.statusDescription || u.status || '')}</div></div></div>`).join('')}</div>` : 'No users found.'
+    el.innerHTML = r.users.length ? `<div class="card-grid">${r.users.map(u => `<div class="mini-card" data-kind="user" data-id="${esc(u.id)}" style="cursor:pointer"><img src="${imgAttr(u.image || 'assets/logo.png')}" referrerpolicy="no-referrer" loading="lazy" decoding="async" /><div style="min-width:0"><div class="nm">${esc(u.displayName)}</div><div class="muted" style="font-size:.72rem">${esc(u.statusDescription || u.status || '')}</div></div></div>`).join('')}</div>` : 'No users found.'
   } else if (type === 'worlds') {
     const r = await api.vrchatSearchWorlds(q)
     if (!r.ok) { el.textContent = r.error || 'Search failed'; return }
@@ -3979,9 +3982,9 @@ async function openWorldModal (id) {
   const w = r.world
   $('dmName').textContent = w.name || '—'
   setText('dmSub', 'World by ' + (w.authorName || '?'))
-  $('dmImage').src = w.thumbnailImageUrl || w.imageUrl || 'assets/logo.png'
-  $('dmBanner').style.backgroundImage = (w.imageUrl || w.thumbnailImageUrl) ? `url("${w.imageUrl || w.thumbnailImageUrl}")` : ''
-  $('dmActions').innerHTML = `<a class="btn" href="https://vrchat.com/home/world/${w.id}" target="_blank">Open on VRChat</a><button class="btn ghost" data-fav="add" data-type="world" data-id="${w.id}">⭐ Favorite</button><button class="btn ghost" data-fav="rm" data-id="${w.id}">✖ Unfavorite</button><button class="btn ghost" id="dmLocalFav">☆ Local Favorite</button>`
+  $('dmImage').src = safeImageUrl(w.thumbnailImageUrl || w.imageUrl)
+  $('dmBanner').style.backgroundImage = safeHttpUrl(w.imageUrl || w.thumbnailImageUrl) ? `url(${JSON.stringify(safeHttpUrl(w.imageUrl || w.thumbnailImageUrl))})` : ''
+  $('dmActions').innerHTML = `<a class="btn" href="https://vrchat.com/home/world/${encodeURIComponent(w.id)}" target="_blank" rel="noopener noreferrer">Open on VRChat</a><button class="btn ghost" data-fav="add" data-type="world" data-id="${esc(w.id)}">⭐ Favorite</button><button class="btn ghost" data-fav="rm" data-id="${esc(w.id)}">✖ Unfavorite</button><button class="btn ghost" id="dmLocalFav">☆ Local Favorite</button>`
   bindDmLocalFav('world', w.id, w.name, w.thumbnailImageUrl || w.imageUrl || '')
   $('dmBody').innerHTML = (w.description ? `<div class="um-bio">${esc(w.description)}</div>` : '') + dmInfo([
     ['Players', w.occupants || 0], ['Capacity', w.capacity || '?'], ['Visits', w.visits || 0],
@@ -4027,9 +4030,9 @@ async function openGroupModal (id) {
   const g = r.group
   $('dmName').textContent = g.name || '—'
   setText('dmSub', (g.shortCode ? '@' + g.shortCode + ' · ' : '') + (g.memberCount || 0) + ' members')
-  $('dmImage').src = g.iconUrl || 'assets/logo.png'
-  $('dmBanner').style.backgroundImage = g.bannerUrl ? `url("${g.bannerUrl}")` : ''
-  $('dmActions').innerHTML = `<a class="btn" href="https://vrchat.com/home/group/${g.id}" target="_blank">Open on VRChat</a><button class="btn ghost" id="grpInvite">Invite people…</button><button class="btn ghost" id="grpMakeInst">Create instance…</button><button class="btn ghost" id="dmLocalFav">☆ Local Favorite</button>`
+  $('dmImage').src = safeImageUrl(g.iconUrl)
+  $('dmBanner').style.backgroundImage = safeHttpUrl(g.bannerUrl) ? `url(${JSON.stringify(safeHttpUrl(g.bannerUrl))})` : ''
+  $('dmActions').innerHTML = `<a class="btn" href="https://vrchat.com/home/group/${encodeURIComponent(g.id)}" target="_blank" rel="noopener noreferrer">Open on VRChat</a><button class="btn ghost" id="grpInvite">Invite people…</button><button class="btn ghost" id="grpMakeInst">Create instance…</button><button class="btn ghost" id="dmLocalFav">☆ Local Favorite</button>`
   // VRChat has no official "favorite group" API — Local Favorites is the only way to bookmark
   // a group (e.g. to quickly get back to groups you've recently joined).
   bindDmLocalFav('group', g.id, g.name, g.iconUrl || '')
@@ -4081,7 +4084,7 @@ async function makeGroupInstance (g) {
 
   const renderWorlds = list => {
     $('giWorldList').innerHTML = list.length
-      ? list.map(w => `<div class="rb-friend gi-w" data-id="${w.id}" style="cursor:pointer"><img class="ava" src="${w.thumbnailImageUrl || w.imageUrl || 'assets/logo.png'}" referrerpolicy="no-referrer" loading="lazy" decoding="async" /><div class="meta grow"><div class="nm">${esc(w.name || w.id)}</div></div></div>`).join('')
+      ? list.map(w => `<div class="rb-friend gi-w" data-id="${esc(w.id)}" style="cursor:pointer"><img class="ava" src="${imgAttr(w.thumbnailImageUrl || w.imageUrl || 'assets/logo.png')}" referrerpolicy="no-referrer" loading="lazy" decoding="async" /><div class="meta grow"><div class="nm">${esc(w.name || w.id)}</div></div></div>`).join('')
       : '<div class="muted">No worlds — paste a world id/URL above.</div>'
     $('giWorldList').querySelectorAll('.gi-w').forEach(row => row.addEventListener('click', () => {
       selectedWorld = row.dataset.id; $('giWorld').value = row.querySelector('.nm').textContent
@@ -4116,7 +4119,7 @@ async function loadGroupExtras (gid) {
   const mr = await api.vrchatGroupMembers(gid)
   if ($('grpMembers')) {
     $('grpMembers').innerHTML = (mr.ok && mr.members.length)
-      ? `<div class="card-grid">${mr.members.map(m => `<div class="rb-friend" data-id="${m.id}" style="cursor:pointer"><img class="ava" src="${m.icon || 'assets/logo.png'}" referrerpolicy="no-referrer" loading="lazy" decoding="async" /><div class="meta grow"><div class="nm">${esc(m.name)}</div></div></div>`).join('')}</div>`
+      ? `<div class="card-grid">${mr.members.map(m => `<div class="rb-friend" data-id="${esc(m.id)}" style="cursor:pointer"><img class="ava" src="${imgAttr(m.icon || 'assets/logo.png')}" referrerpolicy="no-referrer" loading="lazy" decoding="async" /><div class="meta grow"><div class="nm">${esc(m.name)}</div></div></div>`).join('')}</div>`
       : (mr.ok ? 'No members visible.' : esc(mr.error))
     $('grpMembers').querySelectorAll('.rb-friend').forEach(row => row.addEventListener('click', () => openUserModal(row.dataset.id)))
   }
@@ -4127,7 +4130,7 @@ async function loadGroupExtras (gid) {
   const gal = await api.vrchatGroupGalleries(gid)
   if (gal.ok && gal.galleries.length) {
     const imgs = await api.vrchatGroupGalleryImages(gid, gal.galleries[0].id)
-    if ($('grpGallery')) $('grpGallery').innerHTML = (imgs.ok && imgs.images.length) ? `<div class="card-grid">${imgs.images.map(u => `<img src="${u}" referrerpolicy="no-referrer" loading="lazy" decoding="async" style="width:100%;height:110px;object-fit:cover;border-radius:8px" />`).join('')}</div>` : 'No images.'
+    if ($('grpGallery')) $('grpGallery').innerHTML = (imgs.ok && imgs.images.length) ? `<div class="card-grid">${imgs.images.map(u => `<img src="${imgAttr(u)}" referrerpolicy="no-referrer" loading="lazy" decoding="async" style="width:100%;height:110px;object-fit:cover;border-radius:8px" />`).join('')}</div>` : 'No images.'
   } else if ($('grpGallery')) $('grpGallery').textContent = 'No galleries.'
 }
 
@@ -4189,10 +4192,11 @@ function notifItemHtml (n) {
   else if (n.type === 'group') title = `📣 <b>${esc(n.sender || 'Group')}</b>`
   else title = `<b>${esc(n.sender || n.type)}</b> ${esc(n.message || '')}`
   const sub = (n.message && n.type !== 'friendRequest' && n.type !== 'boop') ? `<div class="muted" style="font-size:.74rem">${esc(n.message)}</div>` : ''
-  const accept = n.type === 'friendRequest' ? `<button class="btn nf-accept" data-id="${n.id}" style="padding:3px 9px;font-size:.72rem">Accept</button>` : ''
-  const join = (n.link) ? `<a class="btn nf-join" href="${n.link}" target="_blank" style="padding:3px 9px;font-size:.72rem">Join</a>` : ''
+  const accept = n.type === 'friendRequest' ? `<button class="btn nf-accept" data-id="${esc(n.id)}" style="padding:3px 9px;font-size:.72rem">Accept</button>` : ''
+  const link = safeHttpUrl(n.link)
+  const join = link ? `<a class="btn nf-join" href="${esc(link)}" target="_blank" rel="noopener noreferrer" style="padding:3px 9px;font-size:.72rem">Join</a>` : ''
   const unread = n.read ? '' : 'border-left:3px solid var(--accent,#7c5cff);padding-left:7px;'
-  return `<div class="notif-item" style="${unread}"><div class="grow">${title}${sub}<div class="when">${when}</div></div>${accept}${join}<button class="btn ghost nf-dismiss" data-id="${n.id}" title="Dismiss" style="padding:3px 8px;font-size:.72rem">×</button></div>`
+  return `<div class="notif-item" style="${unread}"><div class="grow">${title}${sub}<div class="when">${when}</div></div>${accept}${join}<button class="btn ghost nf-dismiss" data-id="${esc(n.id)}" title="Dismiss" style="padding:3px 8px;font-size:.72rem">×</button></div>`
 }
 function updateNotifTabCounts () {
   const cats = { friendRequest: 0, invite: 0, vrchat: 0, group: 0 }
@@ -4255,8 +4259,8 @@ function rbFriendRow (f) {
   // fmtLocation returns safe HTML (the .wn world-name span, with its own escaping) —
   // do NOT re-escape it or the span shows up as literal text.
   const loc = st === 'active' ? '🌐 On the website' : (st === 'offline' ? '⚫ Offline' : fmtLocation(f.location))
-  const ava = `<img class="ava" src="${f.image || 'assets/logo.png'}" referrerpolicy="no-referrer" loading="lazy" decoding="async" onerror="this.src='assets/logo.png'" />`
-  return `<div class="rb-friend" data-id="${f.id}">${ava}<span class="dot" style="background:${color}"></span><div class="meta grow"><div class="nm">${name} ${langBadges(f.languages)} ${rankPill(f.communityRank, { minTier: 5 })}</div><div class="lo">${loc}</div></div></div>`
+  const ava = `<img class="ava" src="${imgAttr(f.image || 'assets/logo.png')}" referrerpolicy="no-referrer" loading="lazy" decoding="async" onerror="this.src='assets/logo.png'" />`
+  return `<div class="rb-friend" data-id="${esc(f.id)}">${ava}<span class="dot" style="background:${color}"></span><div class="meta grow"><div class="nm">${name} ${langBadges(f.languages)} ${rankPill(f.communityRank, { minTier: 5 })}</div><div class="lo">${loc}</div></div></div>`
 }
 function rbSection (key, title, friends) {
   if (!friends.length && key !== 'offline') return ''
@@ -4306,10 +4310,10 @@ async function loadRightbar () {
     setText('rbName', me.user.displayName || '—')
     setText('rbStatus', me.user.statusDescription || me.user.status || '')
     const avatarUrl = me.user.userIcon || 'assets/vrchat.png'
-    $('rbAvatar').src = avatarUrl
+    $('rbAvatar').src = safeImageUrl(avatarUrl)
     const sa = $('sidebarAvatar')
     if (sa) {
-      sa.src = avatarUrl
+      sa.src = safeImageUrl(avatarUrl)
       sa.title = me.user.displayName || ''
       sa.style.display = ''
     }
@@ -4352,7 +4356,8 @@ function trustRank (tags) {
   if (tags.includes('system_trust_basic')) return { label: 'New User', color: '#3b82f6' }
   return { label: 'Visitor', color: '#9ca3af' }
 }
-function esc (s) { return String(s == null ? '' : s).replace(/</g, '&lt;') }
+function esc (s) { return escapeHtml(s) }
+function imgAttr (url) { return esc(safeImageUrl(url)) }
 let umCurrentId = null
 let umUser = null
 function closeUserModal () { $('userModal').style.display = 'none' }
@@ -4386,11 +4391,11 @@ async function openUserModal (id) {
   const u = umUser
   $('umName').textContent = u.displayName || '—'
   setText('umStatusDesc', u.statusDescription || u.status || '')
-  $('umAvatar').src = u.userIcon || u.profilePicOverride || u.currentAvatarThumbnailImageUrl || 'assets/logo.png'
+  $('umAvatar').src = safeImageUrl(u.userIcon || u.profilePicOverride || u.currentAvatarThumbnailImageUrl)
   // Banner: VRC+ users' custom profile image if set, otherwise their avatar image.
   const isVrcPlus = (u.tags || []).includes('system_supporter')
   const bannerUrl = (isVrcPlus && u.profilePicOverride) ? u.profilePicOverride : (u.currentAvatarImageUrl || u.profilePicOverride || '')
-  $('umBanner').style.backgroundImage = bannerUrl ? `url("${bannerUrl}")` : ''
+  $('umBanner').style.backgroundImage = safeHttpUrl(bannerUrl) ? `url(${JSON.stringify(safeHttpUrl(bannerUrl))})` : ''
   const tr = trustRank(u.tags)
   const chips = [`<span class="tagchip" style="border-color:${tr.color};color:${tr.color}">${tr.label}</span>`]
   // KitsuNexus Community Rank, estimated from VRChat trust (shows Veteran/Legend
@@ -4425,8 +4430,8 @@ async function renderMTab (tab) {
   document.querySelectorAll('.mtab').forEach(t => t.classList.toggle('active', t.dataset.mtab === tab))
   const body = $('umTabBody'); const u = umUser; if (!u) return
   if (tab === 'info') {
-    const links = (u.bioLinks || []).filter(Boolean).map(l => { let h = l; try { h = new URL(l).hostname } catch (_) {} return `<a href="${l}" target="_blank" class="btn ghost" style="padding:3px 10px;font-size:.74rem">🔗 ${esc(h)}</a>` }).join('')
-    const badges = (u.badges || []).filter(b => b.badgeImageUrl).map(b => `<img class="badge-img" src="${b.badgeImageUrl}" title="${esc(b.badgeName)}${b.badgeDescription ? ' — ' + esc(b.badgeDescription) : ''}" referrerpolicy="no-referrer" loading="lazy" decoding="async" />`).join('')
+    const links = (u.bioLinks || []).filter(Boolean).map(l => { let h = l; try { h = new URL(l).hostname } catch (_) {} return `<a href="${esc(safeHttpUrl(l))}" target="_blank" class="btn ghost" style="padding:3px 10px;font-size:.74rem">🔗 ${esc(h)}</a>` }).join('')
+    const badges = (u.badges || []).filter(b => b.badgeImageUrl).map(b => `<img class="badge-img" src="${imgAttr(b.badgeImageUrl)}" title="${esc(b.badgeName)}${b.badgeDescription ? ' — ' + esc(b.badgeDescription) : ''}" referrerpolicy="no-referrer" loading="lazy" decoding="async" />`).join('')
     const rows = [['Platform', u.last_platform === 'standalonewindows' ? 'PC' : (u.last_platform || '—')]]
     if (u.date_joined) rows.push(['Joined', u.date_joined])
     if (u.last_login) { try { rows.push(['Last login', new Date(u.last_login).toLocaleDateString()]) } catch (_) {} }
@@ -4494,7 +4499,7 @@ async function renderMTab (tab) {
   } else if (tab === 'content') {
     body.innerHTML = '<div class="muted">Loading worlds…</div>'
     const r = await api.vrchatUserWorlds(u.id)
-    body.innerHTML = !r.ok ? `<div class="muted">${esc(r.error)}</div>` : (r.worlds.length ? `<div class="card-grid">${r.worlds.map(w => `<div class="mini-card"><img src="${w.image || 'assets/logo.png'}" referrerpolicy="no-referrer" loading="lazy" decoding="async" /><div style="min-width:0"><div class="nm">${esc(w.name)}</div><div class="muted" style="font-size:.72rem">👤 ${w.visits || 0} · ⭐ ${w.favorites || 0}</div></div></div>`).join('')}</div>` : '<div class="muted">No public worlds.</div>')
+    body.innerHTML = !r.ok ? `<div class="muted">${esc(r.error)}</div>` : (r.worlds.length ? `<div class="card-grid">${r.worlds.map(w => `<div class="mini-card"><img src="${imgAttr(w.image || 'assets/logo.png')}" referrerpolicy="no-referrer" loading="lazy" decoding="async" /><div style="min-width:0"><div class="nm">${esc(w.name)}</div><div class="muted" style="font-size:.72rem">👤 ${w.visits || 0} · ⭐ ${w.favorites || 0}</div></div></div>`).join('')}</div>` : '<div class="muted">No public worlds.</div>')
   } else if (tab === 'mutuals') {
     body.innerHTML = '<div class="modal-tabs" style="padding:0 0 10px"><button class="mtab active" data-msub="friends">Friends</button><button class="mtab" data-msub="groups">Groups</button></div><div id="umMutBody"></div>'
     body.querySelectorAll('[data-msub]').forEach(b => b.addEventListener('click', () => { body.querySelectorAll('[data-msub]').forEach(x => x.classList.toggle('active', x === b)); renderMutSub(b.dataset.msub) }))
@@ -4510,10 +4515,10 @@ async function renderMTab (tab) {
   }
 }
 function worldCard (w) {
-  return `<div class="mini-card" data-kind="world" data-id="${w.id}" style="cursor:pointer"><img src="${w.image || 'assets/logo.png'}" referrerpolicy="no-referrer" loading="lazy" decoding="async" /><div style="min-width:0"><div class="nm">${esc(w.name)}</div><div class="muted" style="font-size:.72rem">👤 ${w.visits || w.occupants || 0} · ⭐ ${w.favorites || 0}</div></div></div>`
+  return `<div class="mini-card" data-kind="world" data-id="${esc(w.id)}" style="cursor:pointer"><img src="${imgAttr(w.image || 'assets/logo.png')}" referrerpolicy="no-referrer" loading="lazy" decoding="async" /><div style="min-width:0"><div class="nm">${esc(w.name)}</div><div class="muted" style="font-size:.72rem">👤 ${w.visits || w.occupants || 0} · ⭐ ${w.favorites || 0}</div></div></div>`
 }
 function groupCard (g) {
-  return `<div class="mini-card" data-kind="group" data-id="${g.id}" style="cursor:pointer"><img src="${g.icon || 'assets/logo.png'}" referrerpolicy="no-referrer" loading="lazy" decoding="async" /><div style="min-width:0"><div class="nm">${esc(g.name)}</div><div class="muted" style="font-size:.72rem">${g.members ? g.members + ' members' : (g.shortCode ? '@' + esc(g.shortCode) : '')}</div></div></div>`
+  return `<div class="mini-card" data-kind="group" data-id="${esc(g.id)}" style="cursor:pointer"><img src="${imgAttr(g.icon || 'assets/logo.png')}" referrerpolicy="no-referrer" loading="lazy" decoding="async" /><div style="min-width:0"><div class="nm">${esc(g.name)}</div><div class="muted" style="font-size:.72rem">${g.members ? g.members + ' members' : (g.shortCode ? '@' + esc(g.shortCode) : '')}</div></div></div>`
 }
 // Any clickable world/group/avatar mini-card opens its detail modal.
 document.addEventListener('click', e => {
@@ -4531,7 +4536,7 @@ async function openAvatarModal (id) {
   if (!r.ok) { $('dmName').textContent = 'Error'; $('dmBody').innerHTML = `<div class="muted">${esc(r.error)}</div>`; return }
   const a = r.avatar
   $('dmName').textContent = a.name || '—'; setText('dmSub', 'Avatar by ' + (a.author || '?'))
-  $('dmImage').src = a.image || 'assets/logo.png'; $('dmBanner').style.backgroundImage = a.image ? `url("${a.image}")` : ''
+  $('dmImage').src = safeImageUrl(a.image); $('dmBanner').style.backgroundImage = safeHttpUrl(a.image) ? `url(${JSON.stringify(safeHttpUrl(a.image))})` : ''
   $('dmActions').innerHTML = `<button class="btn" id="avWear">Wear</button><button class="btn ghost" id="avFav">⭐ Favorite</button><button class="btn ghost" id="dmLocalFav">☆ Local Favorite</button>`
   $('avWear').addEventListener('click', async () => { $('avWear').textContent = '…'; const w = await api.vrchatSelectAvatar(a.id); $('avWear').textContent = w.ok ? '✓ Worn' : '✗ ' + (w.error || '') })
   $('avFav').addEventListener('click', async () => { const f = await api.vrchatAddFav('avatar', a.id); setText('dmSub', f.ok ? '⭐ Favorited' : 'Error: ' + (f.error || '')) })
@@ -4551,7 +4556,7 @@ async function renderMutSub (sub) {
     if (!r.ok) { el.innerHTML = `<div class="muted">${esc(r.error)}</div>`; return }
     if (!r.friends.length) { el.innerHTML = '<div class="muted">No mutual friends.</div>'; return }
     _pageState.mutf = 0
-    renderPaged(el, r.friends, 40, f => `<div class="rb-friend" data-id="${f.id}" style="cursor:pointer"><img class="ava" src="${f.image || 'assets/logo.png'}" referrerpolicy="no-referrer" loading="lazy" decoding="async" /><div class="meta grow"><div class="nm">${esc(f.displayName)}</div></div></div>`, 'mutf', '', c => c.querySelectorAll('.rb-friend').forEach(row => { row.onclick = () => openUserModal(row.dataset.id) }))
+    renderPaged(el, r.friends, 40, f => `<div class="rb-friend" data-id="${esc(f.id)}" style="cursor:pointer"><img class="ava" src="${imgAttr(f.image || 'assets/logo.png')}" referrerpolicy="no-referrer" loading="lazy" decoding="async" /><div class="meta grow"><div class="nm">${esc(f.displayName)}</div></div></div>`, 'mutf', '', c => c.querySelectorAll('.rb-friend').forEach(row => { row.onclick = () => openUserModal(row.dataset.id) }))
   } else {
     const [tg, mg] = await Promise.all([api.vrchatUserGroups(umUser.id), api.vrchatGroups()])
     if (!tg.ok) { el.innerHTML = `<div class="muted">${esc(tg.error)}</div>`; return }
@@ -4679,23 +4684,7 @@ $('promptInput').addEventListener('keydown', e => { if (e.key === 'Enter') _prom
 
 /* ---------------- update available ---------------- */
 // Minimal Markdown -> HTML for release notes (headings, bold, code, lists, links).
-function mdToHtml (md) {
-  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  const inline = s => esc(s)
-    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
-    .replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,.08);padding:1px 4px;border-radius:4px">$1</code>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="#" data-ext="$2" style="color:var(--accent,#7c5cff)">$1</a>')
-  return String(md || '').split(/\r?\n/).map(raw => {
-    const line = raw.trim()
-    if (!line) return ''
-    let m = line.match(/^#{1,6}\s+(.*)$/)
-    if (m) return `<div style="font-weight:700;margin:10px 0 2px">${inline(m[1])}</div>`
-    m = line.match(/^[-*]\s+(.*)$/)
-    if (m) return `<div style="margin-left:6px">• ${inline(m[1])}</div>`
-    if (/^---+$/.test(line)) return '<hr style="border:none;border-top:1px solid var(--border);margin:8px 0">'
-    return `<div>${inline(line)}</div>`
-  }).join('')
-}
+function mdToHtml (md) { return releaseNotesHtml(md) }
 let _updateInfo = null
 function showUpdate (info) {
   _updateInfo = info
@@ -4755,8 +4744,8 @@ async function loadAbout () {
       if (r && r.ok && r.contributors.length) {
         el.innerHTML = r.contributors.map(c => {
           const tip = c.commits > 0 ? `${c.commits} commits` : 'Collaborator'
-          return `<a href="#" data-ext="${c.url}" title="${tip}" style="display:inline-flex;align-items:center;gap:6px;margin:3px 8px 3px 0;text-decoration:none;color:var(--text)">` +
-            `<img src="${c.avatar}" referrerpolicy="no-referrer" style="width:22px;height:22px;border-radius:50%" onerror="this.style.display='none'"/> ${esc(c.login)}</a>`
+          return `<a href="#" data-ext="${esc(safeHttpUrl(c.url))}" title="${esc(tip)}" style="display:inline-flex;align-items:center;gap:6px;margin:3px 8px 3px 0;text-decoration:none;color:var(--text)">` +
+            `<img src="${imgAttr(c.avatar)}" referrerpolicy="no-referrer" style="width:22px;height:22px;border-radius:50%" onerror="this.style.display='none'"/> ${esc(c.login)}</a>`
         }).join('')
       } else el.textContent = 'Could not load contributors.'
     }
@@ -4774,7 +4763,7 @@ async function loadAbout () {
           const tip = `${s.username || 'Anonymous'} · ${PLATFORM_LABEL[s.platform] || s.platform}`
           const avatar = s.avatarUrl || 'https://cdn.discordapp.com/embed/avatars/0.png'
           return `<a href="#" data-ext="${link}" title="${esc(tip)}" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--text)">` +
-            `<img src="${avatar}" referrerpolicy="no-referrer" style="width:28px;height:28px;border-radius:50%" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'"/></a>`
+            `<img src="${imgAttr(avatar)}" referrerpolicy="no-referrer" style="width:28px;height:28px;border-radius:50%" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'"/></a>`
         }).join('')
       } else if (r && !r.ok) {
         el.innerHTML = ''
@@ -4791,7 +4780,7 @@ if ($('aboutCheckUpdate')) $('aboutCheckUpdate').addEventListener('click', async
   const el = $('aboutUpdate'); if (el) el.textContent = 'Checking…'
   const r = await api.updateCheck()
   if (!r || !r.ok) { if (el) el.textContent = 'Could not check (offline?).'; return }
-  if (r.available) { if (el) el.innerHTML = `🎉 v${r.latest} is available!`; showUpdate(r) } else if (el) el.textContent = `✓ You're up to date (v${r.current}).`
+  if (r.available) { if (el) el.textContent = `🎉 v${r.latest} is available!`; showUpdate(r) } else if (el) el.textContent = `✓ You're up to date (v${r.current}).`
 })
 const aboutBtn = document.querySelector('[data-tab="about"]')
 if (aboutBtn) aboutBtn.addEventListener('click', loadAbout)
@@ -4806,7 +4795,7 @@ async function pickFriends (title) {
   const friends = r.ok ? r.friends.slice().sort((a, b) => String(a.displayName).localeCompare(String(b.displayName))) : []
   const render = () => {
     const q = $('pickerSearch').value.toLowerCase()
-    $('pickerList').innerHTML = friends.filter(f => !q || String(f.displayName).toLowerCase().includes(q)).map(f => `<label class="rb-friend" style="cursor:pointer"><input type="checkbox" class="pk" data-id="${f.id}" ${_pickerSel.has(f.id) ? 'checked' : ''} style="width:auto" /> <span class="nm">${esc(f.displayName)}</span></label>`).join('') || '<div class="muted">No online friends.</div>'
+    $('pickerList').innerHTML = friends.filter(f => !q || String(f.displayName).toLowerCase().includes(q)).map(f => `<label class="rb-friend" style="cursor:pointer"><input type="checkbox" class="pk" data-id="${esc(f.id)}" ${_pickerSel.has(f.id) ? 'checked' : ''} style="width:auto" /> <span class="nm">${esc(f.displayName)}</span></label>`).join('') || '<div class="muted">No online friends.</div>'
     $('pickerList').querySelectorAll('.pk').forEach(c => c.addEventListener('change', () => { c.checked ? _pickerSel.add(c.dataset.id) : _pickerSel.delete(c.dataset.id) }))
   }
   render(); $('pickerSearch').oninput = render
@@ -4937,7 +4926,7 @@ async function loadModerations () {
   if (!r.ok) { el.textContent = (r.error || 'failed') + ' — log in on the VRChat tab.'; return }
   if (!r.moderations.length) { el.textContent = 'No blocked or muted users.'; return }
   _pageState.mod = 0
-  renderPaged(el, r.moderations, 50, m => `<div class="row" style="justify-content:space-between;padding:3px 0"><span>${m.type === 'block' ? '🚫' : '🔇'} ${esc(m.targetName || m.targetUserId)}</span><button class="btn ghost mod-un" data-id="${m.targetUserId}" data-type="${m.type}" style="padding:3px 9px;font-size:.72rem">Remove</button></div>`, 'mod', '', c => c.querySelectorAll('.mod-un').forEach(b => { b.onclick = async () => { b.textContent = '…'; await api.vrchatUnmoderate(b.dataset.id, b.dataset.type); loadModerations() } }))
+  renderPaged(el, r.moderations, 50, m => `<div class="row" style="justify-content:space-between;padding:3px 0"><span>${m.type === 'block' ? '🚫' : '🔇'} ${esc(m.targetName || m.targetUserId)}</span><button class="btn ghost mod-un" data-id="${esc(m.targetUserId)}" data-type="${m.type}" style="padding:3px 9px;font-size:.72rem">Remove</button></div>`, 'mod', '', c => c.querySelectorAll('.mod-un').forEach(b => { b.onclick = async () => { b.textContent = '…'; await api.vrchatUnmoderate(b.dataset.id, b.dataset.type); loadModerations() } }))
 }
 $('modRefresh').addEventListener('click', loadModerations)
 
@@ -4985,17 +4974,17 @@ function favCard ({ id, vrchatId, kind, name, image, note, collection, cloudBadg
   const kindIcon = kind === 'world' ? '🌐' : kind === 'avatar' ? '🧍' : kind === 'group' ? '👥' : '👤'
   return `<div class="fav-card" data-fav-id="${id}">
     <div class="fav-thumb-wrap">
-      <img src="${image || 'assets/logo.png'}" referrerpolicy="no-referrer" loading="lazy" decoding="async" />
+      <img src="${imgAttr(image || 'assets/logo.png')}" referrerpolicy="no-referrer" loading="lazy" decoding="async" />
       <span class="fav-kind">${kindIcon} ${kind}</span>
       ${cloudBadge ? `<span class="fav-kind" style="left:auto;right:26px;background:rgba(0,229,255,.25)" title="Also saved to Local Favorites">☁</span>` : ''}
-      <input type="checkbox" class="fav-select" data-id="${id}" title="Select" />
+      <input type="checkbox" class="fav-select" data-id="${esc(id)}" title="Select" />
     </div>
     <div class="fav-body">
       <div class="fav-name" title="${esc(name)}">${esc(name)}</div>
       ${note ? `<div class="fav-note" title="${esc(note)}">📝 ${esc(note)}</div>` : ''}
       ${collection ? `<div class="fav-collection">${esc(collection)}</div>` : ''}
       <div class="fav-actions">
-        <button class="btn ghost fav-open" data-type="${kind}" data-id="${vrchatId}">Open</button>
+        <button class="btn ghost fav-open" data-type="${kind}" data-id="${esc(vrchatId)}">Open</button>
         ${removeAttr}
       </div>
     </div>
@@ -5004,7 +4993,7 @@ function favCard ({ id, vrchatId, kind, name, image, note, collection, cloudBadg
 function favLocalCard (f) {
   return favCard({
     id: f.id, vrchatId: f.vrchat_id, kind: f.type, name: f.display_name || f.vrchat_id, image: f.image_url, note: f.note, collection: f.collection,
-    removeAttr: `<button class="btn ghost fav-edit-note" data-id="${f.id}">Edit</button><button class="btn danger fav-remove-local" data-id="${f.id}">Remove</button>`
+    removeAttr: `<button class="btn ghost fav-edit-note" data-id="${esc(f.id)}">Edit</button><button class="btn danger fav-remove-local" data-id="${esc(f.id)}">Remove</button>`
   })
 }
 // `groupLabel` is VRChat's own favorite group/category for this item (e.g. "Group 1",
@@ -5012,7 +5001,7 @@ function favLocalCard (f) {
 function favOfficialCard (f, type, inCloud, groupLabel) {
   return favCard({
     id: f.id, vrchatId: f.id, kind: type, name: f.name || f.id, image: f.image, note: '', collection: '', cloudBadge: inCloud,
-    removeAttr: `<button class="btn ghost fav-move-cloud" data-type="${type}" data-id="${f.id}" data-name="${esc(f.name || f.id)}" data-image="${esc(f.image || '')}" data-group="${esc(groupLabel || '')}" title="Save to Local/Cloud Favorites and remove from VRChat's official list, to free up a favorite slot">☁ Move to Cloud</button><button class="btn danger fav-remove-official" data-id="${f.id}">Unfavorite</button>`
+    removeAttr: `<button class="btn ghost fav-move-cloud" data-type="${type}" data-id="${esc(f.id)}" data-name="${esc(f.name || f.id)}" data-image="${esc(f.image || '')}" data-group="${esc(groupLabel || '')}" title="Save to Local/Cloud Favorites and remove from VRChat's official list, to free up a favorite slot">☁ Move to Cloud</button><button class="btn danger fav-remove-official" data-id="${esc(f.id)}">Unfavorite</button>`
   })
 }
 function updateFavSelectionUi () {

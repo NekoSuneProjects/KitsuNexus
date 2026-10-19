@@ -21,7 +21,9 @@ const path = require('path')
 const fs = require('fs')
 const os = require('os')
 const https = require('https')
+const crypto = require('crypto')
 const { spawn, execFile } = require('child_process')
+const { validateUpdateUrl, validateUpdateName, validateUpdateDigest, validateWindowsCommandArgument } = require('./updateSecurity')
 
 const UPDATE_PAYLOAD_ENV = 'KITSUNEXUS_UPDATE_PAYLOAD'
 const UPDATER_ACK_TIMEOUT_MS = 135000
@@ -67,7 +69,7 @@ function parseUpdatePayload (argv, env = process.env) {
 
 const args = parseUpdatePayload(process.argv.slice(app.isPackaged ? 1 : 2))
 delete process.env[UPDATE_PAYLOAD_ENV]
-const { url, exe: exePath, name: fileName = 'KitsuNexus-Update.exe', version = '', pid, readyToken, signalDir } = args
+const { url, exe: exePath, name: fileName = 'KitsuNexus-Update.exe', version = '', digest = '', pid, readyToken, signalDir } = args
 startupLog(`payloadParsed url=${!!url} exe=${!!exePath} readyToken=${!!readyToken}`)
 
 let mainWindow = null
@@ -159,28 +161,45 @@ function waitUntilFileUnlocked (targetPath, attempts = 12, intervalMs = 300) {
 function download (fromUrl, toPath, onProgress) {
   return new Promise((resolve, reject) => {
     const request = (u, redirectsLeft) => {
-      https.get(u, res => {
+      const call = https.get(u, res => {
         if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
           if (redirectsLeft <= 0) return reject(new Error('Too many redirects'))
           res.resume()
-          return request(res.headers.location, redirectsLeft - 1)
+          try {
+            const next = new URL(res.headers.location, u).href
+            return request(validateUpdateUrl(next, true), redirectsLeft - 1)
+          } catch (err) { return reject(err) }
         }
         if (res.statusCode !== 200) {
           res.resume()
           return reject(new Error(`Download failed: HTTP ${res.statusCode}`))
         }
         const total = parseInt(res.headers['content-length'] || '0', 10)
+        if (total > 2 * 1024 * 1024 * 1024) { res.resume(); return reject(new Error('Update is too large')) }
         let received = 0
         const writer = fs.createWriteStream(toPath)
-        res.on('data', chunk => { received += chunk.length; onProgress({ received, total }) })
+        res.on('data', chunk => {
+          received += chunk.length
+          if (received > 2 * 1024 * 1024 * 1024) { res.destroy(new Error('Update is too large')); return }
+          onProgress({ received, total })
+        })
         res.pipe(writer)
         writer.on('finish', () => writer.close(resolve))
         writer.on('error', reject)
-        res.on('error', reject)
+        res.on('error', err => { writer.destroy(); reject(err) })
       }).on('error', reject)
+      call.setTimeout(30000, () => call.destroy(new Error('Update download timed out')))
     }
-    request(fromUrl, 5)
+    try { request(validateUpdateUrl(fromUrl), 5) } catch (err) { reject(err) }
   })
+}
+
+async function verifyDownloadedDigest (file, expected) {
+  const digestHex = validateUpdateDigest(expected)
+  if (!digestHex) return
+  const hasher = crypto.createHash('sha256')
+  for await (const chunk of fs.createReadStream(file)) hasher.update(chunk)
+  if (hasher.digest('hex') !== digestHex) throw new Error('Update SHA-256 digest does not match the GitHub release asset')
 }
 
 // execFile wrapper — used for non-NSIS operations (Mac ditto/mv/rm, Linux
@@ -225,10 +244,7 @@ async function killRunningInstances (targetExePath = exePath) {
 // kept as one quoted argument so a path such as C:\Program Files\KitsuNexus is
 // not truncated to C:\Program.
 function launchNsis (installerPath, nsisArgs) {
-  const values = [installerPath, ...nsisArgs]
-  if (values.some(value => /["\r\n]/.test(String(value)))) {
-    return Promise.reject(new Error('The installer path contains unsupported command-line characters.'))
-  }
+  try { [installerPath, ...nsisArgs].forEach(validateWindowsCommandArgument) } catch (err) { return Promise.reject(err) }
   const commandArgs = nsisArgs.map(value => {
     const arg = String(value)
     return /^\/D=/i.test(arg) ? `"${arg}"` : arg
@@ -500,18 +516,28 @@ async function run () {
     setTimeout(() => app.quit(), 4000)
     return
   }
+  let trustedUrl, trustedName
+  try {
+    trustedUrl = validateUpdateUrl(url)
+    trustedName = validateUpdateName(fileName)
+    validateUpdateDigest(digest)
+  } catch (err) {
+    send('status', { phase: 'error', message: err.message })
+    return
+  }
 
   // Wait for the main app to fully release its file handles
   await waitForPidExit(pid)
   await waitUntilFileUnlocked(exePath)
 
   const destDir = app.getPath('temp')
-  const downloadPath = path.join(destDir, fileName)
+  const downloadPath = path.join(destDir, `kitsunexus-${crypto.randomBytes(8).toString('hex')}-${trustedName}`)
   lastDownloadPath = downloadPath
 
   try {
     send('status', { phase: 'downloading', version })
-    await download(url, downloadPath, progress => send('progress', progress))
+    await download(trustedUrl, downloadPath, progress => send('progress', progress))
+    await verifyDownloadedDigest(downloadPath, digest)
   } catch (err) {
     try { fs.unlinkSync(downloadPath) } catch (_) {}
     lastDownloadPath = null

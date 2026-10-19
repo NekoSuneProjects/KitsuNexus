@@ -16,6 +16,7 @@ const fs = require('fs')
 const os = require('os')
 const crypto = require('crypto')
 const { spawn } = require('child_process')
+const { validateUpdateUrl, validateUpdateName, validateUpdateDigest } = require('../../../updater/updateSecurity')
 
 const REPO = 'NekoSuneProjects/KitsuNexus'
 const API = `https://api.github.com/repos/${REPO}/releases/latest`
@@ -64,6 +65,11 @@ async function check (currentVersion) {
     const pick = re => assets.find(a => re.test(a.name || ''))
     const installer = pick(/Setup.*\.exe$/i) || pick(/\.exe$/i) || pick(/\.msi$/i) || pick(/\.dmg$/i) || pick(/\.appimage$/i)
     const updateAsset = pickUpdateAsset(assets)
+    if (updateAsset) {
+      validateUpdateUrl(updateAsset.browser_download_url)
+      validateUpdateName(updateAsset.name)
+      validateUpdateDigest(updateAsset.digest)
+    }
     return {
       ok: true,
       available: cmp(latest, currentVersion) > 0,
@@ -74,7 +80,8 @@ async function check (currentVersion) {
       installerUrl: installer ? installer.browser_download_url : (data.html_url || RELEASES_PAGE),
       updateAssetUrl: updateAsset ? updateAsset.browser_download_url : null,
       updateAssetName: updateAsset ? updateAsset.name : null,
-      updateAssetSize: updateAsset ? updateAsset.size : null
+      updateAssetSize: updateAsset ? updateAsset.size : null,
+      updateAssetDigest: updateAsset ? (updateAsset.digest || '') : ''
     }
   } catch (err) {
     return { ok: false, error: err.message, current: currentVersion }
@@ -249,7 +256,10 @@ function removeUpdaterSignals (signals) {
 // helper starts. A ready/ack file handshake also proves the real
 // extracted updater window is alive before KitsuNexus exits (the Windows
 // portable wrapper's own `spawn` event is not sufficient).
-function startUpdate ({ url, name, version, appRootDir, isPackaged, execPath, pid }, quitApp) {
+function startUpdate ({ url, name, version, digest, appRootDir, isPackaged, execPath, pid }, quitApp) {
+  url = validateUpdateUrl(url)
+  name = validateUpdateName(name)
+  if (digest) validateUpdateDigest(digest)
   const launch = resolveUpdaterLaunch(appRootDir, isPackaged)
   if (!launch) throw new Error(`No update helper available for platform "${process.platform}"`)
   if (isPackaged && process.platform === 'win32') launch.cmd = ensureExternalUpdater()
@@ -270,6 +280,7 @@ function startUpdate ({ url, name, version, appRootDir, isPackaged, execPath, pi
     exe: execPath,
     name: name || 'KitsuNexus-Update',
     version: version || '',
+    digest: digest || '',
     pid,
     readyToken,
     signalDir: path.dirname(signals.ready)

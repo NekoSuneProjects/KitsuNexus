@@ -104,7 +104,7 @@ test('main app waits for the helper ready signal, writes acknowledgement, then q
 
     let quitCalled = false
     const childPid = await startUpdate({
-      url: 'https://example.invalid/update.exe',
+      url: 'https://github.com/NekoSuneProjects/KitsuNexus/releases/download/v1.0.80/KitsuNexus-Setup-1.0.80-x64.exe',
       name: 'test.exe',
       version: '1.0.0',
       appRootDir: root,
