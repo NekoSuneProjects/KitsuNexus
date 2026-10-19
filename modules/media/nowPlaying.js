@@ -1,5 +1,6 @@
 const { execFile } = require('child_process')
 const { lookupArtwork } = require('./artworkLookup')
+const { getSpotifyWindowTrack, shouldTrySpotifyWindowFallback } = require('./spotifyWindowFallback')
 
 const cacheTtlMs = 3000
 const transientMissGraceMs = 12000
@@ -184,6 +185,7 @@ async function normalizeMedia (media) {
     sessions: sessions.length ? sessions : lastSessions,
     preferredSource,
     error: media.error || '',
+    detectionMethod: media.detectionMethod || 'windows-media-session',
     fetchedAt: Number(media.fetchedAt) || Date.now()
   }
 
@@ -211,6 +213,26 @@ async function normalizeMedia (media) {
 }
 
 async function resolveNowPlayingResult (media) {
+  // Some Spotify desktop versions do not expose a WinRT media session, even
+  // while a song is playing. A valid native session always wins, including a
+  // paused Spotify session (the window title cannot tell play from pause).
+  // Honor explicitly selected non-Spotify sources and active native sessions.
+  if (shouldTrySpotifyWindowFallback(media, preferredSource)) {
+    const spotify = await getSpotifyWindowTrack()
+    if (spotify) {
+      const sessions = Array.isArray(media.sessions) ? media.sessions : (media.sessions ? [media.sessions] : [])
+      media = {
+        ...spotify,
+        found: true,
+        sourceAppId: 'Spotify.exe',
+        status: 'Playing', // Window titles do not expose playback state; best effort.
+        detectionMethod: 'spotify-window-title',
+        sessions: [...sessions.filter(s => !String(s?.appId || '').toLowerCase().includes('spotify')),
+          { appId: 'Spotify.exe', status: 'Unknown' }],
+        fetchedAt: Date.now()
+      }
+    }
+  }
   const normalized = await normalizeMedia(media)
   const mediaKey = getMediaKey(normalized)
 

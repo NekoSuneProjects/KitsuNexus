@@ -553,9 +553,11 @@ function renderNowPlaying (m) {
     }
     return
   }
-  if (diag) diag.textContent = ''
+  if (diag) diag.textContent = m.detectionMethod === 'spotify-window-title'
+    ? 'Spotify detected from its window title because Windows has no Spotify media session. Playback time and pause detection are unavailable in this mode.'
+    : ''
   setText('nowPlayingTitle', m.title || 'Unknown')
-  setText('nowPlayingMeta', [m.artist, m.album, m.status].filter(Boolean).join(' · ') || 'Active')
+  setText('nowPlayingMeta', [m.artist, m.album, m.detectionMethod === 'spotify-window-title' ? 'Playback unverified' : m.status].filter(Boolean).join(' · ') || 'Active')
   setText('nowPlayingSource', m.source || 'Windows')
   const progress = mediaProgressInfo(m)
   setText('nowPlayingTime', progress.time ? `${progress.progress} / ${progress.duration}` : 'No timeline available')

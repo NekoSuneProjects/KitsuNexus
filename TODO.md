@@ -1,5 +1,8 @@
 # KitsuNexus — TODO / Roadmap
 
+## Now Playing
+- [x] Detect Spotify songs from its desktop window title when Windows media sessions disappear, while retaining native session priority and reporting fallback limitations.
+
 ## CI/CD
 - [x] Fix Linux ARM64 packaging rebuilding x64 native modules by letting each matrix job select one architecture.
 - [x] Automatically create missing release tags when a manual build specifies a version, and build installers with that version.
