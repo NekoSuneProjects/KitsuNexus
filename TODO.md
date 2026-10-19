@@ -1,5 +1,23 @@
 # KitsuNexus — TODO / Roadmap
 
+## Now Playing
+- [x] Detect Spotify songs from its desktop window title when Windows media sessions disappear, while retaining native session priority and reporting fallback limitations.
+- [x] Keep manually selected media sources authoritative and ignore results from older polls after source switching.
+- [x] Avoid claiming Spotify is actively playing when window-title fallback cannot verify playback.
+- [x] Limit remote artwork response and cache memory usage; reject unrelated search results and unsafe artwork URLs.
+
+## Security
+- [ ] Replace the legacy Node-enabled Electron renderer with an isolated preload API and finish auditing untrusted HTML/attribute interpolation. This needs a coordinated migration because the renderer currently imports many Node modules directly.
+
+## Security hardening
+- [x] Restrict automatic updater assets and redirects to approved GitHub Release hosts; validate installer filenames, sizes and available SHA-256 digests.
+- [x] Require a release-check match before launching the updater, and escape remote profile, avatar, notification and release-note HTML/URLs.
+- [x] Protect Twitch OAuth callbacks using per-login state and bind desktop OAuth callback servers to IPv4 loopback.
+- [x] Validate external browser URLs with a strict URL parser, encode VRChat card links and prevent Windows installer command expansion.
+- [ ] Migrate the Node-enabled Electron renderer to context isolation with a narrowly scoped preload API (also tracked under Community Booster).
+- [ ] Audit OSC listeners on all interfaces (0.0.0.0) and offer explicit LAN opt-in without breaking networked tracking devices.
+- [ ] Add a backend-coordinated state binding for the Discord desktop identity callback to prevent cross-login session injection.
+
 ## CI/CD
 - [x] Fix Linux ARM64 packaging rebuilding x64 native modules by letting each matrix job select one architecture.
 - [x] Automatically create missing release tags when a manual build specifies a version, and build installers with that version.

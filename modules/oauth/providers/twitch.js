@@ -10,6 +10,7 @@
 //   add exactly:  http://localhost:3737/oauth2/twitch/callback
 
 const http = require('http')
+const crypto = require('crypto')
 const axios = require('axios')
 const { BrowserWindow } = require('electron')
 
@@ -35,6 +36,7 @@ function loginTwitch (clientId, clientSecret, scopes = 'moderator:read:followers
     if (!clientId) return reject(new Error('Enter your Twitch Client ID first'))
 
     const implicit = !clientSecret // no secret -> implicit grant (no refresh token)
+    const expectedState = crypto.randomBytes(24).toString('hex')
     let settled = false
     let server = null
     let win = null
@@ -50,6 +52,10 @@ function loginTwitch (clientId, clientSecret, scopes = 'moderator:read:followers
       const u = new URL(req.url, REDIRECT)
 
       if (u.pathname === '/oauth2/twitch/callback') {
+        // A web page must not be able to complete another user's local login.
+        if (u.searchParams.get('state') !== expectedState && !implicit) {
+          res.writeHead(403); res.end('Invalid OAuth state'); return
+        }
         const err = u.searchParams.get('error_description') || u.searchParams.get('error')
         if (err) {
           res.writeHead(200, { 'Content-Type': 'text/html' }); res.end('<h2>Login failed</h2>')
@@ -79,6 +85,9 @@ function loginTwitch (clientId, clientSecret, scopes = 'moderator:read:followers
       }
 
       if (u.pathname === TOKEN_PATH) { // implicit: fragment forwarded here
+        if (!implicit || u.searchParams.get('state') !== expectedState) {
+          res.writeHead(403); res.end('Invalid OAuth state'); return
+        }
         const token = u.searchParams.get('access_token')
         const err = u.searchParams.get('error_description') || u.searchParams.get('error')
         res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('ok')
@@ -95,11 +104,11 @@ function loginTwitch (clientId, clientSecret, scopes = 'moderator:read:followers
       e.code === 'EADDRINUSE' ? `Port ${PORT} in use — close the other login and retry` : 'OAuth server failed: ' + e.message
     )))
 
-    server.listen(PORT, () => {
+    server.listen(PORT, '127.0.0.1', () => {
       const authUrl = 'https://id.twitch.tv/oauth2/authorize' +
         `?response_type=${implicit ? 'token' : 'code'}&client_id=${encodeURIComponent(clientId)}` +
         `&redirect_uri=${encodeURIComponent(REDIRECT)}` +
-        `&scope=${encodeURIComponent(scopes)}&force_verify=true`
+        `&scope=${encodeURIComponent(scopes)}&state=${expectedState}&force_verify=true`
       win = new BrowserWindow({
         width: 520, height: 760, title: 'Login with Twitch', autoHideMenuBar: true,
         webPreferences: { nodeIntegration: false, contextIsolation: true }

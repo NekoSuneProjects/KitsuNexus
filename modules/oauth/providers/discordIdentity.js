@@ -59,7 +59,8 @@ function loginDiscordIdentity (backendBaseUrl) {
       e.code === 'EADDRINUSE' ? `Port ${PORT} in use — close the other login and retry` : 'OAuth server failed: ' + e.message
     )))
 
-    server.listen(PORT, () => {
+    // The desktop session token is delivered only to this machine.
+    server.listen(PORT, '127.0.0.1', () => {
       win = new BrowserWindow({
         width: 520, height: 760, title: 'Login with Discord', autoHideMenuBar: true,
         webPreferences: { nodeIntegration: false, contextIsolation: true }

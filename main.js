@@ -6,6 +6,7 @@ const axios = require('axios')
 app.setName('KitsuNexus')
 const settings = require('./settings')
 const { createCommunityBooster } = require('./modules/integrations/discord/communityBooster')
+const { safeHttpUrl } = require('./modules/security/rendererContent')
 
 // ffmpeg-static's own path points inside app.asar when packaged, which can't
 // be executed directly - asarUnpack (package.json build config) places the
@@ -380,7 +381,7 @@ app.whenReady().then(async () => {
   setTimeout(startGroupAlerts, 22000)
   // Check GitHub for a newer release and tell the renderer once it's loaded.
   setTimeout(async () => {
-    const info = await updater.check(app.getVersion())
+    const info = await checkAndCacheUpdate()
     if (info && info.ok && info.available) push('update:available', info)
   }, 4000)
   // Background VRChat news poller — staggered so it doesn't hit the network
@@ -814,8 +815,21 @@ ipcMain.handle('ton:dataRefresh', async () => {
   return { achievements: c.achievements.length, terrors: c.terrors.length, fetchedAt: c.fetchedAt }
 })
 ipcMain.handle('ton:seen', () => ({ terrors: [...tonSeenTerrors], maps: [...tonSeenMaps] }))
-ipcMain.handle('app:openExternal', (e, url) => { if (/^https?:\/\//i.test(url || '')) shell.openExternal(url); return true })
-ipcMain.handle('update:check', () => updater.check(app.getVersion()))
+ipcMain.handle('app:openExternal', async (e, url) => {
+  const trustedUrl = safeHttpUrl(url)
+  if (!trustedUrl) return false
+  await shell.openExternal(trustedUrl)
+  return true
+})
+let verifiedUpdateAsset = null
+async function checkAndCacheUpdate () {
+  const result = await updater.check(app.getVersion())
+  verifiedUpdateAsset = result?.ok && result.available && result.updateAssetUrl
+    ? { url: result.updateAssetUrl, name: result.updateAssetName, version: result.latest, digest: result.updateAssetDigest }
+    : null
+  return result
+}
+ipcMain.handle('update:check', checkAndCacheUpdate)
 ipcMain.handle('app:version', () => app.getVersion())
 ipcMain.handle('app:contributors', () => updater.contributors())
 
@@ -839,9 +853,12 @@ ipcMain.handle('app:supporters', async () => {
 // it's located per platform / dev vs packaged.
 ipcMain.handle('update:startUpdate', async (e, { url, name, version } = {}) => {
   if (!url) throw new Error('No update file to download')
+  if (!verifiedUpdateAsset || url !== verifiedUpdateAsset.url || name !== verifiedUpdateAsset.name || version !== verifiedUpdateAsset.version) {
+    throw new Error('Update asset is not from the latest verified release check')
+  }
   try {
     await updater.startUpdate({
-      url, name, version,
+      ...verifiedUpdateAsset,
       appRootDir: __dirname,
       isPackaged: app.isPackaged,
       execPath: process.execPath,

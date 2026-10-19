@@ -19,6 +19,7 @@
     },
     "files": [
       "main.js",
+      "updateSecurity.js",
       "preload.js",
       "index.html",
       "renderer.js",

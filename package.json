@@ -1,6 +1,6 @@
 {
   "name": "kitsunexus",
-  "version": "1.0.78",
+  "version": "1.0.79",
   "main": "main.js",
   "bin": "main.js",
   "scripts": {
@@ -78,6 +78,7 @@
         "CHANGELOG.md",
         "assets/**/*",
         "modules/**/*",
+        "updater/updateSecurity.js",
         "package.json",
         "node_modules/**/*"
       ],
@@ -120,6 +121,7 @@
         "CHANGELOG.md",
         "assets/**/*",
         "modules/**/*",
+        "updater/updateSecurity.js",
         "package.json",
         "node_modules/**/*"
       ],
