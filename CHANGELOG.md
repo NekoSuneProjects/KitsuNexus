@@ -5,6 +5,14 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Fixed
+
+- **Manual release checkout failed for v1.0.78.** The release tag existed only
+  in a local repository and was missing on GitHub. The existing tag has now been
+  published so `actions/checkout` can fetch it. Artifact names also use the
+  selected platform consistently so a multi-platform release can upload each
+  installer set without a name collision.
+
 ### Changed
 
 - **GitHub Actions builds are now started manually with a runner choice.** Choose

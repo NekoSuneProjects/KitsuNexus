@@ -1,6 +1,8 @@
 # KitsuNexus — TODO / Roadmap
 
 ## CI/CD
+- [x] Publish missing v1.0.78 tag to GitHub so manual release checkout succeeds.
+- [x] Fix per-platform Actions artifact naming for manual multi-platform builds and releases.
 - [x] Switch desktop and Docker workflows to manual dispatch with a GitHub-hosted / self-hosted runner choice and optional publishing.
 - [x] Support targeted desktop builds to avoid waiting for an unregistered self-hosted Windows runner.
 - [x] Keep build-only runs free of GitHub Actions artifact uploads / GHCR pushes by default.
