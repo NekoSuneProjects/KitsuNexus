@@ -5,6 +5,9 @@
 - [ ] Review Avatar Locker's fixed minimum grid widths for the same narrow-center-pane issue.
 
 ## Now Playing
+- [x] Keep Spotify's progress clock continuous when its accessibility slider freezes, poll controls for current pause/seek/track state, and reject older snapshots.
+- [x] Read Spotify elapsed time, track duration and playback state from its player accessibility controls when Windows media sessions are missing.
+- [ ] Repair the artwork lookup test VM's mocked `require` after the separate artwork User-Agent change; the full test suite currently fails its oversized-response case.
 - [x] Detect Spotify songs from its desktop window title when Windows media sessions disappear, while retaining native session priority and reporting fallback limitations.
 - [x] Keep manually selected media sources authoritative and ignore results from older polls after source switching.
 - [x] Avoid claiming Spotify is actively playing when window-title fallback cannot verify playback.
@@ -39,7 +42,7 @@
 ## Community Booster integration
 - [x] Add optional local-only Spark / Glow / Nova / Constellation visuals and saved cosmetic choices, without gating standard features.
 - [x] Add LinkUp device grant client with state/PKCE checks, encrypted local credentials when available, and verified reward snapshots.
-- [ ] Implement and deploy the scoped LinkUp endpoints described in `docs/community-booster-linkup.md`; verify production device linking and boost changes end-to-end.
+- [~] Implement the scoped LinkUp device grant, consent and reward endpoints in the LinkUp Dashboard repository; deploy to production and verify live browser linking and boost changes end-to-end.
 - [ ] Migrate the legacy Node-enabled Electron renderer to context isolation and narrowed IPC while preserving OSC/audio/BLE.
 
 Feature-parity checklist toward **VRCX** + **VRCNext**, our own version. Sources:

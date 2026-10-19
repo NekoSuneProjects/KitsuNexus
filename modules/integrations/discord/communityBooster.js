@@ -150,6 +150,11 @@ function createCommunityBooster ({ userData, safeStorage, http = request, openEx
       // Only the verified URL is opened in the OS browser. No local HTTP listener.
       await openExternal(verificationUrl)
       return snapshot()
+    } catch (err) {
+      if (attemptGeneration !== generation) return snapshot()
+      pending = null
+      state = [404, 405, 501].includes(err.status) ? 'unavailable' : 'offline'
+      return snapshot()
     } finally { busy = false }
   }
 

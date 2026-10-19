@@ -18,7 +18,7 @@ function getFfmpegBinPath () {
   return app.isPackaged ? p.replace('app.asar', 'app.asar.unpacked') : p
 }
 
-const { getNowPlaying, setPreferredSource, getPreferredSource, getSources } = require('./modules/media/nowPlaying')
+const { getNowPlaying, getSpotifyLive, setPreferredSource, getPreferredSource, getSources } = require('./modules/media/nowPlaying')
 
 const { startComponentStats, stopComponentStats } = require('./modules/stats/componentStats')
 const { startNetworkStats, stopNetworkStats } = require('./modules/stats/networkStats')
@@ -436,6 +436,7 @@ ipcMain.on('updateOscTargets', (e, targets) => {
 })
 ipcMain.handle('saveOscPort', (e, port) => { settings.set('oscPort', port); return port })
 ipcMain.handle('getNowPlaying', () => getNowPlaying())
+ipcMain.handle('nowPlaying:spotifyLive', () => getSpotifyLive())
 ipcMain.handle('nowPlaying:sources', () => ({ sources: getSources(), preferred: getPreferredSource() }))
 ipcMain.handle('nowPlaying:setSource', (e, value) => { setPreferredSource(value); settings.set('nowPlayingSource', String(value || '')); return getPreferredSource() })
 // Overlay page itself is hosted by kitsunexus-server now (routes/overlay.js there) — this just

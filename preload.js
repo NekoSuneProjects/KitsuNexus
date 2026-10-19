@@ -16,6 +16,7 @@ window.electronAPI = {
 
   // now playing / overlay (overlay page itself is hosted by kitsunexus-server — see cloudSyncOverlayUrl below)
   getNowPlaying: () => ipcRenderer.invoke('getNowPlaying'),
+  nowPlayingSpotifyLive: () => ipcRenderer.invoke('nowPlaying:spotifyLive'),
   nowPlayingSources: () => ipcRenderer.invoke('nowPlaying:sources'),
   nowPlayingSetSource: value => ipcRenderer.invoke('nowPlaying:setSource', value),
 

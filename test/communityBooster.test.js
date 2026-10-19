@@ -177,3 +177,25 @@ test('disconnect invalidates an in-flight token exchange', async () => {
   assert.equal(svc.snapshot().tier, 'none')
   assert.equal(fs.existsSync(path.join(ctx.userData, 'community-booster-session.json')), false)
 })
+
+test('missing LinkUp API and connection failures show distinct safe states', async () => {
+  const ctx = fixture()
+  let launched = false
+  const unavailable = createCommunityBooster({
+    userData: ctx.userData, safeStorage: ctx.safeStorage,
+    http: async () => { const err = new Error('Not found'); err.status = 404; throw err },
+    openExternal: () => { launched = true }
+  })
+  const missing = await unavailable.start()
+  assert.equal(missing.state, 'unavailable')
+  assert.equal(missing.tier, 'none')
+  assert.equal(missing.userCode, null)
+  assert.equal(launched, false)
+
+  const offline = createCommunityBooster({
+    userData: ctx.userData, safeStorage: ctx.safeStorage,
+    http: async () => { throw new Error('Network offline') }
+  })
+  assert.equal((await offline.start()).state, 'offline')
+  assert.equal(offline.snapshot().linked, false)
+})

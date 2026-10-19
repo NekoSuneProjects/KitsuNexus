@@ -7,6 +7,32 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Now Playing getting stuck on the previous Spotify song after track changes.**
+  Spotify's accessibility tree can keep reporting an old song even when its
+  window title has moved to the next track. Detect the mismatch, prefer the
+  current window title, and keep polling until fresh progress becomes available.
+  Recover the new song's duration from a matching Spotify list entry or verified
+  catalog metadata when available, carry it forward through stale slider reads,
+  and advance the elapsed time while the player confirms playback.
+
+- **Spotify progress repeatedly jumping backwards while playing.** The desktop
+  accessibility slider can freeze while Spotify plays in the background. Now
+  preserve a continuous elapsed-time clock across identical slider readings,
+  poll Spotify's player controls every 2.5 seconds for seeks, pauses and new
+  tracks, and prevent slower media queries from overwriting fresher positions.
+
+- **Spotify Now Playing could identify the song but showed no elapsed time or total duration.**
+  When Spotify omits its Windows media session, read the playback slider and
+  play/pause button through Windows accessibility controls. Preserve the
+  title-only fallback when those controls are unavailable.
+
+- **Community Booster connection failures were reported as an unexplained unavailable API.**
+  The desktop now distinguishes a missing LinkUp authorization endpoint from
+  connection failures and keeps cosmetic entitlements gated on verified data.
+  The matching API and signed-in browser consent flow have been added to the
+  LinkUp Dashboard source; production must deploy that backend before linking
+  can complete.
+
 - **Heart Rate and Community Booster cards overflowing the app pane.** The Heart Rate
   layout used fixed minimum column widths that extended beyond the main card when
   the right sidebar reduced the available space. Heart Rate panels and their OSC

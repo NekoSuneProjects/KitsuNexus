@@ -43,6 +43,14 @@ function isCloseMatch (candidate, media) {
   )
 }
 
+function matchingDuration (candidate, media, durationMs) {
+  // Only reuse a catalog duration for the exact track title. Similar remixes
+  // can share artwork but have substantially different runtimes.
+  return normalizeKeyPart(candidate.title) === normalizeKeyPart(media.title) &&
+    isCloseMatch(candidate, media) && Number.isFinite(durationMs) &&
+    durationMs >= 5000 && durationMs <= 14400000 ? durationMs : 0
+}
+
 function safeArtworkUrl (value, allowedRoot) {
   try {
     const url = new URL(String(value || ''))
@@ -61,7 +69,7 @@ function getJson (url) {
   return new Promise((resolve, reject) => {
     const request = https.get(url, {
       headers: {
-        'User-Agent': 'OSCAudiolink/1.0'
+        'User-Agent': 'KitsuNexus/' + require('../../package.json').version + ' (https://github.com/NekoSuneProjects/KitsuNexus)'
       }
     }, response => {
       if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -134,7 +142,8 @@ async function lookupItunesArtwork (media) {
   return {
     image,
     source: 'iTunes Search',
-    album: result.collectionName || ''
+    album: result.collectionName || '',
+    durationMs: matchingDuration({ title: result.trackName, artist: result.artistName }, media, Number(result.trackTimeMillis))
   }
 }
 
@@ -163,7 +172,8 @@ async function lookupDeezerArtwork (media) {
   return {
     image,
     source: 'Deezer Search',
-    album: result.album?.title || ''
+    album: result.album?.title || '',
+    durationMs: matchingDuration({ title: result.title, artist: result.artist?.name }, media, Number(result.duration) * 1000)
   }
 }
 

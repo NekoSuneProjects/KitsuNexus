@@ -17,6 +17,7 @@ function createArtworkLookup (reply) {
     URL,
     URLSearchParams,
     require (id) {
+      if (id === '../../package.json') return require('../package.json')
       assert.equal(id, 'https')
       return {
         get (url, _opts, callback) {
@@ -61,4 +62,20 @@ test('remote artwork cannot use local files, arbitrary hosts or non-HTTPS scheme
     ? { data: [{ title: 'Song', artist: { name: 'Artist' }, album: { cover_xl: 'http://127.0.0.1/private' } }] }
     : { results: [{ trackName: 'Song', artistName: 'Artist', artworkUrl100: 'https://attacker.example/cover.jpg' }] }))
   assert.equal(await lookup({ artist: 'Artist', title: 'Song' }), null)
+})
+
+test('provides duration only for an exact catalog track title', async () => {
+  const lookup = createArtworkLookup(url => JSON.stringify(url.includes('deezer')
+    ? { data: [{ title: 'Song (Remix)', duration: 350, artist: { name: 'Artist' },
+      album: { cover_xl: 'https://cdn.dzcdn.net/art.jpg' } }] }
+    : { results: [{ trackName: 'Song', artistName: 'Artist', trackTimeMillis: 193000,
+      artworkUrl100: 'https://is1-ssl.mzstatic.com/cover.jpg' }] }))
+  const media = await lookup({ artist: 'Artist', title: 'Song' })
+  assert.equal(media?.durationMs, 0) // Do not borrow the remix duration.
+
+  const exact = createArtworkLookup(url => JSON.stringify(url.includes('deezer')
+    ? { data: [{ title: 'Song', duration: 193, artist: { name: 'Artist' },
+      album: { cover_xl: 'https://cdn.dzcdn.net/art.jpg' } }] }
+    : { results: [] }))
+  assert.equal((await exact({ artist: 'Artist', title: 'Song' }))?.durationMs, 193000)
 })

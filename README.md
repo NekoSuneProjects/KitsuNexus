@@ -8,9 +8,11 @@ A standalone **VRChat OSC companion** by **NekoSuneVR** — chatbox, heart rate,
 playing, Discord, world radar & more, in one polished themed app.
 
 **Community Booster (optional, preview integration):** Settings includes local
-Spark, Glow, Nova and Constellation visual choices. Verified rewards require
-LinkUp's upcoming desktop account-link API; until that backend is implemented,
-the app keeps the base theme. OSC, chatbox, VRChat, audio and accessibility
+Spark, Glow, Nova and Constellation visual choices. The companion LinkUp
+Dashboard implementation now includes the desktop authorization endpoints
+and signed-in browser consent; the live site must be redeployed with those
+changes before connecting works. Until LinkUp verifies a boost, the app keeps
+the base theme. OSC, chatbox, VRChat, audio and accessibility
 features remain free for everyone. See
 [LinkUp integration contract](docs/community-booster-linkup.md) for the proposed
 server endpoints, token privacy rules and limitations. Run `npm test` for the

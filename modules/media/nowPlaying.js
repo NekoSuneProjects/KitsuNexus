@@ -198,12 +198,20 @@ async function normalizeMedia (media) {
     normalized.imageMime = stableMedia.imageMime || normalized.imageMime
     normalized.imageSource = stableMedia.imageSource || normalized.imageSource
   }
+  if (sameStableMedia && stableMedia?.durationMs > 0 && !normalized.durationMs) {
+    normalized.durationMs = stableMedia.durationMs
+  }
 
   if (normalized.found && !normalized.image) {
     const artwork = await lookupArtwork(normalized)
     if (artwork?.image) {
       normalized.image = artwork.image
       normalized.imageSource = artwork.source
+      // When Spotify's accessibility track is stale, the current track's
+      // validated catalog duration can fill the temporary metadata gap.
+      if (normalized.source === 'Spotify' && !normalized.durationMs && artwork.durationMs > 0) {
+        normalized.durationMs = artwork.durationMs
+      }
       if (!normalized.album && artwork.album) {
         normalized.album = artwork.album
       }
@@ -226,11 +234,11 @@ async function resolveNowPlayingResult (media, generation) {
         ...spotify,
         found: true,
         sourceAppId: 'Spotify.exe',
-        status: 'Unknown', // Window titles cannot verify playing or paused state.
-        detectionMethod: 'spotify-window-title',
+        status: spotify.status || 'Unknown',
+        detectionMethod: spotify.detectionMethod || 'spotify-window-title',
         sessions: [...sessions.filter(s => !String(s?.appId || '').toLowerCase().includes('spotify')),
-          { appId: 'Spotify.exe', status: 'Unknown' }],
-        fetchedAt: Date.now()
+          { appId: 'Spotify.exe', status: spotify.status || 'Unknown' }],
+        fetchedAt: spotify.fetchedAt || Date.now()
       }
     }
   }
@@ -356,8 +364,20 @@ function getPreferredSource () { return preferredSource }
 // The media sources seen most recently (for the UI dropdown).
 function getSources () { return lastSessions.slice() }
 
+// A lightweight, frequent timeline read for Spotify's title/accessibility
+// fallback. The full native media-session query still controls source choice.
+async function getSpotifyLive () {
+  if (process.platform !== 'win32' || (preferredSource && !preferredSource.includes('spotify')) ||
+      stableMedia?.source !== 'Spotify' ||
+      !['spotify-accessibility', 'spotify-window-title'].includes(stableMedia.detectionMethod)) return null
+  const generation = requestGeneration
+  const spotify = await getSpotifyWindowTrack()
+  return generation === requestGeneration ? spotify : null
+}
+
 module.exports = {
   getNowPlaying,
+  getSpotifyLive,
   setPreferredSource,
   getPreferredSource,
   getSources

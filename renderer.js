@@ -262,7 +262,7 @@ function drawBoosterStatus (snapshot) {
     expired: 'Verification expired. Your base theme is active; your choices are saved.',
     revoked: 'LinkUp revoked access. Your base theme is active.',
     offline: 'LinkUp temporarily offline. Only unexpired verified cosmetics remain active.',
-    unavailable: 'LinkUp desktop authorization is not available yet.'
+    unavailable: 'LinkUp does not have the KitsuNexus desktop authorization API available (HTTP 404/405/501). The LinkUp server needs updating.',
   }
   $('boosterStatus').textContent = descriptions[snapshot.state] || 'LinkUp status unavailable.'
   const auth = snapshot.state === 'authorizing' && !!snapshot.userCode
@@ -285,7 +285,7 @@ async function updateBoosterStatus (action = 'status') {
     drawBoosterStatus(result)
   } catch (err) {
     $('boosterStatus').textContent = action === 'start'
-      ? 'LinkUp desktop authorization is currently unavailable. Try again when the LinkUp API is ready.'
+      ? 'Unable to start LinkUp authorization. Check your connection and retry.'
       : 'Unable to check LinkUp right now. Saved cosmetic choices are unchanged.'
     if (action !== 'start') {
       // Keep the last verified display only until the main-process expiry.
@@ -494,7 +494,8 @@ const MEDIA_BAR_STYLES = {
 
 function buildSong (m) {
   if (!m || !m.found || !m.title) return ''
-  if (m.status && m.status !== 'Playing' && m.detectionMethod !== 'spotify-window-title') return ''
+  if (m.status && m.status !== 'Playing' &&
+      !(m.status === 'Unknown' && ['spotify-window-title', 'spotify-accessibility'].includes(m.detectionMethod))) return ''
   return [m.artist, m.title].filter(Boolean).join(' - ')
 }
 function formatMediaTime (ms) {
@@ -555,10 +556,14 @@ function renderNowPlaying (m) {
     return
   }
   if (diag) diag.textContent = m.detectionMethod === 'spotify-window-title'
-    ? 'Spotify detected from its window title because Windows has no Spotify media session. Playback time and pause detection are unavailable in this mode.'
-    : ''
+    ? (m.durationMs > 0
+        ? 'Spotify is updating its player controls. Duration is available; elapsed time is estimated until the slider catches up.'
+        : 'Spotify is updating its player controls. Waiting for this track\'s duration; the previous song\'s timeline was discarded.')
+    : (m.detectionMethod === 'spotify-accessibility' && m.status === 'Unknown'
+        ? 'Spotify timeline detected from its player controls; playback state could not be verified.'
+        : '')
   setText('nowPlayingTitle', m.title || 'Unknown')
-  setText('nowPlayingMeta', [m.artist, m.album, m.detectionMethod === 'spotify-window-title' ? 'Playback unverified' : m.status].filter(Boolean).join(' · ') || 'Active')
+  setText('nowPlayingMeta', [m.artist, m.album, m.status === 'Unknown' ? 'Playback unverified' : m.status].filter(Boolean).join(' · ') || 'Active')
   setText('nowPlayingSource', m.source || 'Windows')
   const progress = mediaProgressInfo(m)
   setText('nowPlayingTime', progress.time ? `${progress.progress} / ${progress.duration}` : 'No timeline available')
@@ -568,6 +573,7 @@ async function initNowPlayingSources () {
   try { const r = await api.nowPlayingSources(); syncNpSourceDropdown(r.sources, r.preferred) } catch (_) {}
 }
 $('nowPlayingSourceSelect').addEventListener('change', async e => {
+  lastNowPlayingMedia = null // Stop fast Spotify polling during a source switch.
   await api.nowPlayingSetSource(e.target.value)
   refreshNowPlaying()
 })
@@ -753,7 +759,16 @@ let lastNowPlayingMedia = null
 async function refreshNowPlaying () {
   if (!nowPlayingNeeded()) return
   try {
-    const m = await api.getNowPlaying()
+    let m = await api.getNowPlaying()
+    // The slow Windows query can finish after a newer Spotify slider read.
+    // Never put an earlier position (or earlier track) back on screen.
+    const live = lastNowPlayingMedia
+    if (live?.source === 'Spotify' && m?.source === 'Spotify' &&
+        Number(live.fetchedAt) > Number(m.fetchedAt)) {
+      if (live.title !== m.title || live.artist !== m.artist) return
+      m = { ...m, ...live, durationMs: live.durationMs || m.durationMs,
+        album: m.album || live.album, image: m.image || live.image }
+    }
     lastNowPlayingMedia = m
     renderNowPlaying(m)
     publishSpotiState(m)
@@ -783,6 +798,56 @@ async function refreshNowPlaying () {
 // see modules/media/nowPlaying.js), so poll gently (every 10s). It still runs while minimised so
 // the chatbox stays current in VR.
 setInterval(refreshNowPlaying, 10000)
+
+// Spotify may freeze its accessibility slider while in the background. The
+// backend compensates for repeated positions; these lightweight polls confirm
+// pauses, seeks and track changes without waiting for the slow Windows query.
+let spotifyLivePollRunning = false
+async function refreshSpotifyLive () {
+  if (spotifyLivePollRunning || !nowPlayingNeeded() ||
+      !['spotify-accessibility', 'spotify-window-title'].includes(lastNowPlayingMedia?.detectionMethod)) return
+  spotifyLivePollRunning = true
+  try {
+    const live = await api.nowPlayingSpotifyLive()
+    const previous = lastNowPlayingMedia
+    if (!live || !['spotify-accessibility', 'spotify-window-title'].includes(live.detectionMethod) ||
+        !['spotify-accessibility', 'spotify-window-title'].includes(previous?.detectionMethod) ||
+        Number(live.fetchedAt) <= Number(previous.fetchedAt)) return
+
+    const changedTrack = live.title !== previous.title || live.artist !== previous.artist
+    const updated = { ...previous, ...live,
+      durationMs: !changedTrack ? (live.durationMs || previous.durationMs) : live.durationMs,
+      album: changedTrack ? '' : previous.album,
+      image: changedTrack ? '' : previous.image }
+    lastNowPlayingMedia = updated
+    renderNowPlaying(updated)
+    publishSpotiState(updated)
+    const progress = mediaProgressInfo(updated)
+    composer.update({
+      song: buildSong(updated) || 'Not playing',
+      artist: updated.artist,
+      title: updated.title,
+      songTime: progress.time,
+      songProgress: progress.progress,
+      songDuration: progress.duration,
+      songBar: progress.bar
+    })
+    if (changedTrack) {
+      const song = buildSong(updated)
+      lastKatText = song
+      if (katText) katText.setText(song)
+      if (discordConnected) api.discordLive({ nowPlaying: song })
+      if (chatboxNpEnabled && song && song !== lastSongKey) {
+        lastSongKey = song
+        sendChatboxMessage(`Now Playing: ${song}`, false)
+      }
+      refreshNowPlaying() // Resolve the new song's album and artwork.
+    }
+  } catch (_) {
+    // Keep the local clock running until the next accessibility poll succeeds.
+  } finally { spotifyLivePollRunning = false }
+}
+setInterval(refreshSpotifyLive, 2500)
 
 // Ticks the progress bar/timestamp (and chatbox {songtime}/{songprogress}/{songbar} placeholders)
 // every second using ONLY the last poll's cached data — no PowerShell, no IPC call, just local
