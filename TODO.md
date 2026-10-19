@@ -1,7 +1,9 @@
 # KitsuNexus — TODO / Roadmap
 
 ## CI/CD
+- [x] Fix Linux ARM64 packaging rebuilding x64 native modules by letting each matrix job select one architecture.
 - [x] Automatically create missing release tags when a manual build specifies a version, and build installers with that version.
+- [ ] Correct release notes and Discord download labels to show the generated Linux `.tar.gz` archives rather than `.deb` packages.
 - [x] Publish missing v1.0.78 tag to GitHub so manual release checkout succeeds.
 - [x] Fix per-platform Actions artifact naming for manual multi-platform builds and releases.
 - [x] Switch desktop and Docker workflows to manual dispatch with a GitHub-hosted / self-hosted runner choice and optional publishing.

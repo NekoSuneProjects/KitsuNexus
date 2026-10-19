@@ -5,6 +5,10 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Fixed
+
+- **Linux ARM64 Actions build attempted to rebuild x64 native dependencies.** The Electron Builder Linux target configuration forced both x64 and arm64 builds even when the workflow selected a single architecture. Linux packaging now uses the architecture chosen by the matrix job, avoiding an x64 `register-scheme` rebuild with the ARM64 compiler.
+
 ## [1.0.78] - 2026-10-19
 
 This release includes the Windows updater reliability fixes, the optional Community Booster theme integration, and manual GitHub Actions release improvements. The standalone updater is now version 1.0.4.
