@@ -60,9 +60,9 @@ it for malware/backdoors/supply-chain risk first:
   affected feature(s), and check for obvious errors, not just that it compiles. Don't push
   untested changes.
 - **Only tag for an actual version release, never otherwise.** `.github/workflows/build.yml`
-  triggers the whole build/publish/Discord-announce pipeline off `v*` tags, so a version
-  release genuinely needs one (`vX.Y.Z`, pushed with the version-bump commit). Don't create
-  tags for anything else (docs commits, mid-session fixes, etc.).
+  is started manually and can create a missing `vX.Y.Z` release tag from its version
+  input. Pushing a tag does not start a build by itself. Don't create tags for
+  docs commits or mid-session fixes.
 - **Always open a Pull Request** to [NekoSuneProjects/KitsuNexus](https://github.com/NekoSuneProjects/KitsuNexus)
   for the changes, rather than just committing/pushing straight to `main` with nothing to review.
   Every PR must have a real description of what changed and why — **never leave the PR description

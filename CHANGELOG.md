@@ -5,6 +5,10 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.78] - 2026-10-19
+
+This release includes the Windows updater reliability fixes, the optional Community Booster theme integration, and manual GitHub Actions release improvements. The standalone updater is now version 1.0.4.
+
 ### Fixed
 
 - **Manual release checkout failed for v1.0.78.** The release tag existed only
@@ -12,21 +16,6 @@ This project follows [Semantic Versioning](https://semver.org/).
   published so `actions/checkout` can fetch it. Artifact names also use the
   selected platform consistently so a multi-platform release can upload each
   installer set without a name collision.
-
-### Changed
-
-- **GitHub Actions builds are now started manually with a runner choice.** Choose
-  GitHub-hosted or self-hosted runners and Windows/Linux targets for desktop builds.
-  Installer releases require an explicit publish selection and a matching existing
-  version tag; temporary build artifacts are retained for one day only when requested
-  or needed to publish. Docker builds likewise run manually, selecting either runner
-  pool and optionally publishing multi-architecture images to GHCR.
-
-## [1.0.78] - 2026-10-19
-
-This release includes the Windows updater reliability fixes and the optional Community Booster theme integration. The standalone updater is now version 1.0.4.
-
-### Fixed
 
 - **Windows updater failed after opening Update.exe.** The standalone helper previously used
   TEMP-based ready/ack signals with a 30-second launcher deadline, which could time out while
@@ -38,6 +27,12 @@ This release includes the Windows updater reliability fixes and the optional Com
 
 ### Added
 
+- **Manual release builds create missing tags automatically.** The workflow
+  accepts `vX.Y.Z` or `X.Y.Z`, checks whether the tag exists, and creates it
+  at the selected branch commit when absent before any platform checkout.
+  Existing tags are reused. Installer version metadata is stamped from the
+  requested release version in CI, without changing the repository version.
+
 - **Optional Community Booster visual themes.** Settings now provides saved local
   Spark/Glow/Nova/Constellation decoration choices, a LinkUp connect/disconnect
   panel and clear offline, expired and revoked states. The main process implements
@@ -45,6 +40,15 @@ This release includes the Windows updater reliability fixes and the optional Com
   storage and five-minute entitlement caching. LinkUp must implement the new
   scoped server endpoints before the rewards can activate; no VRChat/OSC features
   depend on them. See `docs/community-booster-linkup.md`.
+
+### Changed
+
+- **GitHub Actions builds are now started manually with a runner choice.** Choose
+  GitHub-hosted or self-hosted runners and Windows/Linux targets for desktop builds.
+  Installer releases require an explicit publish selection and a matching existing
+  version tag; temporary build artifacts are retained for one day only when requested
+  or needed to publish. Docker builds likewise run manually, selecting either runner
+  pool and optionally publishing multi-architecture images to GHCR.
 
 ### Known issues
 

@@ -33,7 +33,7 @@ on:
         required: true
         default: false
       release_tag:
-        description: 'Existing release tag to build (e.g. v1.0.78); required when publishing'
+        description: 'Version (e.g. v1.0.79); auto-creates tag; required when publishing'
         type: string
         required: false
         default: ''
@@ -42,8 +42,62 @@ permissions:
   contents: read
 
 jobs:
+  prepare:
+    name: Resolve release version
+    # Create tags before any build tries to check them out. GitHub-hosted
+    # runners and the existing neko-lite runner both have GitHub CLI.
+    runs-on: ${{ inputs.runner_type == 'self-hosted' && fromJSON('["self-hosted","Linux","neko-lite"]') || 'ubuntu-24.04' }}
+    permissions:
+      contents: write
+    outputs:
+      checkout_ref: ${{ steps.resolve.outputs.checkout_ref }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - name: Validate version and create tag if missing
+        id: resolve
+        shell: bash
+        env:
+          REQUESTED_TAG: ${{ inputs.release_tag }}
+          PUBLISH_RELEASE: ${{ inputs.publish_release }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          requested="${REQUESTED_TAG}"
+          if [[ -z "$requested" ]]; then
+            if [[ "$PUBLISH_RELEASE" == "true" ]]; then
+              echo 'Enter a release version (for example v1.0.79) to publish.' >&2
+              exit 1
+            fi
+            echo "checkout_ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          version="${requested#v}"
+          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release version: $requested (expected 1.2.3 or v1.2.3)" >&2
+            exit 1
+          fi
+          tag="v$version"
+
+          # Matching-refs returns an empty list if the tag is missing.
+          # Never overwrite or move an existing release tag.
+          refs=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$tag" --jq '.[].ref')
+          existing=$(printf '%s\n' "$refs" | grep -Fx "refs/tags/$tag" || true)
+          if [[ -z "$existing" ]]; then
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA" > /dev/null
+            echo "Created $tag at $GITHUB_SHA"
+          else
+            echo "Reusing existing $tag"
+          fi
+          echo "checkout_ref=refs/tags/$tag" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build (${{ matrix.platform }})
+    needs: [prepare]
     # GitHub-hosted jobs use native Windows/x64, Linux/x64 and Linux/ARM64.
     # Self-hosted Windows requires a registered Windows runner; neko-build
     # cross-builds both Linux architectures, as in the previous workflow.
@@ -57,19 +111,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.release_tag || github.ref }}
-
-      - name: Verify release version before publishing
-        if: ${{ inputs.publish_release }}
-        env:
-          RELEASE_TAG: ${{ inputs.release_tag }}
-        run: node -e "const tag = process.env.RELEASE_TAG; const version = require('./package.json').version; if (tag !== 'v' + version) { console.error('Publish requires an existing v' + version + ' tag matching package.json'); process.exit(1) }"
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
+
+      # A requested new version can differ from package.json on the selected
+      # branch. Stamp the built installers without committing source changes.
+      - name: Set build version from release tag
+        if: ${{ needs.prepare.outputs.version != '' }}
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: node -e "const fs = require('fs'); const version = process.env.RELEASE_VERSION; for (const file of ['package.json','package-lock.json']) { if (!fs.existsSync(file)) continue; const pkg = JSON.parse(fs.readFileSync(file, 'utf8')); pkg.version = version; if (pkg.packages && pkg.packages['']) pkg.packages[''].version = version; fs.writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n'); }"
 
       # Linux needs extra libs for some native deps / AppImage packaging.
       # On self-hosted runners these are usually pre-installed; apt-get is a
@@ -141,19 +197,19 @@ jobs:
 
   release:
     name: Publish release
-    needs: [build]
+    needs: [prepare, build]
     permissions:
       contents: write
-    # Publishing is a separate manual choice. An existing tag is mandatory.
+    # Publishing is a separate manual choice. The prepare job creates new tags.
     if: ${{ inputs.publish_release }}
     runs-on: ${{ inputs.runner_type == 'self-hosted' && fromJSON('["self-hosted", "Linux", "neko-lite"]') || 'ubuntu-24.04' }}
     env:
-      RELEASE_TAG: ${{ inputs.release_tag }}
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.release_tag }}
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -242,7 +298,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.release_tag }}
+          tag_name: ${{ needs.prepare.outputs.tag }}
           files: artifacts/**/*
           body_path: NOTES.md
           generate_release_notes: true

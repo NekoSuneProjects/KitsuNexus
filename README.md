@@ -239,10 +239,14 @@ Select **GitHub-hosted** or **self-hosted** runners and which platform(s) to bui
 registered Windows runner; the `neko-build` Linux runner handles Linux builds.
 The default build keeps no Actions artifacts. Select **Upload artifacts** to keep
 downloadable builds for one day. To publish installers directly to a GitHub Release,
-select **Publish release** and enter an existing tag matching the app's version
-(such as `v1.0.78`, which must already exist on GitHub, not just locally);
-the workflow temporarily uses one-day Actions artifacts to
-pass installers between jobs. Commits and tags never start builds automatically.
+select **Publish release** and enter the desired version in **Release tag** (such
+as `v1.0.79` or `1.0.79`). If the tag is missing, the workflow creates it on
+GitHub at the selected branch's commit, then checks it out and builds. Existing
+tags are reused without moving them. The build uses the entered version for
+installer metadata and filenames even if `package.json` still has the previous
+version; this does not commit a version change to the branch. Entering a tag
+creates it even for a build-only run. Publishing uses one-day Actions artifacts
+to pass installers between jobs. Commits and tags never start builds automatically.
 
 The backend has a separate **Build KitsuNexus Server Docker** workflow in Actions.
 Choose either runner pool and optionally **Publish image** to push `latest` and
