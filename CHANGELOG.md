@@ -5,6 +5,10 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.78] - 2026-10-19
+
+This release includes the Windows updater reliability fixes and the optional Community Booster theme integration. The standalone updater is now version 1.0.4.
+
 ### Fixed
 
 - **Windows updater failed after opening Update.exe.** The standalone helper previously used
