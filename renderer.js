@@ -13,6 +13,9 @@ const { ChatboxComposer } = require('./modules/vrchat/chatbox/chatboxComposer')
 const { escapeHtml, safeHttpUrl, safeImageUrl, releaseNotesHtml } = require('./modules/security/rendererContent')
 const { LiveTypingSender } = require('./modules/vrchat/chatbox/liveTyping')
 const { DEFAULT_PRESETS } = require('./modules/vrchat/status/statusModule')
+const { seasonalTheme } = require('./modules/ui/seasonalTheme')
+const { createHalloweenSpeech } = require('./modules/ui/halloweenPhrases')
+const { avatarUrls, loadProfileImages } = require('./modules/ui/profileImages')
 const { RealisticOscLeashController } = require('./modules/integrations/osc/leash/realisticOscLeash')
 const { OscDigitalClock } = require('./modules/integrations/osc/clock/oscDigitalClock')
 const { OscQrController } = require('./modules/integrations/osc/qr/oscQrModule')
@@ -180,37 +183,20 @@ document.querySelectorAll('.navbtn').forEach(btn => {
   sidebar.addEventListener('mouseleave', () => { tip.style.opacity = '0' })
 })()
 
-// Event themes (Halloween/Christmas/Pride/Easter) always take over during their
-// window, even on top of a custom/default theme pick — the custom pick just
-// resumes automatically once the event window ends.
-function easterDate (y) {
-  const a = y % 19; const b = Math.floor(y / 100); const c = y % 100
-  const d = Math.floor(b / 4); const e = b % 4; const f = Math.floor((b + 8) / 25)
-  const g = Math.floor((b - f + 1) / 3); const h = (19 * a + b - d - g + 15) % 30
-  const i = Math.floor(c / 4); const k = c % 4; const l = (32 + 2 * e + 2 * i - h - k) % 7
-  const m = Math.floor((a + 11 * h + 22 * l) / 451)
-  const mo = Math.floor((h + l - 7 * m + 114) / 31); const da = ((h + l - 7 * m + 114) % 31) + 1
-  return new Date(y, mo - 1, da)
-}
-function seasonalTheme (now) {
-  const mo = now.getMonth() + 1; const day = now.getDate()
-  if (mo === 10 && day >= 24) return { theme: 'halloween', label: '🎃 Halloween', isEvent: true }
-  if (mo === 12) return { theme: 'xmas', label: '🎄 Christmas', isEvent: true }
-  if (mo === 6) return { theme: 'rainbow', label: '🏳️‍🌈 Pride', isEvent: true }
-  const diff = (now - easterDate(now.getFullYear())) / 86400000
-  if (diff >= -7 && diff <= 1) return { theme: 'easter', label: '🐰 Easter', isEvent: true }
-  return { theme: 'blackgreen', label: '', isEvent: false }
-}
+// Event themes always override the saved theme until their calendar window ends.
+const halloweenSpeech = createHalloweenSpeech(document.querySelectorAll('.halloween-ghostface-bubble'))
 function applyTheme (uiTheme) {
   const season = seasonalTheme(new Date())
   if (season.isEvent) {
     document.documentElement.setAttribute('data-theme', season.theme)
     if ($('seasonBadge')) $('seasonBadge').textContent = season.label
+    halloweenSpeech.setActive(season.theme === 'halloween')
     return
   }
   const useAuto = !uiTheme || uiTheme === 'auto'
   document.documentElement.setAttribute('data-theme', useAuto ? season.theme : uiTheme)
   if ($('seasonBadge')) $('seasonBadge').textContent = ''
+  halloweenSpeech.setActive(false)
 }
 applyTheme('auto')
 api.getSetting('uiTheme', 'auto').then(saved => {
@@ -4425,7 +4411,14 @@ function esc (s) { return escapeHtml(s) }
 function imgAttr (url) { return esc(safeImageUrl(url)) }
 let umCurrentId = null
 let umUser = null
-function closeUserModal () { $('userModal').style.display = 'none' }
+let umLoadToken = 0
+let umImageCleanup = null
+function closeUserModal () {
+  ++umLoadToken
+  if (umImageCleanup) { umImageCleanup(); umImageCleanup = null }
+  umCurrentId = null; umUser = null
+  $('userModal').style.display = 'none'
+}
 $('userModalClose').addEventListener('click', closeUserModal)
 $('userModal').addEventListener('click', e => { if (e.target === $('userModal')) closeUserModal() })
 function umLocationLine (u) {
@@ -4445,22 +4438,26 @@ function umJoinActions (u) {
   </div>`
 }
 async function openUserModal (id) {
+  const token = ++umLoadToken
+  if (umImageCleanup) { umImageCleanup(); umImageCleanup = null }
   umCurrentId = id; umUser = null
   $('userModal').style.display = 'flex'
   $('umName').textContent = 'Loading…'
   setText('umStatusDesc', ''); $('umTags').innerHTML = ''; setText('umActionOut', '')
   $('umTabBody').innerHTML = '<div class="muted">Loading…</div>'
+  $('umAvatar').onerror = null
+  $('umAvatar').src = 'assets/logo.png'
+  $('umBanner').style.backgroundImage = ''
   const r = await api.vrchatUser(id)
+  if (token !== umLoadToken) return
   if (!r.ok) { $('umName').textContent = 'Error'; setText('umActionOut', r.error || 'Could not load user'); $('umTabBody').innerHTML = ''; return }
   umUser = r.user
   const u = umUser
   $('umName').textContent = u.displayName || '—'
   setText('umStatusDesc', u.statusDescription || u.status || '')
-  $('umAvatar').src = safeImageUrl(u.userIcon || u.profilePicOverride || u.currentAvatarThumbnailImageUrl)
-  // Banner: VRC+ users' custom profile image if set, otherwise their avatar image.
-  const isVrcPlus = (u.tags || []).includes('system_supporter')
-  const bannerUrl = (isVrcPlus && u.profilePicOverride) ? u.profilePicOverride : (u.currentAvatarImageUrl || u.profilePicOverride || '')
-  $('umBanner').style.backgroundImage = safeHttpUrl(bannerUrl) ? `url(${JSON.stringify(safeHttpUrl(bannerUrl))})` : ''
+  umImageCleanup = loadProfileImages(u, {
+    avatar: $('umAvatar'), banner: $('umBanner'), isCurrent: () => token === umLoadToken
+  })
   const tr = trustRank(u.tags)
   const chips = [`<span class="tagchip" style="border-color:${tr.color};color:${tr.color}">${tr.label}</span>`]
   // KitsuNexus Community Rank, estimated from VRChat trust (shows Veteran/Legend
@@ -4472,6 +4469,7 @@ async function openUserModal (id) {
       if (cr) { chips.push(`<span class="tagchip rank-pill${isOgShown ? ' rank-og' : ''}" title="Estimated from VRChat trust" style="border-color:${cr.color};color:${cr.color}">🏅 ${esc(cr.shortLabel)}</span>`); if (cr.vrcPlus) chips.push('<span class="tagchip" title="VRChat Plus supporter">✦ VRC+</span>') }
     } catch (_) {}
   }
+  if (token !== umLoadToken) return
   if (u.last_platform) chips.push(`<span class="tagchip">${u.last_platform === 'standalonewindows' ? 'PC' : (u.last_platform === 'android' ? 'Quest' : u.last_platform)}</span>`)
   if ((u.tags || []).includes('system_supporter')) chips.push('<span class="tagchip">VRC+</span>')
   if (u.ageVerified || (u.tags || []).includes('system_age_verified')) chips.push('<span class="tagchip">18+</span>')
@@ -4483,6 +4481,7 @@ async function openUserModal (id) {
   $('umAddFriend').classList.toggle('danger', !!u.isFriend)
   // On your OWN profile, hide friend/invite/boop actions (they don't apply to you).
   if (!myUserId) { try { const me = await api.vrchatStatus(); if (me && me.ok) myUserId = me.user.id } catch (_) {} }
+  if (token !== umLoadToken) return
   const isMe = u.id === myUserId
   ;['umAddFriend', 'umFav', 'umLocalFav', 'umMoreBtn'].forEach(k => { $(k).style.display = isMe ? 'none' : '' })
   $('umMoreMenu').hidden = true
@@ -4699,7 +4698,7 @@ $('umLocalFav').addEventListener('click', async () => {
   } else {
     const note = await promptDialog(`Note for ${umUser.displayName || 'this person'} (optional)`, '')
     if (note === null) return
-    await api.localFavAdd({ type: 'friend', vrchatId: umCurrentId, displayName: umUser.displayName || '', imageUrl: umUser.userIcon || umUser.currentAvatarThumbnailImageUrl || '', note })
+    await api.localFavAdd({ type: 'friend', vrchatId: umCurrentId, displayName: umUser.displayName || '', imageUrl: avatarUrls(umUser)[0] || '', note })
     setText('umActionOut', '★ Added to Local Favorites')
   }
   refreshUmLocalFavBtn()

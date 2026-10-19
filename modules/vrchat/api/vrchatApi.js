@@ -68,6 +68,11 @@ function normalizePublicProfile (p = {}) {
     hasVrcPlus: p.hasVrcPlus === true,
     iconFrame: p.iconFrame ?? null,
     iconUrl: p.iconUrl || '',
+    // Public profiles may expose images absent from /users/:id (especially friends).
+    userIcon: p.userIcon || '',
+    profilePicOverride: p.profilePicOverride || '',
+    currentAvatarImageUrl: p.currentAvatarImageUrl || '',
+    currentAvatarThumbnailImageUrl: p.currentAvatarThumbnailImageUrl || '',
     id: p.id || '',
     isEconomyCreator: p.isEconomyCreator === true,
     languages: Array.isArray(p.languages) ? p.languages.filter(Boolean) : [],
@@ -108,6 +113,10 @@ function mergeUserProfile (user = {}, profile = normalizePublicProfile()) {
     hasVrcPlus: profile.hasVrcPlus,
     iconFrame: profile.iconFrame ?? user.iconFrame,
     iconUrl: profile.iconUrl || user.iconUrl || '',
+    userIcon: user.userIcon || profile.userIcon || '',
+    profilePicOverride: user.profilePicOverride || profile.profilePicOverride || '',
+    currentAvatarImageUrl: user.currentAvatarImageUrl || profile.currentAvatarImageUrl || '',
+    currentAvatarThumbnailImageUrl: user.currentAvatarThumbnailImageUrl || profile.currentAvatarThumbnailImageUrl || '',
     isEconomyCreator: verified,
     economyCreatorVerified: verified,
     economyCreatorLabel: verified ? 'Economy Creator' : '',
@@ -127,12 +136,14 @@ function mergeUserProfile (user = {}, profile = normalizePublicProfile()) {
 }
 
 function pickUser (u = {}) {
-  if (u.id) core.setCurrentUserId(u.id)
   return {
     id: u.id, displayName: u.displayName, status: u.status, statusDescription: u.statusDescription,
     bio: typeof u.bio === 'string' ? u.bio : null, pronouns: typeof u.pronouns === 'string' ? u.pronouns : null,
     bioLinks: Array.isArray(u.bioLinks) ? u.bioLinks.filter(Boolean) : [],
     userIcon: u.userIcon || u.iconUrl || u.profilePicOverride || u.currentAvatarThumbnailImageUrl || null,
+    iconUrl: u.iconUrl || '', profilePicOverride: u.profilePicOverride || '',
+    currentAvatarImageUrl: u.currentAvatarImageUrl || '',
+    currentAvatarThumbnailImageUrl: u.currentAvatarThumbnailImageUrl || '',
     state: u.state, dateJoined: u.date_joined || null, date_joined: u.date_joined || null,
     tags: Array.isArray(u.tags) ? u.tags.slice() : [], userTags: Array.isArray(u.tags) ? u.tags.slice() : [],
     friendIds: Array.isArray(u.friends) ? u.friends.slice() : [], isEconomyCreator: u.isEconomyCreator === true
@@ -160,7 +171,7 @@ async function login (username, password) {
   core.clearTwoFactorMethods()
   try {
     const value = await core.getClient().login({ username: user, password: pass, twoFactorCode: '' })
-    if (value && value.data && value.data.id) { core.setLoggedIn(true); return { ok: true, needs2fa: false, user: pickUser(value.data) } }
+    if (value && value.data && value.data.id) { core.setCurrentUserId(value.data.id); core.setLoggedIn(true); return { ok: true, needs2fa: false, user: pickUser(value.data) } }
     const methods = core.getTwoFactorMethods()
     const msg = value && value.error && (value.error.message || value.error.error && value.error.error.message) || 'Login failed'
     if (methods.length || /two.?factor|2fa|totp|otp/i.test(msg)) return { ok: true, needs2fa: true, methods: methods.length ? methods : ['totp', 'emailOtp'] }
@@ -184,7 +195,7 @@ async function verify2fa (code, method) {
 
 function fetchUser () { return core.memo('self', 20000, async () => {
   const r = await core.call('getCurrentUser', {}, { method: 'GET', url: '/auth/user' }, 'Could not fetch user')
-  if (r.ok && r.data && r.data.id) { core.setLoggedIn(true); return { ok: true, user: pickUser(r.data) } }
+  if (r.ok && r.data && r.data.id) { core.setCurrentUserId(r.data.id); core.setLoggedIn(true); return { ok: true, user: pickUser(r.data) } }
   if (r.data && Array.isArray(r.data.requiresTwoFactorAuth)) return { ok: false, needs2fa: true, methods: r.data.requiresTwoFactorAuth }
   core.setLoggedIn(false); return { ok: false, error: r.error || 'Could not fetch user' }
 }) }

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 96" preserveAspectRatio="none">
+  <defs>
+    <linearGradient id="goo" x2="0" y2="1"><stop stop-color="#233b14"/><stop offset=".4" stop-color="#478c18"/><stop offset=".75" stop-color="#6edc31"/><stop offset="1" stop-color="#b3fc60"/></linearGradient>
+    <filter id="shine"><feGaussianBlur stdDeviation="2"/></filter>
+  </defs>
+  <path d="M0 0H700V12q-16 5-24 0v25q-2 19-13 19t-10-17V12h-39v9q-4 12-11 10t-7-13V11h-47v41q-3 24-14 24t-13-24V12h-49v10q-2 17-12 16t-10-17V13h-61v55q-2 27-16 27t-12-28V11h-42v13q-5 21-17 19t-9-23V12h-72v24q0 24-13 24t-14-24V12H94v9q-2 16-11 16t-11-16V12H26v42Q24 74 14 72T3 50V12H0Z" fill="url(#goo)" stroke="#274e18" stroke-width="2"/>
+  <path d="M0 12H700" stroke="#c3ff74" stroke-opacity=".6" stroke-width="3"/>
+  <g fill="#c9ff8d" opacity=".65"><ellipse cx="110" cy="16" rx="22" ry="2"/><ellipse cx="367" cy="15" rx="34" ry="2"/><ellipse cx="590" cy="15" rx="23" ry="2"/></g>
+</svg>

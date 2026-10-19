@@ -1,0 +1,437 @@
+/* The Haunting: October 1–31. Every rule is scoped so the user's regular
+   theme and layout return when the seasonal date window ends. */
+.halloween-event { display:none; }
+
+html[data-theme="halloween"] body {
+  background:radial-gradient(ellipse 80% 55% at 75% -15%,rgba(125,35,56,.28),transparent),
+    radial-gradient(ellipse 70% 70% at 0% 100%,rgba(72,28,98,.19),transparent),#090609;
+}
+
+html[data-theme="halloween"] .sidebar {
+  background:
+    url('halloween-slime.svg') left top / 100% 38px no-repeat,
+    url('halloween-web.svg') right top / 140px 140px no-repeat,
+    linear-gradient(170deg,#1b0e20 0%,#120b15 35%,#0c080f 100%);
+  border-right:1px solid #6e3543;
+  box-shadow:inset -7px 0 26px -20px #ff7036;
+}
+html[data-theme="halloween"] .brand { border-bottom:1px solid #583044; margin-bottom:7px; }
+html[data-theme="halloween"] .brand h1 { color:#ffc48f; letter-spacing:.035em; }
+html[data-theme="halloween"] .brand img { box-shadow:0 0 21px -4px #e65a29; }
+html[data-theme="halloween"] .navlabel { color:#ed9a83; letter-spacing:1.5px; }
+html[data-theme="halloween"] .navbtn { border:1px solid transparent; }
+html[data-theme="halloween"] .navbtn:hover { background:#39202d; border-color:#75394b; color:#ffdfc3; }
+html[data-theme="halloween"] .navbtn.active {
+  color:#fff3df; border-color:#ff984c;
+  background:linear-gradient(115deg,#a43726,#52214d 87%);
+  box-shadow:inset 3px 0 #ffbc66,0 0 20px -12px #ff7329;
+}
+html[data-theme="halloween"] .launchbtn,
+html[data-theme="halloween"] .btn:not(.ghost):not(.danger) {
+  background:linear-gradient(110deg,#b84721,#8a293f 57%,#632d6e);
+  border:1px solid #d76c40; color:#fff3e7;
+  box-shadow:0 7px 20px -12px #f35d2c;
+}
+
+html[data-theme="halloween"] .main {
+  background:
+    url('halloween-web.svg') right top / 205px 205px no-repeat,
+    radial-gradient(ellipse at 70% 50%,rgba(50,125,45,.07),transparent 65%),
+    radial-gradient(ellipse 70% 300px at 60% -5%,rgba(123,30,66,.15),transparent),
+    linear-gradient(175deg,#100a13 0%,#0b0810 100%);
+}
+html[data-theme="halloween"] .rightbar {
+  background:
+    url('halloween-blood.svg') 50% top / 100% 36px no-repeat,
+    url('halloween-web.svg') right top / 150px 150px no-repeat,
+    url('halloween-grasp.svg') right bottom / 100% auto no-repeat,
+    linear-gradient(180deg,#1c0e1f,#100a14 56%,#0d0910);
+  border-left-color:#693244;
+}
+html[data-theme="halloween"] .topbar {
+  border-bottom:1px solid #703749;
+  padding-bottom:13px;
+  margin-bottom:13px;
+  gap:8px;
+  position:relative;
+}
+html[data-theme="halloween"] .topbar::after {
+  content:''; position:absolute; right:55px; bottom:-14px; width:130px; height:14px;
+  background:url('halloween-blood.svg') top center/100% 24px no-repeat;
+  opacity:.8; pointer-events:none;
+}
+html[data-theme="halloween"] .topbar h2 {
+  color:#ffe2c5;
+  text-shadow:0 0 20px rgba(255,85,35,.22);
+  letter-spacing:.05em;
+}
+html[data-theme="halloween"] #seasonBadge {
+  color:#ffcf97;
+  border:1px solid #ad6149;
+  background:linear-gradient(135deg,#47202b,#231522);
+  padding:6px 10px;
+  border-radius:30px;
+  box-shadow:0 0 15px -11px #ff893a;
+  white-space:nowrap;
+  font-weight:700;
+}
+html[data-theme="halloween"] .card,
+html[data-theme="halloween"] .rb-card,
+html[data-theme="halloween"] .metric-tile,
+html[data-theme="halloween"] .subcard {
+  background:linear-gradient(150deg,rgba(46,25,41,.97),rgba(24,15,27,.98));
+  border-color:#5a3244;
+  box-shadow:inset 0 1px rgba(255,166,105,.045),0 9px 30px -24px #d74c3b;
+}
+html[data-theme="halloween"] .card h3 { color:#ffd7ad; }
+html[data-theme="halloween"] .metric-tile b { color:#ffbd74; }
+html[data-theme="halloween"] #home > .card {
+  position:relative;
+  overflow:hidden;
+}
+html[data-theme="halloween"] #home > .card::after {
+  content:'';
+  position:absolute; top:0; right:0; width:33%; height:24px;
+  background:url('halloween-slime.svg') center top/100% 24px no-repeat;
+  opacity:.78; pointer-events:none;
+}
+html[data-theme="halloween"] #home > .card:nth-of-type(even)::after {
+  background-image:url('halloween-blood.svg'); opacity:.6; width:22%;
+}
+html[data-theme="halloween"] .home-quickbtn {
+  background:linear-gradient(160deg,#30202e,#1d1425);
+  border-color:#714154;
+}
+html[data-theme="halloween"] .home-quickbtn:hover {
+  border-color:#ffa75f; box-shadow:0 0 18px -7px #f37a41;
+}
+html[data-theme="halloween"] .bell,
+html[data-theme="halloween"] select,
+html[data-theme="halloween"] input[type="text"],
+html[data-theme="halloween"] input[type="number"],
+html[data-theme="halloween"] input[type="password"],
+html[data-theme="halloween"] textarea {
+  border-color:#694052;
+  background-color:#2a1929;
+}
+html[data-theme="halloween"] :is(button,input,select,textarea):focus-visible {
+  outline:2px solid #ffc06f;
+  outline-offset:2px;
+}
+
+/* A small event placard stays visible on every tab. */
+html[data-theme="halloween"] .halloween-event {
+  display:flex;
+  position:relative;
+  align-items:center;
+  gap:17px;
+  min-height:104px;
+  padding:14px 22px;
+  margin:0 0 18px;
+  overflow:hidden;
+  isolation:isolate;
+  border:1px solid #974e46;
+  border-radius:12px;
+  background:
+    linear-gradient(90deg,rgba(16,8,20,.98) 0%,rgba(31,12,30,.93) 37%,rgba(41,17,28,.19) 72%,rgba(18,8,16,.24) 100%),
+    url('halloween-monsters.svg') center 46%/cover no-repeat,
+    url('halloween-night.svg') center 51%/cover no-repeat;
+  box-shadow:inset 0 1px rgba(255,210,148,.13),0 12px 32px -22px #f66b35;
+  pointer-events:none;
+}
+html[data-theme="halloween"] .halloween-event::after {
+  content:'';
+  position:absolute;
+  inset:0;
+  z-index:0;
+  background:linear-gradient(110deg,transparent 35%,rgba(232,94,54,.12) 57%,transparent 75%);
+  animation:halloween-haze 16s ease-in-out infinite alternate;
+  pointer-events:none;
+}
+html[data-theme="halloween"] .halloween-event::before {
+  content:''; position:absolute; left:0; top:0; width:44%; height:23px;
+  background:url('halloween-blood.svg') center top/100% 26px no-repeat;
+  opacity:.52; pointer-events:none;
+}
+.halloween-event-icon {
+  width:48px;
+  height:55px;
+  flex:none;
+  display:grid;
+  place-items:center;
+  color:#ffbe77;
+  font-size:36px;
+  border:1px solid #bd734c;
+  border-radius:8px 8px 16px 16px;
+  text-shadow:0 0 15px #fb743f;
+  background:rgba(32,11,24,.75);
+  box-shadow:0 0 18px -8px #f76b3b;
+  position:relative;
+  z-index:1;
+}
+.halloween-event-copy { min-width:0; position:relative; z-index:1; }
+.halloween-eyebrow {
+  color:#f7ae8a;
+  font-size:.61rem;
+  letter-spacing:2.3px;
+  font-weight:800;
+}
+.halloween-star { color:#d785ff; padding:0 5px; }
+.halloween-event-copy strong {
+  display:block;
+  margin-top:1px;
+  font-family:Georgia,'Times New Roman',serif;
+  font-size:clamp(1.04rem,2vw,1.62rem);
+  line-height:1.13;
+  letter-spacing:1.2px;
+  color:#ffe2bd;
+  text-shadow:0 1px 8px #361426;
+}
+.halloween-event-copy strong span { color:#ff8e52; }
+.halloween-event-copy small { display:block; margin-top:5px; color:#e0b0ae; letter-spacing:.4px; font-size:.72rem; }
+.halloween-event-mark {
+  display:flex;
+  flex-direction:column;
+  position:relative;
+  z-index:1;
+  margin-left:auto;
+  padding-left:15px;
+  border-left:1px solid rgba(255,168,112,.48);
+  font:700 2rem/1 Georgia,serif;
+  color:#ffb777;
+  text-align:center;
+  text-shadow:0 0 16px #a63d30;
+}
+.halloween-event-mark small { font:800 .57rem/1.5 'Segoe UI',sans-serif; letter-spacing:2px; color:#f5bb9c; }
+
+/* Keep personalisation and real profile content legible on the haunted skyline. */
+html[data-theme="halloween"] .home-hero {
+  min-height:170px;
+  align-items:flex-end;
+  padding:52px 22px 21px;
+  border-color:#ae6747;
+  background:
+    linear-gradient(90deg,rgba(17,10,20,.95) 0%,rgba(20,10,23,.7) 35%,rgba(16,7,16,.13) 72%,rgba(11,7,13,.12) 100%),
+    url('halloween-slime.svg') right top/32% 29px no-repeat,
+    url('halloween-monsters.svg') center center/cover no-repeat,
+    url('halloween-night.svg') center center/cover no-repeat;
+  box-shadow:0 14px 35px -21px #d45540;
+}
+html[data-theme="halloween"] .home-hero::before {
+  background:linear-gradient(0deg,rgba(14,9,19,.86),transparent 65%);
+  opacity:1;
+}
+html[data-theme="halloween"] .home-hero > div {
+  border-radius:7px;
+  text-shadow:0 2px 9px #10070e;
+}
+html[data-theme="halloween"] .home-hero::after {
+  content:'☾  ALL HALLOWS’ MONTH  ·  OCT 01 — 31';
+  position:absolute;
+  top:14px;
+  left:22px;
+  font-size:.64rem;
+  font-weight:800;
+  letter-spacing:1.7px;
+  color:#ffd6ac;
+  text-shadow:0 2px 8px #000;
+  pointer-events:none;
+}
+html[data-theme="halloween"] .home-ava {
+  border-color:#b66b4c;
+  box-shadow:0 0 22px -8px #ff742e;
+}
+html[data-theme="halloween"] .home-name { color:#fff0d6; text-shadow:0 2px 9px #14060d; }
+html[data-theme="halloween"] .home-statusline { color:#edc8bd; text-shadow:0 1px 7px #0c0711; }
+
+/* Ethereal specters move slowly across the haunted art, never intercepting input. */
+.halloween-specter { display:none; }
+html[data-theme="halloween"] .halloween-specter {
+  display:block; position:absolute; z-index:0; pointer-events:none;
+  background:url('halloween-specter.svg') center/contain no-repeat;
+  filter:drop-shadow(0 0 14px rgba(81,251,144,.5));
+  animation:halloween-haunt 7s ease-in-out infinite alternate;
+  opacity:.78;
+}
+html[data-theme="halloween"] .halloween-specter-banner {
+  right:23%; top:7px; width:49px; height:77px; z-index:1;
+  animation-delay:-3s; opacity:.53;
+}
+html[data-theme="halloween"] .halloween-specter-home {
+  right:7%; top:15px; width:48px; height:78px;
+  animation-duration:9s;
+}
+@keyframes halloween-haunt {
+  from { transform:translate(0,5px) rotate(-5deg); opacity:.37; }
+  to { transform:translate(-9px,-13px) rotate(6deg); opacity:.85; }
+}
+
+@keyframes halloween-haze {
+  from { transform:translateX(-22%); opacity:.3; }
+  to { transform:translateX(25%); opacity:.8; }
+}
+
+/* The masked visitor whispers a different line every five seconds. */
+.halloween-ghostface-bubble { display:none; }
+html[data-theme="halloween"] .halloween-ghostface-bubble {
+  display:block;
+  position:absolute;
+  z-index:3;
+  right:20%;
+  top:9px;
+  max-width:220px;
+  width:22%;
+  box-sizing:border-box;
+  padding:10px 12px;
+  border:1px solid #eac7b3;
+  border-radius:13px 13px 4px 13px;
+  background:linear-gradient(150deg,rgba(41,17,34,.97),rgba(10,7,18,.98));
+  color:#fff6eb;
+  box-shadow:0 5px 18px rgba(0,0,0,.65),0 0 16px rgba(187,46,73,.28);
+  font:800 clamp(.57rem,.9vw,.73rem)/1.3 'Segoe UI',sans-serif;
+  letter-spacing:.35px;
+  text-align:center;
+  overflow-wrap:anywhere;
+  pointer-events:none;
+  opacity:0;
+  transform:translateY(7px) scale(.94);
+}
+html[data-theme="halloween"] .halloween-ghostface-bubble::after {
+  content:'';
+  position:absolute;
+  right:-8px;
+  bottom:11px;
+  border-left:9px solid #291122;
+  border-top:7px solid transparent;
+  border-bottom:7px solid transparent;
+}
+html[data-theme="halloween"] .halloween-ghostface-bubble.is-speaking {
+  animation:halloween-whisper 5s ease-in-out both;
+}
+html[data-theme="halloween"] .halloween-ghostface-home {
+  right:19%; top:30px; width:25%; max-width:250px;
+}
+@keyframes halloween-whisper {
+  0% { opacity:0; transform:translateY(7px) scale(.94); }
+  9%,75% { opacity:1; transform:translateY(0) scale(1); }
+  95%,100% { opacity:0; transform:translateY(-5px) scale(.97); }
+}
+
+/* The profile frame haunts both self and friend profiles; real images stay intact. */
+html[data-theme="halloween"] #userModal {
+  background:rgba(9,2,11,.82);
+  backdrop-filter:blur(7px);
+}
+html[data-theme="halloween"] #userModal .modal-card {
+  border:1px solid #9d4152;
+  background:linear-gradient(165deg,#2b1427 0%,#160c19 46%,#100a15 100%);
+  box-shadow:0 28px 85px -17px #000,0 0 35px -19px #f15145,inset 0 0 27px rgba(79,193,93,.06);
+}
+html[data-theme="halloween"] #userModal .modal-banner {
+  position:relative;
+  background-image:linear-gradient(0deg,rgba(16,8,20,.6),rgba(16,8,20,.06)),url('halloween-night.svg');
+  background-size:cover;
+  background-position:center;
+}
+html[data-theme="halloween"] #userModal .modal-banner::after {
+  content:'';
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background:url('halloween-web.svg') left top/170px 150px no-repeat,
+    url('halloween-blood.svg') center top/100% 38px no-repeat,
+    linear-gradient(0deg,rgba(15,6,21,.5),transparent 42%);
+}
+html[data-theme="halloween"] #userModal .modal-head {
+  position:relative;
+  z-index:1;
+}
+html[data-theme="halloween"] #userModal .modal-ava {
+  border:3px solid #8feb77;
+  background:#23152a;
+  box-shadow:0 0 17px rgba(101,224,76,.54),0 0 27px rgba(185,42,78,.3);
+}
+html[data-theme="halloween"] #userModal .modal-name {
+  color:#ffeacb;
+  text-shadow:0 1px 7px #190716,0 0 13px rgba(239,93,63,.35);
+}
+html[data-theme="halloween"] #userModal .tagchip {
+  background:rgba(35,16,32,.91);
+  border-color:#804a60;
+  color:#f5cbbf;
+}
+html[data-theme="halloween"] #userModal .modal-tabs {
+  border-bottom:1px solid #69354b;
+}
+html[data-theme="halloween"] #userModal .mtab.active {
+  background:linear-gradient(120deg,#a52b42,#5e2a7d);
+  color:#fff1dc;
+}
+html[data-theme="halloween"] #userModal .um-sec { color:#a6e78d; }
+html[data-theme="halloween"] #userModal .um-bio { color:#fff0e0; }
+html[data-theme="halloween"] #userModal .rb-card {
+  border-color:#6d3d4f;
+  background:linear-gradient(130deg,rgba(41,19,36,.94),rgba(18,12,24,.95));
+}
+@media (max-width:1100px) {
+  html[data-theme="halloween"] .halloween-event-mark { display:none; }
+  html[data-theme="halloween"] .halloween-event { gap:12px; padding:13px 14px; }
+  html[data-theme="halloween"] .halloween-event-copy {
+    padding:4px 6px;
+    border-radius:5px;
+    background:linear-gradient(90deg,rgba(15,7,17,.99),rgba(15,7,17,.96));
+    box-shadow:0 0 19px 8px rgba(15,7,17,.61);
+  }
+  html[data-theme="halloween"] .halloween-eyebrow { letter-spacing:1px; }
+  html[data-theme="halloween"] #seasonBadge { font-size:.65rem; }
+  html[data-theme="halloween"] .halloween-event {
+    background-image:
+      linear-gradient(90deg,rgba(16,8,20,.99),rgba(21,8,22,.97) 43%,rgba(22,8,21,.85) 73%,rgba(18,8,16,.25)),
+      url('halloween-monsters.svg'), url('halloween-night.svg');
+  }
+  html[data-theme="halloween"] .home-hero {
+    background-image:
+      linear-gradient(90deg,rgba(17,10,20,.98),rgba(20,10,23,.9) 44%,rgba(16,7,16,.58) 75%,rgba(11,7,13,.2)),
+      url('halloween-slime.svg'), url('halloween-monsters.svg'), url('halloween-night.svg');
+  }
+  html[data-theme="halloween"] .halloween-ghostface-bubble { right:12%; width:27%; font-size:.62rem; }
+  html[data-theme="halloween"] .halloween-ghostface-home { right:10%; width:30%; }
+}
+@media (max-width:960px) {
+  html[data-theme="halloween"] .halloween-event-icon { display:none; }
+  html[data-theme="halloween"] .topbar { flex-wrap:wrap; }
+  html[data-theme="halloween"] .home-hero { background-position:60% center; }
+  html[data-theme="halloween"] .halloween-specter-banner { display:none; }
+}
+@media (max-width:650px) {
+  html[data-theme="halloween"] .halloween-event { min-height:160px; padding-bottom:68px; }
+  html[data-theme="halloween"] .halloween-ghostface-event {
+    left:14px; right:auto; top:auto; bottom:10px;
+    width:calc(100% - 28px); max-width:none;
+  }
+  html[data-theme="halloween"] .halloween-ghostface-event::after { display:none; }
+  html[data-theme="halloween"] .home-hero { min-height:198px; }
+  html[data-theme="halloween"] .halloween-ghostface-home {
+    top:42px; right:10px; width:48%; max-width:none;
+  }
+  html[data-theme="halloween"] .halloween-event-copy strong { font-size:1.02rem; }
+  html[data-theme="halloween"] .halloween-event-copy small { line-height:1.3; }
+  html[data-theme="halloween"] .halloween-event {
+    background-image:
+      linear-gradient(90deg,rgba(16,8,20,.99) 0%,rgba(21,8,22,.96) 75%,rgba(18,8,16,.69)),
+      url('halloween-monsters.svg'),url('halloween-night.svg');
+  }
+  html[data-theme="halloween"] .home-hero {
+    background-image:
+      linear-gradient(90deg,rgba(17,10,20,.99) 0%,rgba(20,10,23,.96) 65%,rgba(16,7,16,.49)),
+      url('halloween-slime.svg'),url('halloween-monsters.svg'),url('halloween-night.svg');
+  }
+  html[data-theme="halloween"] .home-hero::after { font-size:.56rem; letter-spacing:.8px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  html[data-theme="halloween"] .halloween-event::after { animation:none; }
+  html[data-theme="halloween"] .halloween-specter { animation:none; opacity:.55; }
+  html[data-theme="halloween"] .halloween-ghostface-bubble.is-speaking {
+    animation:none; opacity:1; transform:none;
+  }
+}

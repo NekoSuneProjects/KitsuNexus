@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 420" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <radialGradient id="apparition"><stop stop-color="#a9ffc4" stop-opacity=".68"/><stop offset=".5" stop-color="#5df2a0" stop-opacity=".24"/><stop offset="1" stop-color="#49fe9b" stop-opacity="0"/></radialGradient>
+    <linearGradient id="ghost" x2=".8" y2="1"><stop stop-color="#edfff0" stop-opacity=".96"/><stop offset=".52" stop-color="#baf9d8" stop-opacity=".85"/><stop offset="1" stop-color="#5ddaac" stop-opacity=".18"/></linearGradient>
+    <linearGradient id="hood" x2="1" y2="1"><stop stop-color="#090a11"/><stop offset=".4" stop-color="#27212a"/><stop offset="1" stop-color="#07070e"/></linearGradient>
+    <linearGradient id="mask" x2=".7" y2="1"><stop stop-color="#f9f4e9"/><stop offset=".55" stop-color="#d9d6d6"/><stop offset="1" stop-color="#85898d"/></linearGradient>
+    <linearGradient id="rotting" x2=".9" y2="1"><stop stop-color="#a7c470"/><stop offset=".5" stop-color="#61793c"/><stop offset="1" stop-color="#35442a"/></linearGradient>
+    <radialGradient id="red"><stop stop-color="#ff3b3b" stop-opacity=".53"/><stop offset="1" stop-color="#ff2640" stop-opacity="0"/></radialGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="9"/></filter>
+  </defs>
+  <!-- Stalking zombie: original decomposed creature with clawed fingers. -->
+  <g transform="translate(835 44)">
+    <ellipse cx="115" cy="252" rx="132" ry="122" fill="url(#apparition)" opacity=".5"/>
+    <path d="M42 378Q5 313 33 250q13-35 55-47l61 5q68 27 84 170" fill="#25282a" stroke="#34332c" stroke-width="5"/>
+    <path d="M41 263q-19 32-6 84l65 30-19-70-5-61M150 236l41 80-15 61h60q-5-105-63-138" fill="#472f34"/>
+    <path d="M99 227l29 30 28-30-12 78-41-12Z" fill="#83945c"/>
+    <path d="M72 133q-8-19 4-40 10-24 32-27l55 11 20 27-5 92-24 36-64-12-27-37Z" fill="url(#rotting)" stroke="#263522" stroke-width="5"/>
+    <path d="M77 101q23-38 55-24l33 16 11 27-22-8-21 9-27-15-27 17Z" fill="#282c25"/>
+    <path d="M77 136l24-9 20 11-5 18-29 2ZM133 144l32-8 7 18-15 15-22-6Z" fill="#1b2820"/>
+    <path d="M89 143l15-6 7 11-12 7ZM145 150l15-7 5 11-13 8Z" fill="#f5ef9e"/>
+    <path d="M100 194q16-9 29-3l19-5 10 12-13 21-22-12-18 3Z" fill="#3f2529"/>
+    <path d="M112 193l5 11 9-11 8 14 12-19" fill="none" stroke="#ded5b2" stroke-width="4"/>
+    <path d="M92 165l-16 12 20 11M151 169l-8 13 15 7M118 95l17 14-11 15" fill="none" stroke="#342c22" stroke-width="5"/>
+    <path d="M23 274q-24-11-33-34l-18-35 8-11 23 28-8-38 11-6 18 41-1-46 13-2 11 42 8-30 10 4-1 53 29 20-16 40Z" fill="#76894d" stroke="#28351e" stroke-width="4"/>
+    <path d="M-18 219l18-13M8 195l19-5M39 196l9-7" stroke="#922c37" stroke-width="5"/>
+    <path d="M90 276l13 34-12 17m90-41-12 20 6 21" fill="none" stroke="#9c3840" stroke-width="7"/>
+  </g>
+  <!-- Hooded scream-mask figure: custom silhouette / original haunted mask. -->
+  <g transform="translate(1078 17)">
+    <ellipse cx="111" cy="239" rx="123" ry="158" fill="url(#red)" opacity=".9"/>
+    <path d="M104 49Q35 44 20 133L0 397h239l-18-262Q205 53 130 44Z" fill="url(#hood)" stroke="#080912" stroke-width="6"/>
+    <path d="M104 54Q53 63 45 142l18 85 48-24 47 21 33-86q-14-76-87-84Z" fill="#08080f"/>
+    <path d="M109 81Q72 82 66 123q-7 36 8 72 18 48 35 62 22-13 37-52 16-44 10-75-4-45-47-49Z" fill="url(#mask)" stroke="#807d81" stroke-width="3"/>
+    <path d="M73 134q9-22 30-9l-9 40q-19 9-21-31ZM144 128q-18-14-30 0l7 36q18 9 23-36Z" fill="#0a0b12"/>
+    <path d="M111 161q-10 16-4 25l11 1q7-15-7-26Z" fill="#17161e"/>
+    <path d="M109 192q-13 7-11 30 1 17 12 27 17-21 16-38-2-16-17-19Z" fill="#0b0a13"/>
+    <path d="M79 180q13 12 18 9M133 188q7-6 12-11" fill="none" stroke="#969092" stroke-width="3" opacity=".65"/>
+    <path d="M61 221Q30 270 18 390M161 225q48 75 49 167" fill="none" stroke="#59515a" stroke-width="3" opacity=".5"/>
+    <path d="M170 255q-15 51-3 140M53 268q9 57-5 125" fill="none" stroke="#6d2336" stroke-width="6" opacity=".65"/>
+    <path d="M146 298l14 30-7 19M76 318l-9 24 12 15" stroke="#ae2639" stroke-width="4" fill="none" opacity=".65"/>
+  </g>
+  <!-- Two luminous wandering ghosts, with tapered tails and hollow faces. -->
+  <g transform="translate(1322 122)">
+    <ellipse cx="12" cy="117" rx="104" ry="145" fill="url(#apparition)"/>
+    <path d="M11 12q-52 0-55 58-2 33-18 75t-27 81q38-13 59-1 21 13 29 49 22-40 44-38 19 1 37 22-20-74-20-159Q60 12 11 12Z" fill="url(#ghost)" stroke="#b8ffe1" stroke-opacity=".5" stroke-width="3"/>
+    <ellipse cx="-8" cy="100" rx="12" ry="19" fill="#17312f"/>
+    <ellipse cx="34" cy="100" rx="12" ry="19" fill="#17312f"/>
+    <ellipse cx="14" cy="146" rx="13" ry="25" fill="#1b3734"/>
+    <path d="M-42 172q12 20 2 42M66 167q-18 25-7 46" fill="none" stroke="#d0ffe5" stroke-opacity=".6" stroke-width="3"/>
+  </g>
+  <g transform="translate(790 31) scale(.54)" opacity=".75">
+    <ellipse cx="10" cy="129" rx="98" ry="148" fill="url(#apparition)"/>
+    <path d="M0 11q-49 0-53 63Q-57 126-97 217q47-12 62 34 28-32 50-19 19 12 36 28-14-85-5-149Q48 12 0 11Z" fill="url(#ghost)"/>
+    <ellipse cx="-16" cy="103" rx="13" ry="22" fill="#16362f"/><ellipse cx="27" cy="103" rx="13" ry="22" fill="#16362f"/><ellipse cx="7" cy="151" rx="11" ry="22" fill="#16362f"/>
+  </g>
+</svg>

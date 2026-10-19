@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 320" preserveAspectRatio="xMidYMax meet">
+  <defs>
+    <radialGradient id="fumes"><stop stop-color="#74ff89" stop-opacity=".35"/><stop offset="1" stop-color="#4cff70" stop-opacity="0"/></radialGradient>
+    <linearGradient id="flesh" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#a8bd78"/><stop offset=".5" stop-color="#5b754c"/><stop offset="1" stop-color="#293e34"/></linearGradient>
+    <linearGradient id="shroud" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#50313a"/><stop offset="1" stop-color="#12121c"/></linearGradient>
+    <filter id="mist"><feGaussianBlur stdDeviation="12"/></filter>
+  </defs>
+  <ellipse cx="165" cy="243" rx="168" ry="91" fill="url(#fumes)" filter="url(#mist)"/>
+  <path d="M2 273q35-37 71-12 29-31 65-13 43-30 82-1 36-26 63 1 27-13 57 21v51H0Z" fill="#0d1014" opacity=".93"/>
+  <path d="M26 300q12-29 36-40M118 314q17-22 41-29M234 306q23-42 48-33" stroke="#314537" stroke-width="3" opacity=".6" fill="none"/>
+  <!-- The hand clawing out of the grave: angular fingers and torn sleeve. -->
+  <path d="M159 314q-28-35-33-79l-15-35-16-50q-4-14 5-16 8-2 14 14l27 48-26-79q-4-15 7-17 10-1 15 14l32 78-11-100q-1-16 10-18 11 1 12 17l16 100 14-71q4-17 15-13 9 4 7 16l-15 105q25-27 36-26 14 3 5 18l-32 47-1 50Z" fill="url(#flesh)" stroke="#1e302a" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M95 150l14 2m4-35 16 3m34-28 17-3m34 29 14 3" fill="none" stroke="#e1dcb3" stroke-width="5" stroke-linecap="round"/>
+  <path d="M130 245q27-11 56 8l20-18m-71 32q39-16 69 9" stroke="#344a38" stroke-width="7" fill="none"/>
+  <path d="M112 293q48-15 110-9l24 36H110Z" fill="url(#shroud)" stroke="#702e3d" stroke-width="3"/>
+  <path d="M140 295q12 12 3 23m41-25q-6 16 5 26m29-21q-4 12 2 20" stroke="#a53c48" stroke-width="5" fill="none"/>
+  <!-- A smaller infected hand breaks through the ground. -->
+  <g transform="translate(-2 56) rotate(-12 57 242) scale(.72)">
+    <path d="M59 315Q46 286 46 255l-24-38q-7-13 3-18 9-2 16 9l24 28-9-65q-1-15 9-16 10 0 12 15l13 65 6-82q1-13 12-12 9 3 8 16l-3 79 18-50q6-13 15-9 8 6 3 19l-18 72 23-14q12-6 15 3 2 10-14 23l-44 37Z" fill="#627f52" stroke="#26382a" stroke-width="7"/>
+    <path d="M57 173l14-2m31-15 11 2m22 40 11 5" stroke="#d1d4a2" stroke-width="6"/>
+  </g>
+  <!-- Scattered occult embers and bubbles drifting out of the soil. -->
+  <g fill="#7bff9b" opacity=".66"><circle cx="66" cy="187" r="3"/><circle cx="271" cy="156" r="4"/><circle cx="256" cy="218" r="2"/><circle cx="40" cy="248" r="3"/></g>
+  <g stroke="#ce424c" stroke-width="3" opacity=".58" fill="none"><path d="M296 276l-8-13 4-17"/><path d="M310 293l-5-9"/></g>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 110" preserveAspectRatio="none">
+ <defs><linearGradient id="blood" x2="0" y2="1"><stop stop-color="#6c091b"/><stop offset="1" stop-color="#d82e3e"/></linearGradient></defs>
+ <path d="M0 0h640v11q-20 13-38 2t-35 4v18q-4 13-12 13t-12-14V18h-69v7q-2 18-12 18t-12-18V14h-45v44q-2 34-16 34t-12-34V14h-56v21q-1 18-12 18t-10-19V15h-67v9q-1 10-9 10t-11-10V13h-53v57q-2 28-15 28t-13-28V15h-61v17q-2 18-12 18t-11-18V15H43v8q0 13-10 13T22 23V13H0Z" fill="url(#blood)" stroke="#4c0814" stroke-width="2"/>
+ <g fill="#a5152b" opacity=".72"><circle cx="81" cy="84" r="7"/><circle cx="230" cy="103" r="4"/><circle cx="517" cy="79" r="6"/><circle cx="615" cy="101" r="3"/></g>
+</svg>

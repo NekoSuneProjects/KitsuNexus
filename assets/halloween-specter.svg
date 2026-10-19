@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 130 190">
+  <defs>
+    <radialGradient id="aura"><stop stop-color="#6affaa" stop-opacity=".45"/><stop offset="1" stop-color="#48ff8d" stop-opacity="0"/></radialGradient>
+    <linearGradient id="skin" x2=".4" y2="1"><stop stop-color="#eefff2" stop-opacity=".95"/><stop offset=".65" stop-color="#b3efd5" stop-opacity=".76"/><stop offset="1" stop-color="#5afa9c" stop-opacity=".08"/></linearGradient>
+  </defs>
+  <ellipse cx="65" cy="94" rx="64" ry="91" fill="url(#aura)"/>
+  <path d="M65 17Q26 16 23 66q-4 43-20 99 24-20 46-2 15 11 16 25 7-22 26-27 17-5 35 15-14-57-16-110Q108 17 65 17Z" fill="url(#skin)" stroke="#baffdb" stroke-opacity=".5" stroke-width="2"/>
+  <path d="M47 81q-11-7-15 14-3 21 13 24 15-4 15-23-1-13-13-15ZM83 81q12-7 16 14 4 21-13 24-16-4-16-23 1-13 13-15ZM65 126q-12-3-12 20 0 22 13 24 14-5 14-25-1-19-15-19Z" fill="#142e2c"/>
+  <path d="M23 120q8 23-6 39M111 119q-11 30 1 45" fill="none" stroke="#f2fff6" stroke-opacity=".42" stroke-width="3"/>
+</svg>

@@ -35,7 +35,7 @@
     [data-theme="blackgreen"]  { --bg:#050806; --bg2:#0a0f0c; --panel:#0f1712; --panel2:#141f18; --border:#1f3327; --text:#e8fff0; --muted:#8fbfa0; --accent:#22c55e; --accent2:#4ade80; }
     /* Seasonal (auto-selected by date — not user-switchable) */
     [data-theme="xmas"]      { --bg:#07140d; --bg2:#0a1c12; --panel:#0d2417; --panel2:#11301e; --border:#1c4a30; --text:#eafff0; --muted:#9fd9b4; --accent:#e3342f; --accent2:#22c55e; }
-    [data-theme="halloween"] { --bg:#140a04; --bg2:#1c0f06; --panel:#241408; --panel2:#301a0a; --border:#4a2a10; --text:#ffe9d6; --muted:#d8a06a; --accent:#ff7518; --accent2:#8b5cf6; }
+    [data-theme="halloween"] { --bg:#090609; --bg2:#120b14; --panel:#1c101c; --panel2:#291724; --border:#583044; --text:#fff0df; --muted:#c9a5a1; --accent:#ff822d; --accent2:#b14aff; --bad:#f34b5d; }
     [data-theme="easter"]    { --bg:#120f18; --bg2:#181522; --panel:#201a2e; --panel2:#28213a; --border:#3a3052; --text:#fdeafd; --muted:#c9b8e0; --accent:#f9a8d4; --accent2:#6ee7b7; }
 
     /* Community Booster cosmetics apply only after a main-process verified grant. */
@@ -334,6 +334,7 @@
     }
     @keyframes rb { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
   </style>
+  <link rel="stylesheet" href="assets/halloween.css" />
 </head>
 
 <body>
@@ -406,6 +407,18 @@
         </div>
       </div>
 
+      <div class="halloween-event" aria-label="Halloween event, October 1 through October 31">
+        <span class="halloween-event-icon" aria-hidden="true">☠</span>
+        <div class="halloween-event-copy">
+          <span class="halloween-eyebrow">KITSUNEXUS PRESENTS <span class="halloween-star">✦</span> OCTOBER 01 — 31</span>
+          <strong>THE HAUNTING <span>IS HERE</span></strong>
+          <small>Ghosts rise. Zombies roam. Enter if you dare.</small>
+        </div>
+        <span class="halloween-ghostface-bubble halloween-ghostface-event" aria-hidden="true"></span>
+        <span class="halloween-specter halloween-specter-banner" aria-hidden="true"></span>
+        <span class="halloween-event-mark" aria-hidden="true">31 <small>NIGHTS</small></span>
+      </div>
+
       <!-- Notifications flyout -->
       <div id="notifPanel" class="notif-panel" style="display:none">
         <div class="notif-head"><b>Notifications</b>
@@ -426,6 +439,8 @@
       <!-- HOME DASHBOARD -->
       <section id="home" class="tabpanel active">
         <div class="home-hero">
+          <span class="halloween-specter halloween-specter-home" aria-hidden="true"></span>
+          <span class="halloween-ghostface-bubble halloween-ghostface-home" aria-hidden="true"></span>
           <img id="homeAvatar" class="home-ava" src="assets/logo.png" referrerpolicy="no-referrer" />
           <div>
             <div class="home-name" id="homeName">KitsuNexus</div>
@@ -2030,7 +2045,7 @@
             <option value="rainbow">Rainbow (Pride)</option>
             <option value="light">Light</option>
           </select>
-          <div class="muted" style="font-size:.75rem;margin-top:6px">"Auto" defaults to Black &amp; Green. Halloween/Christmas/Pride/Easter always take over automatically during those windows — even over a custom pick below — then your pick resumes once the event ends.</div>
+          <div class="muted" style="font-size:.75rem;margin-top:6px">"Auto" defaults to Black &amp; Green. Halloween runs October 1–31; Christmas/Pride/Easter follow their seasonal dates. Event themes override even custom picks and your chosen colours return automatically when the event ends.</div>
         </div>
         <div class="card" id="boosterPanel">
           <h3>Community Booster <span id="boosterBadge" class="booster-badge" hidden>Supporter</span></h3>
@@ -2427,7 +2442,7 @@
       <button id="userModalClose" class="modal-close">×</button>
       <div class="modal-banner" id="umBanner"></div>
       <div class="modal-head">
-        <img id="umAvatar" class="modal-ava" src="assets/logo.png" alt="" />
+        <img id="umAvatar" class="modal-ava" src="assets/logo.png" referrerpolicy="no-referrer" alt="Profile picture" />
         <div style="min-width:0;padding-bottom:6px">
           <div class="modal-name" id="umName">—</div>
           <div class="muted" id="umStatusDesc" style="font-size:.84rem"></div>

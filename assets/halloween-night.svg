@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 420" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="night" x2="0" y2="1"><stop stop-color="#1d0a24"/><stop offset=".53" stop-color="#371227"/><stop offset="1" stop-color="#100c17"/></linearGradient>
+    <radialGradient id="haze"><stop stop-color="#ff9b3c" stop-opacity=".5"/><stop offset=".55" stop-color="#ed4f2d" stop-opacity=".16"/><stop offset="1" stop-color="#e93b2d" stop-opacity="0"/></radialGradient>
+    <radialGradient id="moon"><stop stop-color="#fff6bf"/><stop offset=".72" stop-color="#ffbf66"/><stop offset="1" stop-color="#ed6639"/></radialGradient>
+    <linearGradient id="fog" x2="0" y2="1"><stop stop-color="#c185ae" stop-opacity="0"/><stop offset="1" stop-color="#a2689c" stop-opacity=".19"/></linearGradient>
+  </defs>
+  <rect width="1400" height="420" fill="url(#night)"/>
+  <ellipse cx="1082" cy="136" rx="350" ry="258" fill="url(#haze)"/>
+  <g fill="#f7b281" opacity=".6"><circle cx="505" cy="52" r="1.5"/><circle cx="680" cy="134" r="1.7"/><circle cx="761" cy="44" r="1"/><circle cx="1243" cy="54" r="1.4"/><circle cx="1318" cy="169" r="1.2"/><circle cx="878" cy="95" r="1.2"/></g>
+  <circle cx="1083" cy="141" r="93" fill="url(#moon)"/>
+  <path d="M1024 96q22 14 30-1t36-14M1123 150q-17 1-19 18t-31 13M1091 101q-8 10-1 17" fill="none" stroke="#d97447" stroke-opacity=".28" stroke-width="9" stroke-linecap="round"/>
+  <path d="M0 293Q170 246 329 287T644 286T975 261T1400 282V420H0Z" fill="#26152a"/>
+  <path d="M0 333Q180 304 350 329T690 321T1050 298T1400 330V420H0Z" fill="#190d1c"/>
+  <!-- The crooked roofline and watchtowers of the haunted manor. -->
+  <g fill="#120c18">
+    <path d="M876 332V238l20-20 20 20v94ZM909 320V199l31-25 31 25v121ZM964 327V241l25-21 25 21v86ZM1002 319V194l21-19 21 19v125Z"/>
+    <path d="M864 235h65l-33-57ZM900 204h80l-40-74ZM951 252h75l-37-61ZM989 197h68l-34-57Z"/>
+    <path d="M909 311h143v20H909ZM889 317h184v25H889Z"/>
+    <path d="M932 177v-62h16v62ZM1020 169V97h11v72Z"/>
+    <path d="M938 125l-13-15h40l-17 15ZM1025 103l-14-13h29l-9 13Z"/>
+  </g>
+  <g fill="#fc863e" opacity=".83">
+    <path d="M931 238v-29a10 10 0 0 1 20 0v29ZM1015 246v-22a9 9 0 0 1 18 0v22ZM982 281v-14a8 8 0 0 1 16 0v14Z"/>
+  </g>
+  <path d="M937 210v27M1015 229h18" stroke="#1a0e1b" stroke-width="3"/>
+  <!-- Twisted trees and bare reaching branches. -->
+  <g stroke="#130e19" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M64 420Q95 317 81 238T45 99M77 280Q119 218 123 147M91 293Q25 233 7 202M81 219Q50 166 56 137M102 238Q142 200 181 204M60 175Q30 166 20 146" stroke-width="15"/>
+    <path d="M1322 420q-30-116-15-188t54-99M1308 301q-56-60-83-74M1315 267q51-57 80-71M1320 238q-18-58-19-89M1287 282q-32-15-51-13" stroke-width="14"/>
+    <path d="M485 419q24-83 5-123t-34-48M493 316q31-34 50-38M486 340q-34-24-58-22" stroke-width="12"/>
+  </g>
+  <!-- Gravestones and iron cemetery fencing. -->
+  <g fill="#0c0a13">
+    <path d="M650 357v-48a19 19 0 0 1 38 0v48ZM721 355v-30q0-15 14-15t14 15v30ZM783 366v-42l17-14 17 14v42ZM1161 359v-39a19 19 0 0 1 38 0v39Z"/>
+    <path d="M564 342h3v45h-3zm15-12h3v57h-3zm15 6h3v51h-3zm15-13h3v64h-3zm15 12h3v52h-3zM555 353h87v4h-87z"/>
+    <path d="M669 310v26m-11-16h22M1180 316v26m-12-16h24" stroke="#352437" stroke-width="3"/>
+  </g>
+  <!-- A flock of bats silhouetted against the moon. -->
+  <g fill="#24121e">
+    <path d="M1092 92q-20-25-42-9 14-2 16 20 13-11 26 9 12-20 26-9 2-22 16-20-24-16-42 9Z"/>
+    <path d="M1200 137q-15-18-31-7 11 0 11 13 10-9 20 7 9-16 19-7 1-13 12-13-16-11-31 7Z"/>
+    <path d="M824 109q-14-15-27-7 9 0 10 12 8-7 17 5 9-12 17-5 1-12 10-12-13-8-27 7Z"/>
+  </g>
+  <!-- Jack-o'-lanterns glow along the cemetery path. -->
+  <g transform="translate(1206 320)">
+    <ellipse cx="28" cy="35" rx="32" ry="24" fill="#923b1c"/><ellipse cx="28" cy="35" rx="22" ry="24" fill="#bd5623"/>
+    <path d="M26 14l6-14 10 4-9 11" fill="#3d351b"/>
+    <path d="M10 30l10-9 4 12Zm26 3 6-12 10 9ZM16 43q13 8 26 0l-4 10-6-5-6 5-5-6-5 3Z" fill="#ffd280"/>
+  </g>
+  <rect y="326" width="1400" height="94" fill="url(#fog)"/>
+  <path d="M0 350Q160 329 324 353T690 354T1056 347T1400 357" fill="none" stroke="#b090b2" stroke-opacity=".16" stroke-width="29"/>
+</svg>

@@ -5,8 +5,34 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+
+- **Ghostface-inspired Halloween dialogue.** The masked figure now displays a speech bubble
+  on the event placard and home hero, cycling through twelve horror lines every five
+  seconds with pop-in and fade-out transitions. The bubble hides when Halloween ends,
+  adapts to compact windows, and disables movement for reduced-motion settings.
+- **Spooky seasonal profile dialogs.** During October, self and friend profiles have
+  haunted banner fallbacks, bloody webs, green avatar glows and eerie purple
+  accents while keeping actual VRChat avatars and banners in view.
+- **The Haunting Halloween event theme, October 1–31.** A haunted manor and
+  graveyard skyline, moonlit bats, cobwebbed rails, ember-orange highlights,
+  eerie panels and an event placard appear throughout the desktop app for the
+  entire month of October. The theme respects reduced-motion preferences and
+  automatically restores the user's saved look when November begins. Calendar
+  boundary tests guard the start and end dates.
+- **Expanded Halloween horror decorations.** Original masked stalker and
+  zombie art haunt the event banner and home dashboard alongside drifting green
+  specters, toxic slime and blood drips. Graveyard hands emerge from the friends
+  panel; stronger contrast at narrow widths keeps text readable over the art.
+
 ### Fixed
 
+- **Friend profiles showing blank thumbnails or banners.** The renderer now considers
+  public-profile `iconUrl` as well as avatar thumbnails and custom VRChat Plus
+  images, retries alternate picture URLs after failed loads, and resets old
+  imagery while switching profiles. The VRChat API preserves image fields from
+  both user and public-profile responses; viewing a friend cannot change the
+  authenticated user's ID. Regression tests cover the selection and fallback paths.
 - **Now Playing getting stuck on the previous Spotify song after track changes.**
   Spotify's accessibility tree can keep reporting an old song even when its
   window title has moved to the next track. Detect the mismatch, prefer the

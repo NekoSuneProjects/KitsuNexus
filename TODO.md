@@ -1,6 +1,11 @@
 # KitsuNexus — TODO / Roadmap
 
 ## UI layout
+- [x] Give KitsuNexus an October 1–31 Halloween horror theme with haunted artwork, spooky details and automatic seasonal switching.
+- [x] Expand the October horror decorations with a masked stalker, zombies, drifting ghosts, toxic green goo, bloody drips and hands rising from the grave, with responsive text shading.
+- [x] Give the masked Halloween visitor a five-second rotating speech bubble that fades between horror phrases, pauses outside October, and respects reduced motion.
+- [x] Haunt self and friend profile dialogs in October while preserving real pictures and using haunted art for missing banners.
+- [x] Repair friend profile pictures and banners by retaining public-profile image URLs, falling back to alternate images on load errors, and isolating concurrent profile loads.
 - [x] Prevent Heart Rate panels, OSC outputs, and Community Booster option cards from overflowing the center pane at reduced widths.
 - [ ] Review Avatar Locker's fixed minimum grid widths for the same narrow-center-pane issue.
 

@@ -1,0 +1,2589 @@
+<!DOCTYPE html>
+<html data-theme="halloween" lang="en" data-theme="blackgreen">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KitsuNexus</title>
+  <style>
+    /* ---- Theme engine: every theme is just a set of CSS variables ---- */
+    :root {
+      --bg: #0b0b14;
+      --bg2: #14141f;
+      --panel: #1b1b2a;
+      --panel2: #232336;
+      --border: #2e2e45;
+      --text: #e8e8f0;
+      --muted: #9a9ab0;
+      --accent: #ff007f;
+      --accent2: #00e5ff;
+      --good: #22c55e;
+      --bad: #ef4444;
+      --radius: 14px;
+    }
+    [data-theme="dark"]     { --bg:#0f0f0f; --bg2:#181818; --panel:#1e1e1e; --panel2:#262626; --border:#333; --accent:#ff007f; --accent2:#06b6d4; }
+    [data-theme="midnight"] { --bg:#0b0b14; --bg2:#12121d; --panel:#1b1b2a; --panel2:#232336; --border:#2e2e45; --accent:#7c5cff; --accent2:#00e5ff; }
+    [data-theme="neon"]     { --bg:#04040a; --bg2:#080814; --panel:#0d0d1f; --panel2:#13132b; --border:#1c1c3a; --text:#d7fff9; --muted:#5fd0c4; --accent:#ff2bd6; --accent2:#00ffe0; }
+    [data-theme="pink"]     { --bg:#1a0010; --bg2:#26011a; --panel:#330122; --panel2:#42032c; --border:#5a0a3e; --text:#ffe8f5; --muted:#e59cc9; --accent:#ff4fa3; --accent2:#ffa6d5; }
+    [data-theme="green"]    { --bg:#031a0b; --bg2:#052612; --panel:#073318; --panel2:#0a4220; --border:#0e5a2d; --text:#e4ffe9; --muted:#8fd5a3; --accent:#22e06a; --accent2:#9dffb8; }
+    [data-theme="rainbow"]  { --bg:#06060c; --bg2:#0c0c16; --panel:#15151f; --panel2:#1d1d2b; --border:#2b2b40; --accent:#ff0080; --accent2:#40e0d0; }
+    [data-theme="light"]    { --bg:#f3f4f8; --bg2:#e9eaf0; --panel:#ffffff; --panel2:#f1f2f7; --border:#d7d9e3; --text:#1b1b2a; --muted:#5b5b70; --accent:#d6006b; --accent2:#0090a8; }
+    [data-theme="blackpurple"] { --bg:#060308; --bg2:#0a050f; --panel:#100a1c; --panel2:#171026; --border:#2a1b40; --text:#f0e6ff; --muted:#b39ddb; --accent:#8b5cf6; --accent2:#c084fc; }
+    [data-theme="blackpink"]   { --bg:#08040a; --bg2:#0d060f; --panel:#170a17; --panel2:#211023; --border:#3a1029; --text:#ffe6f2; --muted:#e0a8c8; --accent:#ec4899; --accent2:#f472b6; }
+    [data-theme="blackcyan"]   { --bg:#03080a; --bg2:#050e10; --panel:#0a1518; --panel2:#0f1e22; --border:#123a40; --text:#e0fbff; --muted:#8fd0d9; --accent:#06b6d4; --accent2:#22d3ee; }
+    [data-theme="blackgold"]   { --bg:#0a0803; --bg2:#100c05; --panel:#1a1408; --panel2:#241b0b; --border:#4a3a10; --text:#fff6e0; --muted:#d9c08a; --accent:#f5b942; --accent2:#ffd97a; }
+    [data-theme="blackgreen"]  { --bg:#050806; --bg2:#0a0f0c; --panel:#0f1712; --panel2:#141f18; --border:#1f3327; --text:#e8fff0; --muted:#8fbfa0; --accent:#22c55e; --accent2:#4ade80; }
+    /* Seasonal (auto-selected by date — not user-switchable) */
+    [data-theme="xmas"]      { --bg:#07140d; --bg2:#0a1c12; --panel:#0d2417; --panel2:#11301e; --border:#1c4a30; --text:#eafff0; --muted:#9fd9b4; --accent:#e3342f; --accent2:#22c55e; }
+    [data-theme="halloween"] { --bg:#090609; --bg2:#120b14; --panel:#1c101c; --panel2:#291724; --border:#583044; --text:#fff0df; --muted:#c9a5a1; --accent:#ff822d; --accent2:#b14aff; --bad:#f34b5d; }
+    [data-theme="easter"]    { --bg:#120f18; --bg2:#181522; --panel:#201a2e; --panel2:#28213a; --border:#3a3052; --text:#fdeafd; --muted:#c9b8e0; --accent:#f9a8d4; --accent2:#6ee7b7; }
+
+    /* Community Booster cosmetics apply only after a main-process verified grant. */
+    html[data-booster-accent="on"] .topbar h2 { text-decoration:underline; text-decoration-color:#c4a1ff; text-underline-offset:8px; }
+    html[data-booster-accent="on"] .navbtn.active { box-shadow:inset 4px 0 #c4a1ff; }
+    html[data-theme="light"][data-booster-accent="on"] .topbar h2 { text-decoration-color:#7137a2; }
+    html[data-booster-border="on"] .card, html[data-booster-border="on"] .rb-card,
+    html[data-booster-border="on"] .modal-card {
+      border-color:#9e77cf; box-shadow:inset 0 0 0 1px rgba(158,119,207,.3);
+    }
+    html[data-theme="light"][data-booster-border="on"] .card,
+    html[data-theme="light"][data-booster-border="on"] .rb-card,
+    html[data-theme="light"][data-booster-border="on"] .modal-card { border-color:#7137a2; }
+    .booster-badge { display:inline-block; border:1px solid var(--accent); border-radius:999px; padding:3px 10px; font-weight:700; font-size:.78rem; }
+    .booster-badge[hidden], #boosterAuth[hidden] { display:none !important; }
+    .booster-preview { position:relative; isolation:isolate; overflow:hidden; margin-top:10px; padding:16px;
+      border-radius:12px; border:1px solid var(--border); background:var(--panel2); }
+    .booster-preview[data-decoration="nova"]::before { content:'✦    ✧    ✦'; color:#c4a1ff; display:block; letter-spacing:8px; }
+    .booster-preview[data-decoration="constellation"] { border:2px solid #b8a4fa;
+      background:radial-gradient(circle at 15% 25%, #9fafff 1px, transparent 2px),
+        radial-gradient(circle at 65% 38%, #a4e2ff 1px, transparent 2px),
+        radial-gradient(circle at 88% 82%, #c8a0ff 1px, transparent 2px), var(--panel2);
+      background-size:100% 100%; }
+    .booster-preview[data-decoration="constellation"]::before { content:'✧ ── ✦ ─── ✧'; color:#c4a1ff;
+      display:block; letter-spacing:4px; }
+    html[data-booster-decoration="nova"] .topbar h2::after { content:' ✦'; color:#c4a1ff; }
+    html[data-booster-decoration="constellation"] .topbar { border-bottom:2px solid #ac97e4; border-radius:5px; }
+    html[data-booster-decoration="constellation"] .topbar h2::after { content:' ✧ ✦ ✧'; color:#c4a1ff; }
+    html[data-booster-frame="on"] .app { outline:2px solid #a99ad7; outline-offset:-3px; }
+    @media (prefers-reduced-motion: reduce) {
+      .booster-preview, .booster-preview *, html[data-booster-frame="on"] .app { animation:none !important; transition:none !important; }
+    }
+
+    * { box-sizing: border-box; }
+    /* Hide scrollbars everywhere but keep scrolling (tidy) */
+    * { scrollbar-width: none; -ms-overflow-style: none; }
+    *::-webkit-scrollbar { width: 0; height: 0; display: none; }
+    html { height: 100%; }
+    body {
+      margin: 0; font-family: 'Segoe UI', system-ui, sans-serif;
+      background: radial-gradient(1200px 600px at 0% 0%, var(--bg2), var(--bg) 60%);
+      color: var(--text); height: 100%; overflow: hidden; transition: background .3s, color .3s;
+    }
+    .app { display: grid; grid-template-columns: 190px minmax(0,1fr) 280px; height: 100vh; }
+    @media (max-width: 900px){ .app { grid-template-columns: 190px minmax(0,1fr); } .rightbar { display:none !important; } }
+
+    /* Right friends panel (VRChat) */
+    .rightbar { background:var(--bg2); border-left:1px solid var(--border); padding:14px 12px; display:flex; flex-direction:column; gap:10px; overflow-y:auto; }
+    .rb-profile { display:flex; align-items:center; gap:10px; }
+    .rb-profile img { width:42px; height:42px; border-radius:12px; object-fit:cover; background:var(--panel2); }
+    .rb-profile .nm { font-weight:700; font-size:.92rem; }
+    .rb-card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:10px 12px; }
+    .rb-search { width:100%; }
+    .rb-group { font-size:.66rem; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); font-weight:700; margin:10px 0 4px; }
+    .rb-toggle { cursor:pointer; user-select:none; }
+    .rb-toggle:hover { color:var(--text); }
+    .rb-friend { display:flex; align-items:center; gap:9px; padding:6px 6px; border-radius:9px; font-size:.82rem; }
+    .rb-friend:hover { background:var(--panel); }
+    .rb-friend .ava { width:30px; height:30px; border-radius:8px; object-fit:cover; background:var(--panel2); flex:none; }
+    .rb-friend .meta { min-width:0; }
+    .rb-friend .nm { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .rb-friend .lo { color:var(--muted); font-size:.72rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .rb-friend { cursor:pointer; }
+    .rb-friend .dot { width:8px; height:8px; border-radius:50%; flex:none; }
+
+    /* Spoken-language flag badges (friend lists + Friend Den) */
+    .lang-badges { display:inline-flex; gap:2px; vertical-align:middle; }
+    .lang-badge { font-size:.82em; line-height:1; cursor:help; }
+
+    /* Estimated community-rank pill (Veteran / Legend etc.) on friends + profiles */
+    .rank-pill { display:inline-block; font-size:.64rem; font-weight:800; letter-spacing:.3px; padding:1px 6px; border:1px solid currentColor; border-radius:999px; vertical-align:middle; line-height:1.5; white-space:nowrap; }
+    .rank-pill.rank-og { box-shadow:0 0 6px -1px currentColor; }
+    @keyframes rankShimmer { 0%,100%{ opacity:1 } 50%{ opacity:.6 } }
+    .rank-pill.rank-og { animation:rankShimmer 2.4s ease-in-out infinite; }
+
+    /* User profile modal */
+    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); backdrop-filter:blur(3px); z-index:200; display:flex; align-items:center; justify-content:center; padding:24px; }
+    .modal-card { width:720px; max-width:96vw; max-height:92vh; overflow:auto; background:var(--panel); border:1px solid var(--border); border-radius:18px; position:relative; box-shadow:0 30px 80px -20px #000; }
+    .language-picker-card { width:420px; max-width:calc(100vw - 32px); padding:22px 24px 20px; overflow:visible; }
+    .mgroup { font-size:.7rem; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); font-weight:700; cursor:pointer; user-select:none; padding:8px 2px 4px; }
+    .mgroup:hover { color:var(--text); }
+    .modal-banner { height:150px; background:linear-gradient(135deg,var(--panel2),var(--bg2)); background-size:cover; background-position:center; }
+    .modal-close { position:absolute; top:12px; right:14px; background:rgba(0,0,0,.45); color:#fff; border:none; width:30px; height:30px; border-radius:50%; cursor:pointer; font-size:1rem; z-index:2; }
+    .modal-head { display:flex; gap:14px; align-items:flex-end; padding:0 20px; margin-top:-44px; }
+    .modal-ava { width:88px; height:88px; border-radius:18px; border:3px solid var(--panel); object-fit:cover; background:var(--panel2); }
+    .modal-name { font-size:1.25rem; font-weight:800; }
+    .modal-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+    .tagchip { font-size:.68rem; padding:2px 8px; border-radius:999px; background:var(--panel2); border:1px solid var(--border); color:var(--muted); }
+    .modal-actions { display:flex; flex-wrap:wrap; gap:8px; padding:14px 20px 0; }
+    .modal-tabs { display:flex; gap:4px; padding:12px 16px 0; flex-wrap:wrap; }
+    .mtab { background:transparent; border:none; color:var(--muted); padding:7px 12px; border-radius:9px; cursor:pointer; font-size:.84rem; font-weight:600; }
+    .mtab:hover { background:var(--panel2); color:var(--text); }
+    .mtab.active { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; }
+    .modal-body { padding:14px 20px 22px; display:flex; flex-direction:column; gap:12px; }
+    .um-bio { white-space:pre-wrap; font-size:.86rem; color:var(--text); }
+    .um-sec { font-size:.66rem; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); font-weight:700; margin-top:4px; }
+    .um-info > div { display:flex; justify-content:space-between; gap:10px; padding:4px 0; border-top:1px solid var(--border); font-size:.82rem; }
+    .um-info > div:first-child { border-top:none; }
+    .um-info span { color:var(--muted); }
+    .badge-grid { display:flex; flex-wrap:wrap; gap:8px; }
+    .badge-img { width:40px; height:40px; border-radius:8px; object-fit:contain; background:var(--panel2); padding:3px; }
+    .card-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:8px; }
+    /* Favorites page — richer vertical cards (image on top) instead of the compact .mini-card row */
+    .fav-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(168px, 1fr)); gap:10px; margin-bottom:16px; }
+    .fav-card { position:relative; background:var(--panel2); border:1px solid var(--border); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; transition:.15s; }
+    .fav-card:hover { border-color:var(--accent); transform:translateY(-1px); }
+    .fav-card.selected { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent) inset; }
+    .fav-card .fav-thumb-wrap { position:relative; width:100%; aspect-ratio:1/1; background:var(--bg2); }
+    .fav-card .fav-thumb-wrap img { width:100%; height:100%; object-fit:cover; display:block; }
+    .fav-card .fav-kind { position:absolute; top:6px; left:6px; background:rgba(0,0,0,.55); color:#fff; font-size:.68rem; padding:2px 7px; border-radius:20px; backdrop-filter:blur(2px); }
+    .fav-card .fav-select { position:absolute; top:6px; right:6px; width:18px; height:18px; cursor:pointer; accent-color:var(--accent); }
+    .fav-card .fav-body { padding:8px 9px 9px; display:flex; flex-direction:column; gap:4px; flex:1; }
+    .fav-card .fav-name { font-size:.82rem; font-weight:700; line-height:1.2; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+    .fav-card .fav-note { font-size:.7rem; color:var(--muted); white-space:pre-wrap; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+    .fav-card .fav-collection { font-size:.65rem; color:var(--accent2); font-weight:600; text-transform:uppercase; letter-spacing:.03em; }
+    .fav-card .fav-actions { margin-top:auto; display:flex; gap:4px; padding-top:4px; }
+    .fav-card .fav-actions button { flex:1; padding:4px 0; font-size:.68rem; border-radius:7px; }
+    .pill-group { display:flex; gap:6px; flex-wrap:wrap; }
+    .pill-btn { background:var(--panel2); border:1px solid var(--border); color:var(--text); border-radius:20px; padding:6px 14px; font-size:.78rem; font-weight:600; cursor:pointer; transition:.15s; }
+    .pill-btn:hover { border-color:var(--accent); }
+    .pill-btn.active { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; border-color:transparent; }
+    .fav-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:10px 0; padding:8px 10px; background:var(--panel2); border:1px solid var(--border); border-radius:10px; font-size:.78rem; }
+    .fav-toolbar .grow { flex:1; }
+    /* Tidy profile-modal action bar: primary button + small icon toggles + a "more" dropdown,
+       instead of a long row of same-size buttons. */
+    .um-actions-bar { display:flex; align-items:center; gap:8px; }
+    .icon-btn { width:38px; height:38px; flex:none; border-radius:10px; border:1px solid var(--border); background:var(--panel2); color:var(--text); font-size:1rem; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:.15s; }
+    .icon-btn:hover { border-color:var(--accent); }
+    .icon-btn.active { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; border-color:transparent; }
+    .um-more-wrap { position:relative; }
+    .um-more-menu { position:absolute; top:calc(100% + 6px); left:0; z-index:40; min-width:190px; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:6px; box-shadow:0 16px 40px -14px #000; display:flex; flex-direction:column; gap:1px; }
+    .um-more-menu[hidden] { display:none; }
+    .um-more-menu button { all:unset; box-sizing:border-box; width:100%; padding:8px 10px; border-radius:8px; font-size:.82rem; color:var(--text); cursor:pointer; display:flex; align-items:center; gap:8px; }
+    .um-more-menu button:hover { background:var(--panel2); }
+    .um-more-menu button.danger { color:var(--bad); }
+    .um-more-sep { height:1px; background:var(--border); margin:5px 2px; }
+    .fav-group-label { font-size:.72rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin:10px 0 6px 2px; display:flex; align-items:center; gap:6px; }
+    .fav-group-label .cnt { background:var(--panel2); border:1px solid var(--border); border-radius:20px; padding:1px 8px; font-weight:600; }
+    .mini-card { display:flex; gap:9px; align-items:center; background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:7px; }
+    .mini-card img { width:42px; height:32px; border-radius:6px; object-fit:cover; flex:none; background:var(--bg2); }
+    .mini-card .nm { font-size:.8rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+    /* Sidebar — labeled nav (VRCNext-style) */
+    .sidebar { background: var(--bg2); border-right: 1px solid var(--border); padding: 8px 8px; display:flex; flex-direction:column; align-items:stretch; gap:2px; overflow-y:auto; overflow-x:hidden; }
+    /* Prevent flex from compressing sidebar items when height is constrained.
+       The flex:1 spacer div uses inline style so it keeps flex-shrink:1 (inline > class). */
+    .sidebar > * { flex-shrink: 0; }
+    .sidebar::-webkit-scrollbar { width:0; }
+    .brand { display:flex; align-items:center; gap:10px; padding: 8px 6px 14px; }
+    .brand h1 { display:block; font-size:.88rem; font-weight:800; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .brand img { width:30px; height:30px; border-radius:8px; box-shadow:0 0 14px -4px var(--accent); flex-shrink:0; }
+    .brand .dot { display:none; }
+    .navbtn { display:flex; align-items:center; justify-content:flex-start; width:100%; height:38px; padding:0 10px; gap:10px; border:none; border-radius:10px;
+      background:transparent; color:var(--muted); cursor:pointer; font-size:1.05rem; transition:.15s; position:relative; }
+    .navbtn:hover { background:var(--panel); color:var(--text); }
+    .navbtn.active { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; box-shadow:0 4px 14px -6px var(--accent); }
+    .navbtn.dragging { opacity:.35; }
+    .navbtn.drag-over { outline:2px solid var(--accent); outline-offset:2px; }
+    .navbtn .ico { width:22px; text-align:center; flex-shrink:0; }
+    /* Custom sidebar icons: drop a PNG/SVG into assets/icons/<tab>.(png|svg) and it
+       replaces the emoji automatically. Missing files just keep the emoji. */
+    .navbtn .ico.has-img { display:inline-block; width:22px; height:22px; font-size:0; line-height:0;
+      background-size:contain; background-repeat:no-repeat; background-position:center; }
+    .navbtn .lbl { display:block; font-size:.81rem; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .navlabel { font-size:.63rem; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); font-weight:700; padding:8px 10px 2px; width:100%; height:auto; line-height:normal; background:none; margin:4px 0 0; opacity:.8; }
+    /* bottom rail: user avatar + clock + launch */
+    .sidebar-avatar { width:32px; height:32px; border-radius:50%; object-fit:cover; cursor:pointer; border:2px solid var(--border); transition:border-color .15s; }
+    .sidebar-avatar:hover { border-color:var(--accent); }
+    .railclock { font-size:.7rem; color:var(--muted); font-variant-numeric:tabular-nums; margin-top:4px; text-align:center; }
+    .launchbtn { width:100%; height:40px; border-radius:10px; border:none; cursor:pointer; color:#fff; font-size:1rem; margin:6px 0 4px;
+      background:linear-gradient(135deg,var(--accent),var(--accent2)); box-shadow:0 6px 18px -8px var(--accent); transition:.15s; }
+    .launchbtn:hover { filter:brightness(1.12); transform:translateY(-1px); }
+    /* notifications */
+    .bell { position:relative; background:var(--panel2); border:1px solid var(--border); color:var(--text); width:38px; height:38px; border-radius:10px; cursor:pointer; font-size:1rem; }
+    .bell:hover { border-color:var(--accent); }
+    .notif-badge { position:absolute; top:-6px; right:-6px; background:var(--bad); color:#fff; font-size:.62rem; font-weight:700; min-width:17px; height:17px; border-radius:9px; padding:0 4px; display:flex; align-items:center; justify-content:center; }
+    .notif-panel { position:absolute; top:60px; right:26px; width:340px; max-height:70vh; overflow:auto; z-index:80;
+      background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:14px; box-shadow:0 18px 50px -18px #000; }
+    .notif-head { display:flex; justify-content:space-between; align-items:center; }
+    .notif-item { display:flex; gap:8px; align-items:flex-start; padding:9px 0; border-top:1px solid var(--border); font-size:.82rem; color:var(--text); }
+    .notif-item:first-of-type { border-top:none; }
+    .notif-item .grow { flex:1; min-width:0; }
+    .notif-item .when { color:var(--muted); font-size:.7rem; }
+    .toast-wrap { position:fixed; right:18px; bottom:18px; z-index:300; display:flex; flex-direction:column; gap:8px; }
+    .toast { background:var(--panel); border:1px solid var(--accent); border-radius:12px; padding:10px 14px; max-width:320px; box-shadow:0 14px 40px -14px #000; font-size:.84rem; animation:fade .2s; }
+    .toast b { color:var(--accent2); }
+
+    /* Main */
+    .main { min-width:0; padding: 22px 26px; overflow:auto; }
+    .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
+    .topbar h2 { margin:0; font-size:1.4rem; font-weight:800; }
+    select, input[type="text"], input[type="number"], input[type="password"], textarea {
+      background:var(--panel2); color:var(--text); border:1px solid var(--border); border-radius:10px; padding:8px 10px; width:100%; outline:none;
+    }
+    select:focus, input:focus, textarea:focus { border-color:var(--accent); }
+    label { font-size:.85rem; color:var(--muted); display:block; margin-bottom:5px; }
+    .card { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:16px; box-shadow:0 10px 30px -20px #000; }
+    .card h3 { margin:0 0 12px; font-size:1.05rem; display:flex; align-items:center; gap:8px; }
+    .subcard { background:var(--panel2); border:1px solid var(--border); border-radius:12px; padding:14px; }
+    .subcard h4 { margin:0 0 10px; color:var(--text); font-size:.92rem; }
+    .section-note { color:var(--muted); font-size:.74rem; line-height:1.45; }
+    .metric-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .metric-tile { background:var(--panel2); border:1px solid var(--border); border-radius:12px; padding:12px; min-width:0; }
+    .metric-tile small { display:block; color:var(--muted); font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; }
+    .metric-tile b { display:block; margin-top:5px; font-size:1.35rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    /* Let heart-rate panels stack when the center pane is narrower than two cards. */
+    .hr-layout { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr)); gap:16px; align-items:start; }
+    .hr-layout > *, .hr-layout .subcard { min-width:0; }
+    .hr-layout .muted, .hr-layout .section-note { overflow-wrap:anywhere; }
+    #heartrate .row { flex-wrap:wrap; }
+    .hr-device-grid { display:grid; grid-template-columns:minmax(0,1fr) 145px; gap:10px; align-items:end; }
+    .locker-layout { display:grid; grid-template-columns:minmax(280px,.8fr) minmax(380px,1.2fr); gap:16px; align-items:start; }
+    .locker-list { display:flex; flex-direction:column; gap:8px; max-height:430px; overflow:auto; }
+    .locker-avatar { width:100%; text-align:left; background:var(--panel2); border:1px solid var(--border); color:var(--text); border-radius:11px; padding:11px; cursor:pointer; }
+    .locker-avatar:hover,.locker-avatar.active { border-color:var(--accent); filter:brightness(1.08); }
+    .locker-avatar .meta { color:var(--muted); font-size:.73rem; margin-top:4px; }
+    .locker-group { display:flex; align-items:center; justify-content:space-between; gap:12px; background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:9px 11px; }
+    .locker-group input { width:auto; }
+    .grid { display:grid; gap:14px; }
+    .grid.cols-2 { grid-template-columns:1fr 1fr; }
+    .grid.cols-3 { grid-template-columns:repeat(3,1fr); }
+    /* Form cards should respond to the pane width, not just the window width. */
+    #heartrate .grid.cols-2, #boosterPanel .grid.cols-2 { grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); }
+    #heartrate .grid > *, #boosterPanel .grid > * { min-width:0; overflow-wrap:anywhere; }
+    @media (max-width: 820px){ .grid.cols-2,.grid.cols-3,.hr-layout,.locker-layout { grid-template-columns:1fr; } .app{ grid-template-columns:64px minmax(0,1fr); } .brand h1,.navbtn .lbl,.navlabel{display:none;} .sidebar{ padding:12px 0; align-items:center; } .navbtn{ justify-content:center; width:48px; padding:0; } }
+    @media (max-width: 620px){ .metric-row,.hr-device-grid { grid-template-columns:1fr; } }
+    .btn { border:none; border-radius:10px; padding:9px 14px; font-weight:600; cursor:pointer; color:#fff; background:linear-gradient(135deg,var(--accent),var(--accent2)); transition:.15s; }
+    .btn:hover { filter:brightness(1.1); }
+    .btn.ghost { background:var(--panel2); color:var(--text); border:1px solid var(--border); }
+    .btn.ghost.active { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; border-color:transparent; }
+    .btn.danger { background:var(--bad); }
+    .row { display:flex; gap:10px; align-items:center; }
+    .switch { display:flex; align-items:center; gap:10px; background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; }
+    .switch input { width:auto; }
+    .pill { font-size:.72rem; padding:3px 9px; border-radius:999px; background:var(--panel2); border:1px solid var(--border); color:var(--muted); }
+    .pill.on { background:var(--good); color:#04210f; border-color:transparent; }
+    .pill.off { background:var(--bad); color:#2a0606; border-color:transparent; }
+    .stat-big { font-size:2rem; font-weight:800; }
+    .muted { color:var(--muted); font-size:.85rem; }
+    .tabpanel { display:none; }
+    .tabpanel.active { display:block; animation:fade .2s; }
+    @keyframes fade { from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
+    canvas { width:100%; border-radius:10px; background:var(--bg); }
+    input[type="range"]{ width:100%; accent-color:var(--accent); }
+    textarea { resize:vertical; font-family:ui-monospace,monospace; font-size:.8rem; }
+
+    /* Custom background layer */
+    #bgLayer { position:fixed; inset:0; z-index:-1; background-size:cover; background-position:center; background-repeat:no-repeat; background-color:transparent; transition:opacity .5s,filter .5s; pointer-events:none; }
+    body.has-custom-bg { background:transparent; }
+    .bg-type-btn.active { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; border-color:transparent; }
+    .bg-preset-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(76px,1fr)); gap:8px; margin-top:10px; }
+    .bg-preset { border:2px solid var(--border); border-radius:10px; height:52px; cursor:pointer; transition:.15s; position:relative; overflow:hidden; }
+    .bg-preset:hover { border-color:var(--accent); transform:translateY(-1px); }
+    .bg-preset.active { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent); }
+    .bg-preset span { position:absolute; bottom:3px; left:0; right:0; text-align:center; font-size:.63rem; font-weight:700; color:#fff; text-shadow:0 1px 3px #000; }
+    .bg-photo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; max-height:280px; overflow-y:auto; margin-top:8px; }
+    .bg-photo { border:2px solid var(--border); border-radius:9px; overflow:hidden; cursor:pointer; aspect-ratio:16/9; }
+    .bg-photo img { width:100%; height:100%; object-fit:cover; display:block; }
+    .bg-photo:hover { border-color:var(--accent); }
+    .bg-photo.active { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent); }
+
+    /* Home dashboard */
+    .home-hero { display:flex; align-items:center; gap:16px; padding:20px 22px; margin-bottom:16px; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); position:relative; overflow:hidden; box-shadow:0 10px 30px -20px #000; }
+    .home-hero::before { content:''; position:absolute; inset:0; background:linear-gradient(120deg,var(--accent),transparent 55%); opacity:.1; pointer-events:none; }
+    .home-ava { width:68px; height:68px; border-radius:16px; object-fit:cover; background:var(--panel2); border:3px solid var(--border); flex-shrink:0; position:relative; z-index:1; }
+    .home-name { font-size:1.35rem; font-weight:800; position:relative; z-index:1; }
+    .home-statusline { color:var(--muted); font-size:.84rem; margin-top:4px; position:relative; z-index:1; }
+    .home-quicknav { display:flex; flex-wrap:wrap; gap:8px; }
+    .home-quickbtn { display:flex; flex-direction:column; align-items:center; gap:6px; background:var(--panel2); border:1px solid var(--border); border-radius:12px; padding:14px 18px; cursor:pointer; font-size:1.25rem; min-width:72px; color:var(--muted); transition:.15s; }
+    .home-quickbtn:hover { background:var(--panel); color:var(--text); transform:translateY(-2px); box-shadow:0 6px 20px -10px var(--accent); border-color:var(--accent); }
+    .home-quickbtn span { font-size:.72rem; font-weight:600; white-space:nowrap; color:var(--muted); }
+    .news-item { padding:9px 0; border-top:1px solid var(--border); cursor:pointer; }
+    .news-item:first-child { border-top:none; padding-top:0; }
+    .news-item:hover .news-title { color:var(--accent); }
+    .news-title { font-size:.88rem; font-weight:700; margin-bottom:3px; transition:color .15s; }
+    .news-desc { color:var(--muted); font-size:.77rem; line-height:1.45; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .news-date { color:var(--muted); font-size:.7rem; margin-top:3px; }
+    .news-cached-note { color:var(--muted); font-size:.72rem; font-style:italic; padding-bottom:8px; margin-bottom:6px; border-bottom:1px solid var(--border); }
+    #homeNews { max-height:320px; overflow-y:auto; scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
+    #homeNews::-webkit-scrollbar { width:4px; }
+    #homeNews::-webkit-scrollbar-track { background:transparent; }
+    #homeNews::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+    .news-refresh-btn { background:none; border:1px solid var(--border); border-radius:5px; color:var(--muted); cursor:pointer; font-size:.72rem; line-height:1; padding:2px 7px; transition:border-color .15s,color .15s; -webkit-app-region:no-drag; }
+    .news-refresh-btn:hover { border-color:var(--accent); color:var(--accent); }
+    .news-refresh-btn:disabled { opacity:.4; cursor:default; }
+    .card:hover { box-shadow:0 14px 40px -18px var(--accent); }
+    .ql-profile-row { border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:8px; background:var(--panel2); }
+    .ql-profile-row .ql-flag { display:flex; align-items:center; gap:4px; font-size:.78rem; color:var(--muted); }
+    .ql-profile-row input[type="number"] { width:64px; }
+    .ql-profile-row .ql-id { width:56px; }
+
+    [data-theme="rainbow"] .brand .dot,
+    [data-theme="rainbow"] .navbtn.active,
+    [data-theme="rainbow"] .btn:not(.ghost):not(.danger) {
+      background:linear-gradient(270deg,#ff0080,#ff8c00,#40e0d0,#00ff80,#9932cc); background-size:600% 600%; animation:rb 6s linear infinite;
+    }
+    @keyframes rb { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+  </style>
+  <link rel="stylesheet" href="assets/halloween.css" />
+</head>
+
+<body>
+  <div id="bgLayer"></div>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand" title="KitsuNexus"><img src="assets/logo.png" alt="KitsuNexus" /><h1>KitsuNexus</h1></div>
+      <button class="navbtn active" data-tab="home"><span class="ico">🏠</span><span class="lbl">Home</span></button>
+      <div class="navlabel">VRChat</div>
+      <button class="navbtn" data-tab="chatbox"><span class="ico">💬</span><span class="lbl">Chatbox</span></button>
+      <button class="navbtn" data-tab="nowplaying"><span class="ico">🎵</span><span class="lbl">Now Playing</span></button>
+      <button class="navbtn" data-tab="vrchat"><span class="ico">🦊</span><span class="lbl">VRChat</span></button>
+      <button class="navbtn" data-tab="quicklaunch"><span class="ico">🚀</span><span class="lbl">Quick Launch</span></button>
+      <button class="navbtn" data-tab="radar"><span class="ico">🛰</span><span class="lbl">Radar</span></button>
+      <button class="navbtn" data-tab="search"><span class="ico">🔍</span><span class="lbl">Search</span></button>
+      <div class="navlabel">Friends &amp; Social</div>
+      <button class="navbtn" data-tab="friendden"><span class="ico">🫂</span><span class="lbl">Friend Den</span></button>
+      <button class="navbtn" data-tab="ranks"><span class="ico">🏅</span><span class="lbl">Community Ranks</span></button>
+      <button class="navbtn" data-tab="eventscout"><span class="ico">🔭</span><span class="lbl">Event Scout</span></button>
+      <button class="navbtn" data-tab="pawprints"><span class="ico">🐾</span><span class="lbl">Pawprints</span></button>
+      <button class="navbtn" data-tab="groups"><span class="ico">👥</span><span class="lbl">Groups</span></button>
+      <button class="navbtn" data-tab="messenger"><span class="ico">✉️</span><span class="lbl">Messenger</span></button>
+      <button class="navbtn" data-tab="notify"><span class="ico">🔔</span><span class="lbl">Notify</span></button>
+      <button class="navbtn" data-tab="favorites"><span class="ico">⭐</span><span class="lbl">Favorites</span></button>
+      <div class="navlabel">Avatars &amp; Media</div>
+      <button class="navbtn" data-tab="avatars"><span class="ico">🧍</span><span class="lbl">Avatars</span></button>
+      <button class="navbtn" data-tab="avatarlocker"><span class="ico">🔐</span><span class="lbl">Avatar Locker</span></button>
+      <button class="navbtn" data-tab="inventory"><span class="ico">🎒</span><span class="lbl">Inventory</span></button>
+      <button class="navbtn" data-tab="content"><span class="ico">🌐</span><span class="lbl">Content</span></button>
+      <button class="navbtn" data-tab="media"><span class="ico">🖼</span><span class="lbl">Media</span></button>
+      <button class="navbtn" data-tab="history"><span class="ico">📜</span><span class="lbl">History</span></button>
+      <div class="navlabel">AI &amp; Speech</div>
+      <button class="navbtn" data-tab="ai"><span class="ico">🤖</span><span class="lbl">AI</span></button>
+      <button class="navbtn" data-tab="translation"><span class="ico">🌐</span><span class="lbl">Translation</span></button>
+      <div class="navlabel">Games</div>
+      <button class="navbtn" data-tab="tonref"><span class="ico">👻</span><span class="lbl">Terrors</span></button>
+      <div class="navlabel">Tools</div>
+      <button class="navbtn" data-tab="tools"><span class="ico">🧩</span><span class="lbl">Tools</span></button>
+      <button class="navbtn" data-tab="vrctools"><span class="ico">🧰</span><span class="lbl">VRChat Tools</span></button>
+      <button class="navbtn" data-tab="oscapps"><span class="ico">🔌</span><span class="lbl">OSC Apps</span></button>
+      <button class="navbtn" data-tab="audio"><span class="ico">🔊</span><span class="lbl">AudioLink</span></button>
+      <div class="navlabel">Integrations</div>
+      <button class="navbtn" data-tab="live"><span class="ico">📡</span><span class="lbl">Live</span></button>
+      <button class="navbtn" data-tab="discord"><span class="ico">💜</span><span class="lbl">Discord</span></button>
+      <button class="navbtn" data-tab="oauth"><span class="ico">🔑</span><span class="lbl">OAuth Accounts</span></button>
+      <button class="navbtn" data-tab="heartrate"><span class="ico">❤️</span><span class="lbl">Heart Rate</span></button>
+      <button class="navbtn" data-tab="weather"><span class="ico">🌦</span><span class="lbl">Weather</span></button>
+      <button class="navbtn" data-tab="overlay"><span class="ico">🖥</span><span class="lbl">Overlay</span></button>
+      <div class="navlabel">General</div>
+      <button class="navbtn" data-tab="stats"><span class="ico">📊</span><span class="lbl">Stats</span></button>
+      <button class="navbtn" data-tab="settings"><span class="ico">⚙️</span><span class="lbl">Settings</span></button>
+      <button class="navbtn" data-tab="docs"><span class="ico">📖</span><span class="lbl">Docs / Setup</span></button>
+      <button class="navbtn" data-tab="about"><span class="ico">ℹ️</span><span class="lbl">About</span></button>
+      <button class="navbtn" data-tab="log"><span class="ico">📜</span><span class="lbl">OSC Log</span></button>
+      <div style="flex:1"></div>
+      <img id="sidebarAvatar" class="sidebar-avatar" src="" alt="Your profile" title="" referrerpolicy="no-referrer" style="display:none">
+      <div class="railclock" id="railClock">--:--</div>
+      <button class="launchbtn" id="launchVrc" title="Launch VRChat">▶</button>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <div class="topbar">
+        <h2 id="pageTitle">Home</h2>
+        <div class="row" style="width:auto;gap:14px">
+          <div class="muted" id="onlineCount" style="font-size:.78rem" title="VRChat users online — Total (all platforms), Steam (PC desktop/PCVR), Quest (everything non-Steam: Quest standalone, Meta Store, mobile)"></div>
+          <div class="muted" id="seasonBadge" style="font-size:.8rem"></div>
+          <button id="notifBell" class="bell" title="Notifications">🔔<span id="notifCount" class="notif-badge" style="display:none">0</span></button>
+        </div>
+      </div>
+
+      <div class="halloween-event" aria-label="Halloween event, October 1 through October 31">
+        <span class="halloween-event-icon" aria-hidden="true">☠</span>
+        <div class="halloween-event-copy">
+          <span class="halloween-eyebrow">KITSUNEXUS PRESENTS <span class="halloween-star">✦</span> OCTOBER 01 — 31</span>
+          <strong>THE HAUNTING <span>IS HERE</span></strong>
+          <small>Ghosts rise. Zombies roam. Enter if you dare.</small>
+        </div>
+        <span class="halloween-ghostface-bubble halloween-ghostface-event" aria-hidden="true"></span>
+        <span class="halloween-specter halloween-specter-banner" aria-hidden="true"></span>
+        <span class="halloween-event-mark" aria-hidden="true">31 <small>NIGHTS</small></span>
+      </div>
+
+      <!-- Notifications flyout -->
+      <div id="notifPanel" class="notif-panel" style="display:none">
+        <div class="notif-head"><b>Notifications</b>
+          <div style="display:flex;gap:6px">
+            <button id="notifMarkRead" class="btn ghost" style="padding:3px 9px;font-size:.72rem">✓ Mark all read</button>
+            <button id="notifRefresh" class="btn ghost" style="padding:3px 9px;font-size:.74rem">↻</button>
+          </div>
+        </div>
+        <div class="notif-tabs" style="display:flex;gap:4px;margin-top:8px;flex-wrap:wrap">
+          <button class="btn ghost ntab active" data-ntab="friendRequest" style="padding:3px 8px;font-size:.7rem">👋 Requests <span class="ntab-c"></span></button>
+          <button class="btn ghost ntab" data-ntab="invite" style="padding:3px 8px;font-size:.7rem">📨 Invites <span class="ntab-c"></span></button>
+          <button class="btn ghost ntab" data-ntab="vrchat" style="padding:3px 8px;font-size:.7rem">🔔 Alerts <span class="ntab-c"></span></button>
+          <button class="btn ghost ntab" data-ntab="group" style="padding:3px 8px;font-size:.7rem">📣 Groups <span class="ntab-c"></span></button>
+        </div>
+        <div id="notifList" class="muted" style="margin-top:8px">Not loaded — log in on the VRChat tab.</div>
+      </div>
+
+      <!-- HOME DASHBOARD -->
+      <section id="home" class="tabpanel active">
+        <div class="home-hero">
+          <span class="halloween-specter halloween-specter-home" aria-hidden="true"></span>
+          <span class="halloween-ghostface-bubble halloween-ghostface-home" aria-hidden="true"></span>
+          <img id="homeAvatar" class="home-ava" src="assets/logo.png" referrerpolicy="no-referrer" />
+          <div>
+            <div class="home-name" id="homeName">KitsuNexus</div>
+            <div class="home-statusline" id="homeStatusLine">Log in on the VRChat tab to personalise.</div>
+          </div>
+        </div>
+        <div class="metric-row" style="margin-bottom:16px">
+          <div class="metric-tile"><small>🟢 Friends Online</small><b id="homeFriendsOnline">—</b></div>
+          <div class="metric-tile"><small>🌐 VRChat Players</small><b id="homeVrcOnline">—</b></div>
+          <div class="metric-tile"><small>🖥 · 🥽 Steam · Quest</small><b id="homeVrcPlatforms">—</b></div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <h3>🚀 Quick Access</h3>
+          <div class="home-quicknav">
+            <button class="home-quickbtn" data-goto="chatbox">💬<span>Chatbox</span></button>
+            <button class="home-quickbtn" data-goto="nowplaying">🎵<span>Music</span></button>
+            <button class="home-quickbtn" data-goto="heartrate">❤️<span>Heart Rate</span></button>
+            <button class="home-quickbtn" data-goto="vrchat">🦊<span>VRChat</span></button>
+            <button class="home-quickbtn" data-goto="friendden">🫂<span>Friends</span></button>
+            <button class="home-quickbtn" data-goto="search">🔍<span>Search</span></button>
+            <button class="home-quickbtn" data-goto="history">📜<span>History</span></button>
+            <button class="home-quickbtn" data-goto="settings">⚙️<span>Settings</span></button>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <h3>🌍 Recently Visited Worlds</h3>
+          <div id="homeRecentWorlds" class="muted" style="font-size:.84rem">Log in to see recent worlds.</div>
+        </div>
+        <div class="card">
+          <h3 style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            📰 VRChat News
+            <span style="display:flex;align-items:center;gap:8px;-webkit-app-region:no-drag">
+              <span id="homeNewsAge" class="muted" style="font-size:.68rem;font-weight:400"></span>
+              <button class="news-refresh-btn" id="homeNewsRefresh" title="Refresh news">↻</button>
+              <span class="muted" id="homeNewsMore" style="font-size:.75rem;font-weight:500;cursor:pointer">hello.vrchat.com →</span>
+            </span>
+          </h3>
+          <div id="homeNews" class="muted" style="font-size:.84rem">Loading news…</div>
+        </div>
+      </section>
+
+      <!-- CHATBOX -->
+      <section id="chatbox" class="tabpanel">
+        <div class="card">
+          <h3>💬 Send to VRChat chatbox</h3>
+          <div class="row">
+            <input type="text" id="chatInput" maxlength="144" placeholder="Type a message (max 144)..." />
+            <button class="btn" id="chatSend">Send</button>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <select id="aiMode" style="width:auto">
+              <option value="rewrite">AI: Rewrite</option>
+              <option value="spellcheck">AI: Spellcheck</option>
+              <option value="shorten">AI: Shorten</option>
+              <option value="translate">AI: Translate</option>
+            </select>
+            <button class="btn ghost" id="aiRun">✨ IntelliChat</button>
+            <span class="muted" id="aiStatus"></span>
+          </div>
+          <div class="muted" id="chatHoldStatus" style="margin-top:8px">Sent messages stay pinned for 1m 30s, then the chatbox returns to automated status.</div>
+        </div>
+
+        <div class="card">
+          <h3>⌨️ <span data-i18n="liveTyping.title">Live Typing</span> <span class="muted" style="font-size:.72rem" data-i18n="liveTyping.subtitle">(sends as you type, like VRChat's own chatbox)</span></h3>
+          <textarea id="liveTypingInput" rows="3" data-i18n-ph="liveTyping.placeholder" placeholder="Type here — this sends to the chatbox automatically every few seconds as you type. Keep typing past 144 chars; VRChat will show '…' + the end of your message." style="width:100%;resize:vertical"></textarea>
+          <div class="row" style="margin-top:6px;justify-content:space-between;align-items:center">
+            <span class="muted" id="liveTypingCount" style="font-size:.75rem">0 chars</span>
+            <button class="btn ghost" id="liveTypingClear" style="padding:4px 10px;font-size:.75rem" data-i18n="common.clear">Clear</button>
+          </div>
+          <div class="muted" style="margin-top:6px;font-size:.72rem" data-i18n="liveTyping.previewLabel">Preview (what VRChat will show):</div>
+          <pre id="liveTypingPreview" style="background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:8px; white-space:pre-wrap; min-height:24px; font-size:.85rem"></pre>
+          <label class="switch" style="margin-top:8px"><input type="checkbox" id="liveTypingTranslate"> <span data-i18n="liveTyping.translateLabel">Translate before sending (uses Translator settings)</span></label>
+        </div>
+
+        <div class="card">
+          <h3>🕘 Message history</h3>
+          <p class="muted">Your sent messages. Click <b>Repost</b> to pin one again without retyping.</p>
+          <div id="chatHistoryList"></div>
+          <div class="row" id="chatHistoryPager" style="margin-top:10px;align-items:center;gap:8px;display:none">
+            <button class="btn ghost" id="chatHistPrev">‹ Prev</button>
+            <span class="muted" id="chatHistPageInfo" style="flex:1;text-align:center"></span>
+            <button class="btn ghost" id="chatHistNext">Next ›</button>
+            <button class="btn ghost" id="chatHistClear">Clear</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🧱 Multi-line chatbox <span class="pill" id="composerState">off</span></h3>
+          <p class="muted">Each source can be its <b>own line</b> (always shown) or join the single <b>rotating line</b> (cycles one at a time). Most things stay own-lines; keep the rotating line for status text.</p>
+          <div class="grid cols-2" id="modeGrid" style="margin:10px 0"></div>
+          <div class="row">
+            <div style="flex:1"><label>Rotation interval (ms)</label><input type="number" id="rotateInterval" value="4000" min="1500" /></div>
+            <div style="flex:1"><label>Rotating line position</label>
+              <select id="rotationPos"><option value="top">Top</option><option value="bottom">Bottom</option></select>
+            </div>
+            <button class="btn" id="composerToggle" style="align-self:end">Start</button>
+          </div>
+          <div class="muted" style="margin-top:10px">Preview:</div>
+          <pre id="chatPreview" style="background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:10px; white-space:pre-wrap; min-height:48px"></pre>
+        </div>
+
+        <div class="card">
+          <h3>📝 Status presets</h3>
+          <p class="muted">One per line. Each platform has separate tokens:</p>
+          <details style="margin-bottom:8px">
+            <summary class="muted" style="cursor:pointer">Show all tokens</summary>
+            <div class="muted" style="font-size:.78rem; line-height:1.7; margin-top:6px">
+              <b>Time:</b> {time} {date}<br>
+              <b>Music:</b> {song} {artist} {title} {songsource} {songtime} {songprogress} {songduration} {songbar} <i>(song -> "Not playing" when idle)</i><br>
+              <b>System:</b> {cpu} {cputemp} {gpu} {gputemp} {ram} {ramused} {ramtotal}<br>
+              <b>Network:</b> {down} {up} {ping}<br>
+              <b>Heart rate:</b> {hr} {hravg} {hrmax} {hrmin}<br>
+              <b>TikTok:</b> {tiktok}=followers · {tiktoklive}=viewers · {tiktoklikes} · {tiktokvideos} · {tiktoknew}=new follows<br>
+              <b>Twitch:</b> {twitch}=followers · {twitchlive}=viewers<br>
+              <b>Kick:</b> {kick}=followers · {kicklive}=viewers<br>
+              <b>Terrors of Nowhere:</b> {ton}=summary · {tonround} · {tonterror} · {tonmap} · {tonalive} · {tonplayers} · {tonrounds} · {tondeaths} · {tonsurvivals} · {tonwinrate} · {tondamage} · {tonstuns}<br>
+              <b>Weather:</b> {weather} <i>(enable + set a city on the Weather tab — also has its own Off/Own line/Rotate toggle above, no preset needed)</i><br>
+              <b>Other:</b> {window} {world}
+            </div>
+          </details>
+          <textarea id="presetsText" rows="6"></textarea>
+          <button class="btn ghost" id="savePresets" style="margin-top:10px">Save presets</button>
+        </div>
+      </section>
+
+      <!-- AUDIOLINK -->
+      <section id="audio" class="tabpanel">
+        <div class="card">
+          <h3>🔊 AudioLink spectrum</h3>
+          <canvas id="audioCanvas" height="220"></canvas>
+          <div class="row" style="justify-content:space-between; color:var(--muted); font-size:.8rem; margin-top:8px">
+            <span>Low</span><span>Bass</span><span>Mid</span><span>Treble</span>
+          </div>
+          <button class="btn" id="toggleAudio" style="width:100%; margin-top:12px">Start Audio</button>
+          <details style="margin-top:12px">
+            <summary class="muted" style="cursor:pointer">Avatar parameters (add these to your avatar)</summary>
+            <div class="muted" style="font-size:.78rem; line-height:1.7; margin-top:6px">
+              Sent over OSC to VRChat (<code>127.0.0.1:9000</code>) every audio frame. Add each as
+              an <b>Expression&nbsp;Parameter</b> + Animator parameter. The avatar parameter name is
+              the part after <code>/avatar/parameters/</code>. Floats range <b>0.0&nbsp;–&nbsp;0.92</b>
+              (not 1.0 — output is clamped).<br><br>
+              <b>Float</b> <code>VRCOSC/NekoSuneApps/Audiolink/Low</code> — band 0<br>
+              <b>Float</b> <code>VRCOSC/NekoSuneApps/Audiolink/Bass</code> — band 1<br>
+              <b>Float</b> <code>VRCOSC/NekoSuneApps/Audiolink/Mid</code> — band 2<br>
+              <b>Float</b> <code>VRCOSC/NekoSuneApps/Audiolink/Treble</code> — band 3<br>
+              <b>Float</b> <code>VRCOSC/NekoSuneApps/Audiolink/Volume</code> — average of the 4 bands<br>
+              <b>Float</b> <code>VRCOSC/NekoSuneApps/Audiolink/Peak</code> — max of the 4 bands<br>
+              <b>Bool</b> <code>VRCOSC/NekoSuneApps/Audiolink/Beat</code> — true while Peak&nbsp;&gt;&nbsp;0.65<br><br>
+              Names are case-sensitive; <code>/</code> is allowed in VRChat parameter names. Mark the
+              params <b>synced</b> if other players should see the reaction (≈49 bits), or leave them
+              <b>local</b> to save parameter memory. Enable OSC in VRChat (Radial&nbsp;Menu →
+              Options → OSC → Enabled).
+            </div>
+          </details>
+        </div>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3>🎚 Device</h3>
+            <label>Audio input device</label>
+            <select id="audioDeviceSelect"><option value="">Loading devices...</option></select>
+          </div>
+          <div class="card">
+            <h3>🎛 Spectrum tuning</h3>
+            <label>Gain: <span id="gainValue">2.0</span></label><input type="range" id="gainSlider" min="0.1" max="10" step="0.1" value="2.0" />
+            <label>Low (20-120Hz): <span id="lowBoostValue">2.6</span></label><input type="range" id="lowBoostSlider" min="0.1" max="10" step="0.1" value="2.6" />
+            <label>Bass (120-250Hz): <span id="bassBoostValue">3.0</span></label><input type="range" id="bassBoostSlider" min="0.1" max="10" step="0.1" value="3.0" />
+            <label>Mid (250-4kHz): <span id="midBoostValue">2.0</span></label><input type="range" id="midBoostSlider" min="0.1" max="10" step="0.1" value="2.0" />
+            <label>Treble (4k-20kHz): <span id="trebleBoostValue">3.4</span></label><input type="range" id="trebleBoostSlider" min="0.1" max="10" step="0.1" value="3.4" />
+          </div>
+        </div>
+      </section>
+
+      <!-- NOW PLAYING -->
+      <section id="nowplaying" class="tabpanel">
+        <div class="card">
+          <h3>🎵 Now Playing</h3>
+          <div class="row" style="justify-content:space-between">
+            <div>
+              <div class="muted" style="text-transform:uppercase; font-size:.7rem">Now Playing</div>
+              <div id="nowPlayingTitle" style="font-weight:700">Detecting media...</div>
+              <div id="nowPlayingMeta" class="muted">Windows media session</div>
+              <div id="nowPlayingTime" class="muted" style="font-size:.78rem;margin-top:4px">--:-- / --:--</div>
+            </div>
+            <span class="pill" id="nowPlayingSource">Windows</span>
+          </div>
+          <div style="height:8px;background:var(--bg);border:1px solid var(--border);border-radius:999px;overflow:hidden;margin-top:10px">
+            <div id="nowPlayingProgress" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .25s"></div>
+          </div>
+          <div class="row" style="margin-top:10px;align-items:center;gap:8px">
+            <label style="min-width:96px">Media source</label>
+            <select id="nowPlayingSourceSelect" style="flex:1"><option value="">Auto (recommended)</option></select>
+            <button class="btn ghost" id="nowPlayingRefreshSources" title="Re-scan sources" style="padding:4px 10px;font-size:.75rem">↻</button>
+          </div>
+          <div class="row" style="margin-top:8px;align-items:center;gap:8px">
+            <label style="min-width:96px">Progress text</label>
+            <select id="nowPlayingBarStyle" style="flex:1">
+              <option value="bars">Bars [██░░]</option>
+              <option value="stars">Stars [★★☆☆]</option>
+              <option value="diamonds">Diamonds [◆◆◇◇]</option>
+              <option value="dots">Dots [●●○○]</option>
+              <option value="squares">Squares [■■□□]</option>
+              <option value="thin">Thin [▰▰▱▱]</option>
+            </select>
+          </div>
+          <div id="nowPlayingDiag" class="muted" style="margin-top:6px;font-size:.74rem"></div>
+        </div>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3>⌨️ KAT (KillFrenzy AvatarText)</h3>
+            <label class="switch"><input type="checkbox" id="enableKatNowPlaying"> Send Now Playing to KAT</label>
+            <div class="row" style="margin-top:8px;align-items:center;gap:8px">
+              <label style="min-width:96px">Sync params</label>
+              <select id="katSyncParamsMode" style="flex:1">
+                <option value="0">Auto-detect (recommended)</option>
+                <option value="4">Manual: 4</option>
+                <option value="8">Manual: 8</option>
+                <option value="16">Manual: 16</option>
+                <option value="custom">Manual: custom</option>
+              </select>
+              <input type="number" id="katSyncParamsCustom" min="1" max="16" value="4" style="width:70px;display:none" />
+            </div>
+            <div id="katNowPlayingStatus" class="muted" style="margin-top:8px">KAT output is off</div>
+          </div>
+          <div class="card">
+            <h3>💬 Chatbox now playing</h3>
+            <label class="switch"><input type="checkbox" id="enableChatboxNowPlaying"> Post Now Playing to chatbox</label>
+            <div id="chatboxNowPlayingStatus" class="muted" style="margin-top:8px">Chatbox output is off</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- LIVE -->
+      <section id="live" class="tabpanel">
+        <div class="grid cols-3">
+          <div class="card">
+            <h3>🎬 TikTok <span class="pill off" id="tiktokState">offline</span></h3>
+            <label>TikTok username (must be live)</label>
+            <input type="text" id="tiktokUser" placeholder="@username" />
+            <label style="margin-top:8px">Euler Stream API key (optional, fixes signing errors — free at eulerstream.com)</label>
+            <input type="password" id="tiktokSignKey" placeholder="sign api key" />
+            <div class="stat-big" id="tiktokFollowers">—</div>
+            <div class="muted" id="tiktokMeta">followers</div>
+            <div class="row" style="margin-top:10px">
+              <button class="btn" id="tiktokFollowersStart">Track followers</button>
+              <button class="btn ghost" id="tiktokFollowersStop">Stop</button>
+            </div>
+            <div class="muted" style="margin-top:6px; font-size:.75rem">↑ works any time (reads profile). ↓ live room = viewers + new-follows, needs them live.</div>
+            <div class="row" style="margin-top:6px">
+              <button class="btn ghost" id="tiktokConnect">Connect live</button>
+              <button class="btn ghost" id="tiktokDisconnect">Stop live</button>
+            </div>
+          </div>
+          <div class="card">
+            <h3>🟣 Twitch <span class="pill off" id="twitchState">offline</span></h3>
+            <div class="subcard"><div class="muted" id="twitchLiveAccount">No Twitch OAuth account configured.</div></div>
+            <button class="btn ghost" id="twitchOpenOAuth" style="margin-top:8px">OAuth account settings</button>
+            <div class="stat-big" id="twitchFollowers">—</div><div class="muted">followers</div>
+            <div class="row" style="margin-top:10px"><button class="btn" id="twitchConnect">Start</button><button class="btn ghost" id="twitchDisconnect">Stop</button></div>
+          </div>
+          <div class="card">
+            <h3>🟢 Kick <span class="pill off" id="kickState">offline</span></h3>
+            <label>Channel slug</label><input type="text" id="kickSlug" placeholder="channelname" />
+            <div class="stat-big" id="kickFollowers">—</div><div class="muted">followers</div>
+            <div class="row" style="margin-top:10px"><button class="btn" id="kickConnect">Connect</button><button class="btn ghost" id="kickDisconnect">Stop</button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- OAUTH ACCOUNTS -->
+      <section id="oauth" class="tabpanel">
+        <div class="card">
+          <h3>OAuth Accounts</h3>
+          <div class="section-note">One home for external account authorization. Live counters, OSC apps, and future integrations reuse these saved accounts instead of storing duplicate client IDs, secrets, and tokens.</div>
+        </div>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3>🟣 Twitch <span class="pill" id="twitchTokenState">no token</span></h3>
+            <label>Channel login</label><input type="text" id="twitchLogin" placeholder="channel" />
+            <label style="margin-top:8px">Application Client ID</label><input type="password" id="twitchClientId" placeholder="client id" autocomplete="off" />
+            <label style="margin-top:8px">Client Secret <span class="muted">(optional, enables refresh tokens)</span></label><input type="password" id="twitchClientSecret" placeholder="client secret" autocomplete="off" />
+            <input type="hidden" id="twitchToken" />
+            <div class="subcard" style="margin-top:10px">
+              <div class="section-note"><b>Permissions:</b> follower totals, chat read, and channel reward redemptions.</div>
+              <div class="section-note" style="margin-top:5px"><b>Redirect:</b> <code id="oauthTwitchRedirect">http://localhost:3737/oauth2/twitch/callback</code></div>
+            </div>
+            <div class="row" style="margin-top:10px;flex-wrap:wrap">
+              <button class="btn" id="twitchLogin2">Login with Twitch</button>
+              <button class="btn ghost" id="twitchOAuthSave">Save application</button>
+              <button class="btn danger" id="twitchOAuthForget">Forget token</button>
+            </div>
+            <div class="section-note" id="oauthTwitchAccount" style="margin-top:8px">Not configured</div>
+          </div>
+          <div class="card">
+            <h3>Adding more OAuth providers</h3>
+            <div class="section-note">This page is ready for more provider cards. Each provider should keep its authorization implementation under <code>modules/oauth/providers/</code> and expose one shared saved account to the features that need it.</div>
+            <div class="subcard" style="margin-top:10px"><div class="section-note">OAuth callbacks use loopback-only URLs while login is active. Credentials remain in local AppData and are not included in builds or source control.</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- AI -->
+      <section id="ai" class="tabpanel">
+        <div id="aiCards" class="grid cols-2"></div>
+
+        <div class="card">
+          <h3>🤖 IntelliChat (AI provider)</h3>
+          <label>Provider</label>
+          <select id="aiProvider"></select>
+          <label style="margin-top:8px">Base URL (OpenAI-compatible /chat/completions)</label>
+          <input type="text" id="aiBaseUrl" placeholder="https://api.openai.com/v1" />
+          <div class="grid cols-2" style="margin-top:8px">
+            <div><label>Model</label><input type="text" id="aiModel" placeholder="gpt-4o-mini" /></div>
+            <div><label>API key (blank for local Ollama)</label><input type="password" id="aiKey" placeholder="key" /></div>
+          </div>
+          <div class="muted" style="font-size:.75rem; margin-top:6px">Works with OpenAI, Ollama, LiteLLM, xAI (Grok), Google Gemini, Groq, OpenRouter, Anthropic, or any compatible gateway. Used by the Chatbox ✨ IntelliChat button, the Voice Assistant below, and the Translator's AI grammar fix.</div>
+        </div>
+
+        <div class="card">
+          <h3>🎙 Voice Assistant</h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Say your wake word, then a command — checks a friend's status, who's online, your own status, changes your status text (never your bio), or sends an SOS to trusted friends. Listens through an actual microphone (picked below), separate from the Desktop STT card on the Translation tab (which listens to desktop/system audio, not your voice) — it only reuses that card's speech-to-text engine/API key settings.</div>
+          <div class="grid cols-2">
+            <div><label>Microphone</label><select id="assistantMicDevice"></select></div>
+            <div><label>Wake word</label><input type="text" id="assistantWakeWord" placeholder="e.g. nova" /></div>
+          </div>
+          <div class="grid cols-2" style="margin-top:8px">
+            <div><label>Min. listen time (s) <span class="muted" style="font-size:.7rem">(keeps listening longer automatically while you're still talking)</span></label><input type="number" id="assistantClipSeconds" min="2" max="10" value="4" /></div>
+            <div><label>Mic sensitivity</label>
+              <select id="assistantMicSensitivity">
+                <option value="0.008">Quiet room (picks up softer speech)</option>
+                <option value="0.015" selected>Normal</option>
+                <option value="0.03">Noisy room (ignores more background noise)</option>
+              </select>
+            </div>
+          </div>
+          <label style="margin-top:8px">Web search <span class="muted" style="font-size:.7rem">(used for "what's the news"-style questions and anything needing current info)</span></label>
+          <select id="assistantSearchProvider">
+            <option value="searxng">SearXNG (self-hosted, real web results)</option>
+            <option value="duckduckgo">DuckDuckGo (no setup, limited — instant-answer only, often returns nothing)</option>
+          </select>
+          <div id="assistantSearxngRow" style="margin-top:8px">
+            <input type="text" id="assistantSearxngEndpoint" placeholder="https://searxng.nekosunevr.co.uk/" />
+          </div>
+          <label style="margin-top:8px">Trusted friends (for SOS) <span class="muted" style="font-size:.7rem">comma-separated display names, must be on your friends list</span></label>
+          <input type="text" id="assistantTrustedFriends" placeholder="name1, name2" />
+          <label class="switch" style="margin-top:8px"><input type="checkbox" id="assistantEnableReplay"> Enable instant-replay clip for SOS <span class="muted" style="font-size:.7rem">(needs a separate screen-share prompt; optional — voice commands work without it)</span></label>
+          <div class="grid cols-2" style="margin-top:8px">
+            <div><label>Instant-replay length</label>
+              <select id="assistantReplayMinutes">
+                <option value="1">1 minute</option>
+                <option value="5" selected>5 minutes</option>
+                <option value="10">10 minutes</option>
+              </select>
+            </div>
+            <div><label>SOS webhook URL <span class="muted" style="font-size:.7rem">(Discord, optional — sends the replay clip)</span></label><input type="text" id="assistantSosWebhook" placeholder="https://discord.com/api/webhooks/..." /></div>
+          </div>
+          <div class="row" style="margin-top:10px;gap:8px">
+            <button class="btn" id="assistantToggle">Start listening</button>
+            <button class="btn ghost" id="assistantSosButton">🆘 Trigger SOS now</button>
+          </div>
+          <div class="muted" id="assistantStatus" style="margin-top:8px;font-size:.78rem">Stopped</div>
+          <div class="muted" id="assistantHeard" style="margin-top:4px;font-size:.78rem"></div>
+        </div>
+      </section>
+
+      <!-- TRANSLATION / SPEECH -->
+      <section id="translation" class="tabpanel">
+        <div id="translationCards" class="grid cols-2"></div>
+
+        <div class="card">
+          <h3>🔊 Text-to-Speech</h3>
+          <label>Engine</label>
+          <select id="ttsEngine">
+            <option value="sapi">Windows built-in (SAPI)</option>
+            <option value="tiktok">TikTok TTS</option>
+            <option value="elevenlabs">ElevenLabs (cloud)</option>
+            <option value="openai">OpenAI TTS (cloud)</option>
+            <option value="google">Google Cloud TTS (cloud)</option>
+            <option value="azure">Azure Cognitive Speech (cloud)</option>
+            <option value="polly">Amazon Polly (cloud)</option>
+            <option value="ibmwatson">IBM Watson TTS (cloud)</option>
+            <option value="deepgram">Deepgram Aura (cloud)</option>
+            <option value="voiceforge">VoiceForge (cloud)</option>
+            <option value="uberduck">UberDuck (cloud)</option>
+            <option value="ttsmonster">TTS Monster (cloud)</option>
+            <option value="glados">GLaDOS TTS (self-hosted)</option>
+            <option value="moonbase">Moonbase Voices (local app)</option>
+            <option value="selfhosted">Self-hosted (Piper / XTTS / other)</option>
+          </select>
+          <div id="ttsSapiRow" class="grid cols-2" style="margin-top:8px">
+            <div><label>Voice</label><select id="ttsSapiVoice"></select></div>
+            <div><label>Rate</label><input type="range" id="ttsSapiRate" min="-10" max="10" step="1" value="0" /></div>
+          </div>
+          <div id="ttsTiktokRow" style="margin-top:8px">
+            <label>Voice</label><select id="ttsTiktokVoice"></select>
+          </div>
+          <div id="ttsElevenRow" style="margin-top:8px">
+            <label>API key</label><input type="password" id="ttsElevenKey" placeholder="key" />
+            <label style="margin-top:8px">Voice ID</label><input type="text" id="ttsElevenVoiceId" placeholder="voice id" />
+          </div>
+          <div id="ttsOpenaiRow" style="margin-top:8px">
+            <label>API key</label><input type="password" id="ttsOpenaiKey" placeholder="key" />
+            <div class="grid cols-2" style="margin-top:8px">
+              <div><label>Model</label><select id="ttsOpenaiModel"><option value="gpt-4o-mini-tts">gpt-4o-mini-tts</option><option value="tts-1">tts-1</option><option value="tts-1-hd">tts-1-hd</option></select></div>
+              <div><label>Voice</label><select id="ttsOpenaiVoice"><option>alloy</option><option>echo</option><option>fable</option><option>onyx</option><option>nova</option><option>shimmer</option><option>ash</option><option>coral</option><option>sage</option></select></div>
+            </div>
+          </div>
+          <div id="ttsGoogleRow" style="margin-top:8px">
+            <label>API key</label><input type="password" id="ttsGoogleKey" placeholder="key" />
+            <div class="grid cols-2" style="margin-top:8px">
+              <div><label>Language code</label><input type="text" id="ttsGoogleLang" placeholder="en-US" /></div>
+              <div><label>Voice name</label><input type="text" id="ttsGoogleVoice" placeholder="en-US-Standard-A" /></div>
+            </div>
+          </div>
+          <div id="ttsAzureRow" style="margin-top:8px">
+            <label>Subscription key</label><input type="password" id="ttsAzureKey" placeholder="key" />
+            <div class="grid cols-2" style="margin-top:8px">
+              <div><label>Region</label><input type="text" id="ttsAzureRegion" placeholder="eastus" /></div>
+              <div><label>Voice name</label><input type="text" id="ttsAzureVoice" placeholder="en-US-AvaMultilingualNeural" /></div>
+            </div>
+          </div>
+          <div id="ttsPollyRow" style="margin-top:8px">
+            <div class="grid cols-2">
+              <div><label>Access key ID</label><input type="password" id="ttsPollyAccessKey" placeholder="AKIA..." /></div>
+              <div><label>Secret access key</label><input type="password" id="ttsPollySecretKey" placeholder="secret" /></div>
+            </div>
+            <div class="grid cols-2" style="margin-top:8px">
+              <div><label>Region</label><input type="text" id="ttsPollyRegion" placeholder="us-east-1" /></div>
+              <div><label>Voice ID</label><input type="text" id="ttsPollyVoiceId" placeholder="Joanna" /></div>
+            </div>
+            <label style="margin-top:8px">Engine</label>
+            <select id="ttsPollyEngine"><option value="neural">Neural</option><option value="standard">Standard</option></select>
+          </div>
+          <div id="ttsIbmRow" style="margin-top:8px">
+            <label>API key</label><input type="password" id="ttsIbmKey" placeholder="key" />
+            <div class="grid cols-2" style="margin-top:8px">
+              <div><label>Region</label><input type="text" id="ttsIbmRegion" placeholder="us-south" /></div>
+              <div><label>Instance ID</label><input type="text" id="ttsIbmInstance" placeholder="instance id" /></div>
+            </div>
+            <label style="margin-top:8px">Voice</label><input type="text" id="ttsIbmVoice" placeholder="en-US_AllisonV3Voice" />
+          </div>
+          <div id="ttsDeepgramRow" style="margin-top:8px">
+            <label>API key</label><input type="password" id="ttsDeepgramKey" placeholder="key" />
+            <label style="margin-top:8px">Model</label><input type="text" id="ttsDeepgramModel" placeholder="aura-asteria-en" />
+          </div>
+          <div id="ttsVoiceforgeRow" style="margin-top:8px">
+            <label>API key</label><input type="password" id="ttsVoiceforgeKey" placeholder="key" />
+            <label style="margin-top:8px">Voice</label><input type="text" id="ttsVoiceforgeVoice" placeholder="Susan" />
+          </div>
+          <div id="ttsUberduckRow" style="margin-top:8px">
+            <div class="grid cols-2">
+              <div><label>API key</label><input type="password" id="ttsUberduckKey" placeholder="key" /></div>
+              <div><label>API secret</label><input type="password" id="ttsUberduckSecret" placeholder="secret" /></div>
+            </div>
+            <label style="margin-top:8px">Voice model UUID</label><input type="text" id="ttsUberduckVoice" placeholder="voicemodel_uuid" />
+          </div>
+          <div id="ttsMonsterRow" style="margin-top:8px">
+            <label>API key</label><input type="password" id="ttsMonsterKey" placeholder="key" />
+            <label style="margin-top:8px">Voice ID</label><input type="text" id="ttsMonsterVoice" placeholder="voice_id" />
+          </div>
+          <div id="ttsGladosRow" style="margin-top:8px">
+            <label>Server address</label><input type="text" id="ttsGladosEndpoint" placeholder="http://localhost:8124" />
+          </div>
+          <div id="ttsMoonbaseRow" style="margin-top:8px">
+            <div class="grid cols-2">
+              <div><label>Server address</label><input type="text" id="ttsMoonbaseEndpoint" placeholder="http://localhost:54027" /></div>
+              <div><label>Voice</label><input type="text" id="ttsMoonbaseVoice" placeholder="Betty" /></div>
+            </div>
+          </div>
+          <div id="ttsSelfHostedRow" style="margin-top:8px">
+            <label>Endpoint URL</label><input type="text" id="ttsSelfHostedEndpoint" placeholder="http://localhost:5000/api/tts" />
+          </div>
+          <label style="margin-top:8px">Output device <span class="muted" style="font-size:.7rem">(install a virtual audio cable yourself to route this into VRChat's mic input)</span></label>
+          <select id="ttsOutputDevice"><option value="">System default</option></select>
+          <div class="row" style="margin-top:8px">
+            <input type="text" id="ttsEngineTestText" placeholder="Type something to speak..." style="flex:1" />
+            <button class="btn" id="ttsEngineTestSpeak">Speak</button>
+          </div>
+          <audio id="ttsEngineAudio" style="display:none"></audio>
+          <div class="muted" id="ttsEngineStatus" style="margin-top:6px;font-size:.78rem"></div>
+        </div>
+
+        <div class="card">
+          <h3>🎙 Desktop Speech-to-Text</h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Listens to shared desktop/system audio, transcribes speech, and can translate + send it to the chatbox or speak the translation aloud.</div>
+          <label>Engine</label>
+          <select id="sttEngine">
+            <option value="cloud">Cloud (OpenAI / Groq Whisper)</option>
+            <option value="local">Local (offline, downloads a model on first use)</option>
+          </select>
+          <div id="sttCloudRow" class="grid cols-2" style="margin-top:8px">
+            <div><label>Provider</label><select id="sttCloudProvider"><option value="openai">OpenAI</option><option value="groq">Groq</option></select></div>
+            <div><label>API key</label><input type="password" id="sttCloudKey" placeholder="key" /></div>
+          </div>
+          <div id="sttLocalRow" style="margin-top:8px">
+            <label>Model size</label>
+            <select id="sttLocalModel">
+              <option value="tiny">Tiny (fastest, least accurate)</option>
+              <option value="base">Base</option>
+              <option value="small">Small (slower, more accurate)</option>
+              <option value="medium">Medium (slower, more accurate)</option>
+              <option value="large">Large v3 (slowest, most accurate)</option>
+              <option value="turbo">Large v3 Turbo (faster whisper — near-large accuracy, ~8x faster)</option>
+            </select>
+            <div class="muted" style="font-size:.72rem;margin-top:4px">Uses your GPU automatically if available (falls back to CPU). Larger models download once on first use (up to a few GB) — the app will show progress below.</div>
+            <div id="sttLocalProgressWrap" style="display:none;margin-top:6px">
+              <div style="height:6px;border-radius:3px;background:var(--panel2,#1a1a1a);overflow:hidden"><div id="sttLocalProgressBar" style="height:100%;width:0%;background:var(--accent,#7c5cff)"></div></div>
+              <div id="sttLocalProgressText" class="muted" style="font-size:.72rem;margin-top:3px"></div>
+            </div>
+          </div>
+          <div class="grid cols-2" style="margin-top:8px">
+            <div><label>Source language</label><select id="sttSourceLang"><option value="auto">Auto-detect</option></select></div>
+            <div><label>Clip length (s)</label><input type="number" id="sttClipSeconds" min="3" max="15" value="6" /></div>
+          </div>
+          <div class="row" style="margin-top:8px;flex-wrap:wrap;gap:14px">
+            <label class="switch" style="margin:0"><input type="checkbox" id="sttToChatbox"> Send to chatbox</label>
+            <label class="switch" style="margin:0"><input type="checkbox" id="sttSpeakTranslation"> Speak the translation</label>
+          </div>
+          <div class="row" style="margin-top:10px"><button class="btn" id="sttToggle">Start listening</button></div>
+          <div class="muted" id="sttStatus" style="margin-top:8px;font-size:.78rem">Stopped</div>
+          <div class="muted" id="sttLastText" style="margin-top:4px;font-size:.78rem"></div>
+        </div>
+
+        <div class="card">
+          <h3>🔎 OCR Screen Translate</h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Reads text from a shared screen/window (e.g. VRChat) and can translate + send it to the chatbox.</div>
+          <div class="grid cols-2">
+            <div><label>OCR language</label>
+              <select id="ocrLang">
+                <option value="eng">English</option>
+                <option value="jpn">Japanese</option>
+                <option value="spa">Spanish</option>
+                <option value="rus">Russian</option>
+                <option value="deu">German</option>
+                <option value="fra">French</option>
+                <option value="chi_sim">Chinese (Simplified)</option>
+                <option value="kor">Korean</option>
+                <option value="ara">Arabic</option>
+                <option value="por">Portuguese</option>
+                <option value="ita">Italian</option>
+                <option value="nld">Dutch</option>
+                <option value="pol">Polish</option>
+                <option value="ukr">Ukrainian</option>
+                <option value="vie">Vietnamese</option>
+              </select>
+            </div>
+            <div><label>Scan interval (ms)</label><input type="number" id="ocrInterval" min="1000" max="15000" step="500" value="3000" /></div>
+          </div>
+          <label class="switch" style="margin-top:8px"><input type="checkbox" id="ocrToChatbox"> Send to chatbox</label>
+          <div class="row" style="margin-top:10px"><button class="btn" id="ocrToggle">Start reading</button></div>
+          <div class="muted" id="ocrStatus" style="margin-top:8px;font-size:.78rem">Stopped</div>
+          <div class="muted" id="ocrLastText" style="margin-top:4px;font-size:.78rem"></div>
+        </div>
+
+      </section>
+
+      <!-- STATS -->
+      <section id="stats" class="tabpanel">
+        <div class="grid cols-2">
+          <div class="card">
+            <h3>🖥 Component stats <span class="pill" id="statsState">off</span></h3>
+            <label class="switch"><input type="checkbox" id="enableStats"> Enable polling</label>
+            <div id="statsOut" class="muted" style="margin-top:10px">—</div>
+          </div>
+          <div class="card">
+            <h3>🌐 Network <span class="pill" id="netState">off</span></h3>
+            <label class="switch"><input type="checkbox" id="enableNet"> Enable polling</label>
+            <div id="netOut" class="muted" style="margin-top:10px">—</div>
+          </div>
+          <div class="card">
+            <h3>🪟 Window activity <span class="pill" id="winState">off</span></h3>
+            <label class="switch"><input type="checkbox" id="enableWindow"> Track active window</label>
+            <label class="switch"><input type="checkbox" id="winShowTitle"> Show full window title (not just the app name)</label>
+            <div id="winOut" class="muted" style="margin-top:10px">—</div>
+          </div>
+          <div class="card">
+            <h3>🔋 VR gear battery <span class="pill" id="vrState">off</span></h3>
+            <label class="switch"><input type="checkbox" id="enableVr"> Enable</label>
+            <div id="vrOut" class="muted" style="margin-top:10px">Requires native OpenVR helper (see README).</div>
+          </div>
+          <div class="card">
+            <h3>🥽 VR Overlay <span class="pill" id="vrOverlayState">off</span> <span class="muted" style="font-size:.68rem">(experimental)</span></h3>
+            <div class="muted" style="font-size:.72rem;margin-bottom:6px">Mirrors this app into a floating panel in your headset via SteamVR, so you don't have to tab out to desktop. Windows + SteamVR only, needs your headset connected and powered on. First version: view-only (not yet clickable in VR).</div>
+            <button class="btn" id="vrOverlayToggle">Start VR overlay</button>
+            <div id="vrOverlayOut" class="muted" style="margin-top:10px">Stopped</div>
+          </div>
+          <div class="card">
+            <h3>👻 Terrors of Nowhere <span class="pill" id="tonState">off</span></h3>
+            <div class="muted" style="font-size:.72rem;margin-bottom:6px">✅ Reads ToN <b>automatically from VRChat's log</b> — save codes (auto-decoded to achievements), round type, map, deaths &amp; stuns — <b>no ToNSaveManager needed</b>. ToNSaveManager is optional and adds the richest live data + lifetime stats.</div>
+            <label class="switch"><input type="checkbox" id="enableTon"> Connect to ToNSaveManager <span class="muted">(optional)</span></label>
+            <label style="margin-top:8px">WebSocket port</label>
+            <input type="number" id="tonPort" value="11398" min="1" max="65535" />
+            <div id="tonOut" class="muted" style="margin-top:10px">—</div>
+            <details style="margin-top:10px">
+              <summary class="muted" style="cursor:pointer">Stats &amp; achievements</summary>
+              <div id="tonStatsGrid" style="font-size:.8rem; margin-top:8px"></div>
+              <div id="tonAchievements" style="margin-top:10px"></div>
+              <div class="row" style="gap:6px;margin-top:8px;align-items:center">
+                <button class="btn ghost" id="tonStatsCatchup">🔄 Catch up from stats</button>
+                <span class="muted" id="tonStatsCatchupMsg" style="font-size:.72rem"></span>
+              </div>
+            </details>
+            <div class="muted" style="font-size:.72rem; margin-top:6px">In ToNSaveManager, open <b>Settings → WebSocket API</b>, enable it (and "WebTracker compatibility"). Live round type, terror, map, alive status and lifetime stats become <code>{ton*}</code> chatbox tokens.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TERRORS OF NOWHERE REFERENCE (fully native — no embeds) -->
+      <section id="tonref" class="tabpanel">
+        <div class="card">
+          <h3>👻 Terrors of Nowhere — Reference <span class="pill off" id="tonConnState">connecting…</span> <span class="pill" id="tonCacheState">—</span></h3>
+          <div class="muted" id="tonLiveInfo" style="font-size:.8rem">Connecting to ToNSaveManager…</div>
+          <div class="muted" id="tonCacheInfo" style="font-size:.78rem">—</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--line,#2a2a3a)">
+            <span class="muted" style="font-size:.74rem">ToNSaveManager app <span class="pill off" id="tonMgrState">—</span></span>
+            <button class="btn ghost" id="tonMgrInstall" style="font-size:.74rem">⬇ Install</button>
+            <button class="btn ghost" id="tonMgrStart" style="font-size:.74rem">▶ Start</button>
+            <button class="btn ghost" id="tonMgrStop" style="font-size:.74rem">■ Stop</button>
+            <button class="btn ghost" id="tonMgrUpdate" style="font-size:.74rem">↻ Update</button>
+            <label class="switch" style="font-size:.74rem;margin-left:auto"><input type="checkbox" id="tonMgrAuto"> Auto-launch on app start</label>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--line,#2a2a3a)">
+            <label class="switch" style="font-size:.74rem"><input type="checkbox" id="tonNotify"> 🔔 Alert on achievements</label>
+            <label class="switch" style="font-size:.74rem"><input type="checkbox" id="tonNotifyTerrors"> + new terrors</label>
+            <span class="muted" style="font-size:.74rem">via</span>
+            <select id="tonNotifyMode" style="font-size:.74rem;width:auto">
+              <option value="auto">Auto (VR ↔ desktop)</option>
+              <option value="xsoverlay">XSOverlay</option>
+              <option value="ovrtoolkit">OVR Toolkit</option>
+              <option value="windows">Windows toast</option>
+              <option value="off">Off</option>
+            </select>
+            <button class="btn ghost" id="tonNotifyTest" style="font-size:.74rem">Test</button>
+            <span class="muted" id="tonNotifyDetect" style="font-size:.72rem;margin-left:auto"></span>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;align-items:center">
+            <button class="btn ghost tonCat active" data-toncat="achievements">🏆 Achievements</button>
+            <button class="btn ghost tonCat" data-toncat="terrors">👹 Terrors</button>
+            <button class="btn ghost tonCat" data-toncat="items">🎒 Items</button>
+            <button class="btn ghost tonCat" data-toncat="locations">🗺 Locations</button>
+            <button class="btn ghost tonCat" data-toncat="rounds">🎲 Rounds</button>
+            <button class="btn ghost" id="tonRefresh" style="margin-left:auto" title="Update the cached data from the source sites">↻ Refresh</button>
+          </div>
+          <input id="tonSearch" placeholder="Search names &amp; unlock hints…" style="margin-bottom:8px" />
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
+            <span class="muted" style="font-size:.72rem">Show:</span>
+            <button class="btn ghost tonFilter active" data-tonfilter="all">All</button>
+            <button class="btn ghost tonFilter" data-tonfilter="unlocked">✓ Unlocked</button>
+            <button class="btn ghost tonFilter" data-tonfilter="locked">🔒 Locked</button>
+          </div>
+          <div id="tonBoard" style="max-height:540px;overflow:auto">Loading…</div>
+        </div>
+        <div id="tonToolsCards" class="grid cols-2"></div>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3>📊 Player data</h3>
+            <div id="tonPlayerStats" class="muted" style="font-size:.82rem"></div>
+            <div id="tonEncounters" style="margin-top:8px"></div>
+            <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+              <button class="btn ghost" id="tonExport">⬇ Export player data</button>
+              <button class="btn ghost" id="tonImport">⬆ Import</button>
+              <button class="btn danger" id="tonResetAll">🗑 Reset all ToN data</button>
+            </div>
+            <div class="muted" style="font-size:.7rem;margin-top:6px">Reset clears board unlocks, terrors/maps seen and round history. Lifetime stats come from ToNSaveManager and repopulate on connect.</div>
+          </div>
+          <div class="card">
+            <h3>📜 Round history</h3>
+            <div id="tonRoundHistory" style="max-height:300px;overflow:auto;font-size:.8rem">—</div>
+          </div>
+          <div class="card">
+            <h3>💾 Save backups <span class="pill" id="tonSaveState">—</span></h3>
+            <div class="muted" style="font-size:.74rem">Auto-captured from the game's save code, with date/time. Click <b>Copy</b> to put a code on your clipboard, then paste it in-game to restore.</div>
+            <div style="margin-top:10px;padding:8px;border:1px solid var(--accent,#7c5cff);border-radius:8px">
+              <div style="font-weight:600;font-size:.82rem">📥 Paste your save code to catch up</div>
+              <div class="muted" style="font-size:.72rem;margin:2px 0 6px">Paste your <code>[START]…[END]</code> code and click <b>Import</b> — it's backed up and your achievements are read and ticked on the board automatically.</div>
+              <textarea id="tonSaveImport" rows="2" placeholder="Paste a [START]…[END] save code here…" style="width:100%;font-family:monospace;font-size:.66rem"></textarea>
+              <div class="row" style="gap:6px;margin-top:6px;align-items:center">
+                <button class="btn" id="tonSaveImportBtn">⬆ Import &amp; catch up</button>
+                <span class="muted" id="tonSaveImportMsg" style="font-size:.72rem"></span>
+              </div>
+            </div>
+            <div class="muted" style="font-size:.72rem;margin-top:10px">Backed-up codes — tap <b>Copy</b> to put one on your clipboard (no need to highlight anything):</div>
+            <div id="tonSavesList" style="max-height:220px;overflow:auto;margin-top:6px;font-size:.8rem">—</div>
+            <button class="btn ghost" id="tonSavesClear" style="margin-top:8px">Clear backups</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- HEART RATE -->
+      <section id="heartrate" class="tabpanel">
+        <div class="card">
+          <h3>❤️ Heart rate <span class="pill off" id="hrState">offline</span></h3>
+          <div class="hr-layout">
+          <div class="subcard">
+          <h4>Monitoring source</h4>
+          <label>Provider</label>
+          <select id="hrProvider">
+            <option value="pulsoid">Pulsoid</option>
+            <option value="hyperate">HypeRate.io</option>
+            <option value="device">Other device / local bridge</option>
+          </select>
+          <div id="hrPulsoidFields" class="subcard" style="margin-top:10px">
+          <h4>Pulsoid read access</h4>
+          <div>
+            <button class="btn ghost" id="hrPulsoidAuthorize" type="button">Authorize Pulsoid read access</button>
+            <div class="muted" id="hrPulsoidAuthHint" style="font-size:.72rem;margin-top:4px">Authorizes only <code>data:heart_rate:read</code>. This token is never used for device posting.</div>
+          </div>
+          <div style="margin-top:8px">
+            <label>Pulsoid read token</label><input type="password" id="pulsoidToken" placeholder="token with data:heart_rate:read" />
+          </div>
+          </div>
+          <div id="hrHyperateFields" class="subcard" style="margin-top:10px; display:none">
+            <h4>HypeRate connection</h4>
+            <label>HypeRate API key</label><input type="password" id="hyperateKey" placeholder="api key" />
+            <label style="margin-top:8px">HypeRate device / session ID</label><input type="text" id="hyperateDevice" placeholder="e.g. abc123 (from hyperate.io/abc123)" />
+          </div>
+          </div>
+          <div>
+          <div id="hrDeviceFields" class="subcard" style="display:none">
+            <h4>BLE watch and local receiver</h4>
+            <div class="muted" style="font-size:.75rem;margin-bottom:8px">Accepts BPM from any watch, phone app, Home Assistant automation, microcontroller, or device-specific bridge over a local HTTP endpoint.</div>
+            <label>Local receiver port</label><input type="number" id="hrBridgePort" min="1" max="65535" value="7392" />
+            <div class="muted" style="font-size:.72rem;margin-top:4px">Send <code>{"bpm":72}</code> to <code id="hrBridgeEndpoint">http://127.0.0.1:7392/heart-rate</code></div>
+            <hr style="border:none;border-top:1px solid var(--border);margin:12px 0" />
+            <label>Bluetooth LE watch / heart-rate monitor</label>
+            <div class="row" style="margin-top:6px">
+              <button class="btn ghost" id="hrBleScan" type="button">Scan nearby</button>
+              <button class="btn ghost" id="hrBlePaired" type="button">Paired / remembered</button>
+              <button class="btn ghost" id="hrBleCancel" type="button">Cancel scan</button>
+            </div>
+            <select id="hrBleDevices" style="margin-top:8px"><option value="">No BLE devices loaded</option></select>
+            <div class="row" style="margin-top:8px">
+              <button class="btn" id="hrBleConnect" type="button">Connect</button>
+              <button class="btn ghost" id="hrBleDisconnect" type="button">Disconnect</button>
+              <button class="btn ghost" id="hrBleDebug" type="button">BLE debug log</button>
+            </div>
+            <label class="switch" style="margin-top:8px"><input type="checkbox" id="hrBleAutoReconnect" checked> Keep monitoring and auto-reconnect in background</label>
+            <div class="row" style="margin-top:6px;align-items:center">
+              <label class="switch" style="flex:1"><input type="checkbox" id="hrGmansAutomatic"> Enable GMANS watch-side automatic heart rate</label>
+              <div style="width:150px"><label>Interval (minutes)</label><input type="number" id="hrGmansAutoInterval" min="1" max="255" value="5"></div>
+            </div>
+            <div class="muted" style="font-size:.72rem;margin-top:4px">Recovered from Goodmans Fit Pro's <code>setAutoHeartData</code> command. It lets the watch measure with its Heart Rate screen closed; firmware may save periodic readings instead of streaming every beat.</div>
+            <label class="switch" style="margin-top:6px"><input type="checkbox" id="hrGmansBackgroundWake"> Experimental GMANS screen-off handshake <span class="muted">(session-specific; off by default)</span></label>
+            <div class="muted" id="hrBleStatus" style="font-size:.72rem;margin-top:5px">Supports standard BLE Heart Rate Service devices and the proprietary GMANS WATCH protocol. Other proprietary watches need an adapter.</div>
+            <label class="switch" style="margin-top:10px"><input type="checkbox" id="hrRelayPulsoid"> Also feed readings to Pulsoid</label>
+            <div id="hrRelayFields" style="display:none">
+              <label style="margin-top:8px">Pulsoid posting token</label><input type="password" id="hrRelayToken" placeholder="separate token with data:heart_rate:write" />
+              <button class="btn ghost" id="hrPulsoidKeys" type="button" style="margin-top:6px">Get posting token</button>
+              <div class="muted" id="hrRelayTokenStatus" style="font-size:.72rem;margin-top:4px">Enter a separate manually issued token with <code>data:heart_rate:write</code>. The read OAuth token is not copied here.</div>
+            </div>
+          </div>
+          <div class="subcard" style="margin-top:10px">
+          <h4>Live reading and session</h4>
+          <div class="row"><button class="btn" id="hrStart">Start monitoring</button><button class="btn ghost" id="hrStop">Stop</button></div>
+          <div class="stat-big" id="hrOut" style="margin-top:8px">—</div><div class="muted" id="hrSub">bpm</div>
+          <hr style="border:none;border-top:1px solid var(--border);margin:12px 0" />
+          <div class="row" style="justify-content:space-between"><label style="margin:0">Session history</label><button class="btn ghost" id="hrClear" style="padding:4px 10px;font-size:.78rem">Clear</button></div>
+          <div id="hrSessions" class="muted" style="font-size:.78rem;margin-top:6px;max-height:160px;overflow:auto">No saved sessions yet.</div>
+          </div>
+          </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Avatar OSC outputs</h3>
+          <div class="section-note" style="margin-bottom:10px">Enable only the avatar systems you use. Every enabled output receives the same reading from Pulsoid, HypeRate, BLE, or the local bridge.</div>
+          <div class="grid cols-2">
+            <div class="subcard">
+              <h4>Beko Smooth Heartbeat / VRC Heart Rate</h4>
+              <label class="switch"><input type="checkbox" id="hrOscVrcosc" checked> Current 3.x profile</label>
+              <div class="section-note"><code>VRCOSC/Heartrate/Value</code>, Connected, Average, Enabled, Beat, Normalised and digit floats.</div>
+              <label class="switch" style="margin-top:8px"><input type="checkbox" id="hrOscBekoLegacy"> Legacy 2.x <code>HR</code> integer</label>
+              <div class="section-note" style="margin-top:6px"><code>HBG/*</code> remains controlled by the asset. <a href="https://booth.pm/ja/items/5316535" target="_blank">Asset page</a></div>
+            </div>
+            <div class="subcard">
+              <h4>HeartEchoes</h4>
+              <label class="switch"><input type="checkbox" id="hrOscHeartEchoes" checked> Enable complete HeartEchoes profile</label>
+              <div class="section-note"><code>HeartEchoes_Heart_Beat</code>, <code>isHRActive</code>, <code>isHRConnected</code>, <code>isHRBeat</code>, and <code>HeartBeatToggle</code>.</div>
+            </div>
+            <div class="subcard">
+              <h4>Akaryu HeartRate OSC 3.0</h4>
+              <div class="row" style="align-items:center">
+                <label class="switch" style="flex:1"><input type="checkbox" id="hrOscAkaryu" checked> Enable profile</label>
+                <div style="width:125px"><label>Maximum BPM</label><input type="number" id="hrOscAkaryuMax" min="40" max="255" value="200"></div>
+              </div>
+              <div class="section-note"><code>hr_percent</code>, <code>hr_connected</code>, and toggled <code>hr_beat</code>. Local UI, position, rotation, scale and opacity remain avatar-controlled. <a href="https://booth.pm/ja/items/5531594" target="_blank">Asset page</a></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- AVATAR LOCKER -->
+      <section id="avatarlocker" class="tabpanel">
+        <div class="card">
+          <h3>Avatar Locker <span class="pill on" id="lockerState">secure vault</span></h3>
+          <div class="metric-row">
+            <div class="metric-tile"><small>Owned avatars</small><b id="lockerOwnedCount">0</b></div>
+            <div class="metric-tile"><small>Active unlocks</small><b id="lockerUnlockedCount">0</b></div>
+            <div class="metric-tile"><small>OSC target</small><b id="lockerOscSummary" style="font-size:1rem">127.0.0.1:9000</b></div>
+          </div>
+          <div class="row" style="margin-top:12px;flex-wrap:wrap">
+            <button class="btn" id="lockerImport">Import ownership</button>
+            <button class="btn ghost" id="lockerLegacy">Import old vault</button>
+            <button class="btn ghost" id="lockerSign">Sign template</button>
+            <button class="btn ghost" id="lockerFolder">Vault folder</button>
+            <button class="btn ghost" id="lockerRefresh">Refresh</button>
+          </div>
+          <div class="section-note" id="lockerMessage" style="margin-top:8px">Signed packages are verified before being added. Creator private keys remain in AppData.</div>
+        </div>
+        <div class="locker-layout">
+          <div class="card">
+            <h3>Owned avatars</h3>
+            <div class="locker-list" id="lockerAvatarList"><div class="section-note">No ownership packages imported.</div></div>
+          </div>
+          <div>
+            <div class="card" id="lockerDetail">
+              <h3>Unlock controls</h3>
+              <div id="lockerNoSelection" class="section-note">Select or import an avatar ownership package.</div>
+              <div id="lockerSelected" style="display:none">
+                <div class="row" style="justify-content:space-between;align-items:flex-start">
+                  <div><h3 id="lockerAvatarName" style="margin-bottom:3px"></h3><div class="section-note" id="lockerAvatarCreator"></div><div class="section-note" id="lockerAvatarId" style="word-break:break-all"></div></div>
+                  <span class="pill" id="lockerAvatarMode">locked</span>
+                </div>
+                <div class="row" style="margin-top:14px;flex-wrap:wrap"><button class="btn ghost locker-mode" data-locker-mode="locked">Lock</button><button class="btn ghost locker-mode" data-locker-mode="partial">Partial</button><button class="btn locker-mode" data-locker-mode="unlocked">Unlock all</button></div>
+                <h4 style="margin:16px 0 8px">Feature groups</h4>
+                <div id="lockerGroups" style="display:flex;flex-direction:column;gap:7px"></div>
+                <div class="row" style="margin-top:12px;flex-wrap:wrap"><button class="btn" id="lockerSendPartial">Send selected groups</button><button class="btn ghost" id="lockerExport">Export package</button></div>
+              </div>
+            </div>
+            <div class="card">
+              <h3>Locker OSC settings</h3>
+              <div class="grid cols-2"><div><label>Host</label><input id="lockerOscHost" type="text" value="127.0.0.1"></div><div><label>Port</label><input id="lockerOscPort" type="number" min="1" max="65535" value="9000"></div></div>
+              <div class="row" style="margin-top:10px;flex-wrap:wrap"><button class="btn" id="lockerSaveOsc">Save OSC target</button><button class="btn danger" id="lockerReset">Clear vault</button></div>
+              <div class="section-note" style="margin-top:8px">Device ID: <code id="lockerDeviceId">loading</code></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- DISCORD -->
+      <section id="discord" class="tabpanel">
+        <div class="card">
+          <h3>💜 Discord <span class="pill off" id="discordState">off</span></h3>
+          <label>Discord Application (Client) ID <span class="muted" style="font-size:.72rem">(fixed — the official KitsuNexus app)</span></label>
+          <input type="text" id="discordAppId" placeholder="application id" disabled readonly title="Fixed to the official KitsuNexus Discord Application ID — cannot be changed" />
+          <label style="margin-top:8px">Client Secret (only for voice detection)</label>
+          <input type="password" id="discordSecret" placeholder="client secret (optional)" />
+          <div class="grid cols-2" style="margin-top:8px">
+            <label class="switch"><input type="checkbox" id="discordRP" checked> Rich Presence (show VRChat status)</label>
+            <label class="switch"><input type="checkbox" id="discordVoice"> Voice detection (channel, speaking, mute/deafen)</label>
+          </div>
+          <div class="grid cols-2" style="margin-top:8px">
+            <label class="switch"><input type="checkbox" id="discordVoiceOsc" checked> Send voice state to VRChat (OSC)</label>
+            <label class="switch"><input type="checkbox" id="discordMuteOsc" checked> Send mute/deafen to VRChat (OSC)</label>
+          </div>
+
+          <hr style="border:none;border-top:1px solid var(--line,#23233a);margin:12px 0" />
+          <label>VRChat status <span class="muted" style="font-size:.72rem">(controls what your presence reveals — not your Discord status)</span></label>
+          <div class="grid cols-2" style="margin-top:6px">
+            <select id="discordVrcStatus">
+              <option value="join">🔵 Join Me — show world + join button</option>
+              <option value="active" selected>🟢 Active — show world + join button</option>
+              <option value="ask">🟠 Ask Me — hide world</option>
+              <option value="busy">🔴 Do Not Disturb — hide world</option>
+            </select>
+            <label class="switch"><input type="checkbox" id="discordShowWorld" checked> Show VRChat world + Join button</label>
+          </div>
+          <label style="margin-top:8px">VRChat profile URL <span class="muted" style="font-size:.72rem">(optional — auto-detected from VRChat log)</span></label>
+          <input type="text" id="discordVrcProfile" placeholder="https://vrchat.com/home/user/usr_..." />
+          <div class="grid cols-2" style="margin-top:8px">
+            <label class="switch"><input type="checkbox" id="discordShowHr" checked> ❤️ Show heart rate in presence</label>
+            <label class="switch"><input type="checkbox" id="discordShowNp" checked> 🎵 Show now playing in presence</label>
+          </div>
+
+          <div class="row" style="margin-top:10px"><button class="btn" id="discordStart">Connect</button><button class="btn ghost" id="discordStop">Stop</button></div>
+          <div class="muted" id="discordOut" style="margin-top:8px">Not connected</div>
+          <div class="muted" id="discordWorldOut" style="margin-top:4px;font-size:.78rem">World: not detected</div>
+          <div class="muted" style="font-size:.72rem; margin-top:4px">Voice detection needs Discord's private voice scope (approved apps only) — falls back to Rich Presence if rejected. See Docs.</div>
+        </div>
+
+        <div class="card">
+          <h3>🤖 Discord Voice Bot <span class="pill off" id="botState">off</span></h3>
+          <label>Mode</label>
+          <select id="botMode">
+            <option value="own">Your own bot (paste a token)</option>
+            <option value="official">KitsuNexus official bot (just log in)</option>
+          </select>
+
+          <div id="botOwnFields">
+            <div class="muted" style="font-size:.75rem;margin:8px 0">The no-allowlist alternative to voice scope. Create a bot in the <a href="https://discord.com/developers/applications" target="_blank">Developer Portal</a>, paste its <b>token</b>, invite it to <b>your own private server</b>, and enter your Discord <b>user ID</b>. It stays invisible (appears offline) and reads your voice state + can server-mute/deafen you via OSC.</div>
+            <label>Bot token</label><input type="password" id="botToken" placeholder="bot token" autocomplete="off" />
+            <div class="grid cols-2" style="margin-top:8px">
+              <div><label>Your Discord user ID</label><input type="text" id="botUserId" placeholder="e.g. 123456789012345678" /></div>
+              <div><label>Application ID (for invite)</label><input type="text" id="botAppId" placeholder="application id (optional)" /></div>
+            </div>
+          </div>
+
+          <div id="botOfficialFields" style="display:none">
+            <div class="muted" style="font-size:.75rem;margin:8px 0">No token or bot setup needed — log in with your own Discord account and KitsuNexus's official shared bot reads your voice state (and can server-mute/deafen you) the same way, as long as it's already in the server you're calling from.</div>
+            <label>Backend URL <span class="muted" style="font-size:.72rem">(self-hosting? point this at your own deployment instead)</span></label>
+            <input type="text" id="nekosuneBackendUrl" placeholder="https://kitsunexus.nekosunevr.co.uk" />
+            <div class="row" style="margin-top:8px"><button class="btn" id="discordIdentityLogin">Login with Discord</button><button class="btn ghost" id="discordIdentityLogout">Log out</button></div>
+            <div class="muted" id="discordIdentityOut" style="margin-top:8px">Not logged in</div>
+          </div>
+
+          <div class="row" style="margin-top:10px"><button class="btn" id="botStart">Connect</button><button class="btn ghost" id="botStop">Stop</button><button class="btn ghost" id="botInvite">Invite link</button></div>
+          <div class="muted" id="botOut" style="margin-top:8px">Not connected</div>
+        </div>
+      </section>
+
+      <!-- OVERLAY -->
+      <section id="overlay" class="tabpanel">
+        <div class="card">
+          <h3>🖥 OBS Overlay</h3>
+          <div id="overlayNotPaired" class="muted">
+            This overlay is hosted by your KitsuNexus server, not this app — pair a device in
+            <b>Settings ▸ Cloud Sync</b> first to get your overlay URL.
+          </div>
+          <div id="overlayPaired" style="display:none">
+            <div class="grid cols-2">
+              <div><label>Style</label>
+                <select id="overlayStyleSelect">
+                  <option value="default">Default</option><option value="bash">Bash</option><option value="discord">Discord</option>
+                  <option value="macos">macOS</option><option value="windows">Windows</option><option value="soundcloud">SoundCloud</option><option value="youtube">YouTube</option>
+                </select>
+              </div>
+              <div><label>Box background</label>
+                <select id="overlayBgSelect">
+                  <option value="solid">Solid</option><option value="thin">Thin</option><option value="hidden">Hidden (text only)</option>
+                </select>
+              </div>
+            </div>
+            <label style="margin-top:12px">OBS Browser Source URL</label>
+            <div class="row"><input type="text" id="overlayUrlInput" readonly style="flex:1" /><button class="btn ghost" id="overlayCopyUrl">Copy</button></div>
+            <div id="overlayStatus" class="muted" style="margin-top:8px">Overlay not checked yet</div>
+            <iframe id="overlayPreview" style="width:100%; height:220px; border:1px solid var(--border); border-radius:10px; margin-top:10px; background:transparent" title="overlay preview"></iframe>
+          </div>
+        </div>
+      </section>
+
+      <!-- SETTINGS -->
+      <!-- VRCHAT -->
+      <section id="vrchat" class="tabpanel">
+        <div class="card">
+          <h3>🔐 VRChat Account <span class="pill off" id="vrcAcctState">logged out</span></h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Logs into the VRChat API to auto-detect your status (🟢/🔵/🟠/🔴) and drive the Discord world gate. Your password is never stored — only the session cookie.</div>
+          <div class="grid cols-2">
+            <div><label>Username / email</label><input type="text" id="vrcUser" placeholder="username" autocomplete="off" /></div>
+            <div><label>Password</label><input type="password" id="vrcPass" placeholder="password" autocomplete="off" /></div>
+          </div>
+          <div class="row" style="margin-top:10px"><button class="btn" id="vrcLogin">Login</button><button class="btn ghost" id="vrcLogout">Logout</button></div>
+          <div id="vrc2faRow" style="margin-top:10px; display:none">
+            <label>2FA code <span class="muted" id="vrc2faHint" style="font-size:.72rem"></span></label>
+            <div class="row"><input type="text" id="vrc2faCode" placeholder="123456" autocomplete="off" /><button class="btn" id="vrc2faVerify">Verify</button></div>
+          </div>
+          <label class="switch" style="margin-top:10px"><input type="checkbox" id="vrcAutoStatus"> Auto-apply my VRChat status to Discord</label>
+          <div class="muted" id="vrcAcctOut" style="margin-top:8px">Not logged in</div>
+        </div>
+
+        <div class="card">
+          <h3>✏️ Profile Editor</h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Update your own VRChat status, status text and bio (needs login).</div>
+          <div class="grid cols-2">
+            <div><label>Status</label><select id="peStatus"><option value="join me">🔵 Join Me</option><option value="active">🟢 Active</option><option value="ask me">🟠 Ask Me</option><option value="busy">🔴 Do Not Disturb</option></select></div>
+            <div><label>Status text</label><input type="text" id="peStatusDesc" placeholder="status description" /></div>
+          </div>
+          <label style="margin-top:8px">Bio</label>
+          <textarea id="peBio" rows="3" placeholder="your bio"></textarea>
+          <label style="margin-top:8px">Pronouns <span class="muted" style="font-size:.72rem">(optional)</span></label>
+          <input type="text" id="pePronouns" placeholder="e.g. she/her" maxlength="32" />
+          <label style="margin-top:8px">Bio Links <span class="muted" style="font-size:.72rem">(up to 3, one per line)</span></label>
+          <textarea id="peBioLinks" rows="3" placeholder="https://twitch.tv/...&#10;https://twitter.com/..."></textarea>
+          <div class="row" style="margin-top:8px"><button class="btn" id="peSave">Save profile</button><button class="btn ghost" id="peLoad">Reload</button></div>
+          <label style="margin-top:10px">Bio prefabs</label>
+          <div class="muted" style="font-size:.72rem;margin-bottom:4px">Save the bio above as a reusable prefab; load one to drop it into the editor, then Save profile to apply.</div>
+          <div class="row"><select id="peBioPreset" style="flex:1"><option value="">— bio prefabs —</option></select><button class="btn ghost" id="peBioLoad">Load</button><button class="btn ghost" id="peBioSave">Save bio as prefab</button><button class="btn ghost danger" id="peBioDel">×</button></div>
+          <label style="margin-top:10px">Status presets</label>
+          <div class="row"><select id="pePreset" style="flex:1"><option value="">— saved presets —</option></select><button class="btn ghost" id="pePresetApply">Apply</button><button class="btn ghost" id="pePresetSave">Save current</button><button class="btn ghost danger" id="pePresetDel">×</button></div>
+          <div class="muted" id="peOut" style="margin-top:6px;font-size:.78rem"></div>
+        </div>
+      </section>
+
+      <!-- QUICK LAUNCH -->
+      <section id="quicklaunch" class="tabpanel">
+        <div class="card">
+          <h3>🚀 VRChat Quick Launch</h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Launch multiple simultaneous VRChat instances. Each profile below gets its own local login/settings via VRChat's <code>--profile</code> flag, so different accounts can be signed in at once. Launches the game exe directly — Steam doesn't need to be running.</div>
+          <label>VRChat executable</label>
+          <div class="row" style="flex-wrap:wrap;gap:8px">
+            <input type="text" id="qlExePath" readonly placeholder="Not detected — click Auto-detect or Browse" style="flex:1;min-width:220px">
+            <button class="btn ghost" id="qlAutoDetect">Auto-detect</button>
+            <button class="btn ghost" id="qlBrowseExe">Browse…</button>
+          </div>
+          <div class="muted" id="qlExeOut" style="margin-top:6px;font-size:.78rem">—</div>
+        </div>
+
+        <div class="card">
+          <h3>🎯 Instance info</h3>
+          <div class="row" style="flex-wrap:wrap;gap:8px">
+            <select id="qlInstMode" style="max-width:150px">
+              <option value="none">None</option>
+              <option value="local">Local</option>
+              <option value="join">Join existing</option>
+              <option value="create">Create new</option>
+            </select>
+            <input type="text" id="qlInstWorldId" placeholder="World ID (for Create)" style="flex:1;min-width:180px">
+            <input type="text" id="qlInstLocation" placeholder="Instance location (for Join)" style="flex:1;min-width:180px">
+            <select id="qlInstAccess" style="max-width:130px">
+              <option value="public">Public</option>
+              <option value="friends+">Friends+</option>
+              <option value="friends">Friends</option>
+              <option value="invite+">Invite+</option>
+              <option value="invite">Invite</option>
+            </select>
+          </div>
+          <div class="muted" style="font-size:.72rem;margin-top:6px">"Create" makes one fresh instance and every launched profile below joins it together. "Join" uses the location you paste in. "Local"/"None" just start VRChat normally.</div>
+        </div>
+
+        <div class="card">
+          <h3>👤 Profiles</h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Add a row per account to launch simultaneously. Profile numbers must be unique — VRChat keeps each one's login/settings separate. Each profile also gets its own OSC ports (profile 0 = VRChat's default 9000/9001, profile N = 9000+2N/9001+2N) — profiles other than 0 are automatically mirrored into Settings → OSC's extra targets/receivers, so Chatbox/AudioLink/etc. reach every launched profile, not just the default one.</div>
+          <div id="qlProfiles"></div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn ghost" id="qlAddProfile">+ Add profile</button>
+            <button class="btn" id="qlLaunchAll">🚀 Launch selected</button>
+          </div>
+          <div class="muted" id="qlLaunchOut" style="margin-top:6px;font-size:.78rem"></div>
+        </div>
+      </section>
+
+      <!-- RADAR -->
+      <section id="radar" class="tabpanel">
+        <div class="card">
+          <h3>📡 Radar <span class="pill" id="radarCount">0</span></h3>
+          <div class="muted" style="font-size:.75rem">Players currently in your instance, read live from the VRChat log.</div>
+          <div id="radarList" class="muted" style="margin-top:8px;max-height:220px;overflow:auto;font-size:.82rem">Not in a world.</div>
+        </div>
+      </section>
+
+      <!-- WEATHER -->
+      <section id="weather" class="tabpanel">
+        <div class="card">
+          <h3>🌦 Weather <span class="pill off" id="weatherState">off</span></h3>
+          <div class="grid cols-2">
+            <div><label>City</label><input type="text" id="weatherCity" placeholder="e.g. London" /></div>
+            <div><label>Units</label><select id="weatherUnits"><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select></div>
+          </div>
+          <label class="switch" style="margin-top:8px"><input type="checkbox" id="weatherEnable"> Enable weather (updates every 15 min)</label>
+          <div class="stat-big" id="weatherOut" style="margin-top:8px">—</div>
+          <div class="muted" id="weatherSub">Give Weather its own Off/Own line/Rotate toggle on the Chatbox tab, or use {weather} in a status preset.</div>
+        </div>
+      </section>
+
+      <!-- OSC APPS -->
+      <section id="oscapps" class="tabpanel">
+        <div class="card">
+          <h3>OSC companion apps</h3>
+          <div class="section-note">Native and managed OSC compatibility tools for VRChat avatars, media, Discord, leashes, clocks, and supported worlds.</div>
+          <div class="row" style="margin-top:10px"><div style="flex:1"><label>Screen/window used by OSCQR and ShazamOSC</label><select id="oscAppsCaptureSource"><option value="">Primary display</option></select></div><button class="btn ghost" id="oscAppsCaptureRefresh" style="margin-top:20px">Refresh sources</button></div>
+        </div>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3>OSCQR <span class="pill off" id="oscQrState">off</span></h3>
+            <div class="section-note">Real-time QR detection from a screen or window you choose. Results stay local unless chatbox output is enabled.</div>
+            <div class="grid cols-2" style="margin-top:9px">
+              <div><label>Scan interval (ms)</label><input type="number" id="oscQrInterval" min="200" max="5000" step="100" value="500"></div>
+              <label class="switch" style="margin:20px 0 0"><input type="checkbox" id="oscQrChatbox"> Post detected text to chatbox</label>
+            </div>
+            <label class="switch"><input type="checkbox" id="oscQrSaveHistory" checked> Save recent codes in AppData</label>
+            <div class="row" style="margin-top:10px"><button class="btn" id="oscQrStart">Start scan</button><button class="btn ghost" id="oscQrStop">Stop</button><button class="btn ghost" id="oscQrClear">Clear history</button></div>
+            <div class="section-note" id="oscQrOut" style="margin-top:8px">Stopped</div>
+            <div class="subcard" id="oscQrHistory" style="margin-top:10px;max-height:145px;overflow:auto"><div class="section-note">No QR codes detected.</div></div>
+          </div>
+          <div class="card">
+            <h3>DiscordOSC <span class="pill off" id="discordOscState">off</span></h3>
+            <div class="section-note">Controls and monitors Discord voice through KitsuNexus's Discord Voice Bot. Configure and connect the bot on the Discord page first.</div>
+            <label class="switch" style="margin-top:10px"><input type="checkbox" id="discordOscEnable"> Enable DiscordOSC parameters</label>
+            <div class="subcard" style="margin-top:10px"><div class="section-note"><code>VRCOSC/Discord/Mic</code>/<code>Mute</code> · <code>Deafen</code> · <code>Ready</code> · <code>ChannelUserCount</code> · <code>VoiceConnectionState</code></div></div>
+            <div class="section-note" id="discordOscOut" style="margin-top:8px">Waiting for Discord Voice Bot</div>
+          </div>
+          <div class="card">
+            <h3>SpotiOSC <span class="pill off" id="spotiOscState">off</span></h3>
+            <div class="section-note">Controls Spotify or another Windows media session and publishes playback state to OSC.</div>
+            <label class="switch" style="margin-top:10px"><input type="checkbox" id="spotiOscEnable"> Enable SpotiOSC parameters</label>
+            <div class="section-note" style="margin:6px 0 10px"><code>VRCOSC/Media/Play</code> · <code>Skip</code>/<code>Next</code> · <code>Previous</code><br><code>SpotiOSC/Pause</code> · <code>NextTrack</code> · <code>PreviousTrack</code> · <code>IsPlaying</code> · playback position</div>
+            <label style="margin-top:8px">Spotify Jam invite link</label><input type="text" id="spotiJamUrl" placeholder="https://spotify.link/..." />
+            <div class="row" style="margin-top:8px"><button class="btn" id="spotiJamJoin">Open / join Jam</button><button class="btn ghost" id="spotiJamCreate">Create Jam in Spotify</button></div>
+            <div class="section-note" id="spotiOscOut" style="margin-top:8px">Idle</div>
+          </div>
+          <div class="card">
+            <h3>ShazamOSC <span class="pill off" id="shazamOscState">ready</span></h3>
+            <div class="section-note">Recognizes desktop audio, sends bass and match parameters, saves results, and can post matches to the chatbox.</div>
+            <label style="margin-top:10px">Recognition provider</label>
+            <select id="shazamProvider"><option value="auto">Automatic fallback</option><option value="audd">AudD</option><option value="acrcloud">ACRCloud</option><option value="node-shazam">node-shazam (optional external)</option></select>
+            <label style="margin-top:8px">AudD API token</label><input type="password" id="shazamToken" autocomplete="off" placeholder="Your token from dashboard.audd.io" />
+            <details style="margin-top:8px"><summary class="section-note" style="cursor:pointer">ACRCloud fallback credentials</summary>
+              <label style="margin-top:8px">Host</label><input type="text" id="shazamAcrHost" placeholder="identify-eu-west-1.acrcloud.com" />
+              <div class="grid cols-2" style="margin-top:7px"><div><label>Access key</label><input type="password" id="shazamAcrKey" autocomplete="off" /></div><div><label>Access secret</label><input type="password" id="shazamAcrSecret" autocomplete="off" /></div></div>
+            </details>
+            <div class="section-note" id="shazamProviderState" style="margin-top:7px">Checking providers…</div>
+            <div class="grid cols-2" style="margin-top:9px">
+              <div><label>Live interval (seconds)</label><input type="number" id="shazamLiveInterval" min="15" max="300" value="25"></div>
+              <label class="switch" style="margin:20px 0 0"><input type="checkbox" id="shazamChatbox"> Post matches to chatbox</label>
+            </div>
+            <label class="switch"><input type="checkbox" id="shazamLive"> Live listening</label>
+            <div class="row" style="margin-top:10px"><button class="btn" id="shazamRecognize">Recognize now</button><button class="btn ghost" id="shazamStop">Stop audio share</button><button class="btn ghost" id="shazamDashboard">Get token</button></div>
+            <div class="section-note" id="shazamOut" style="margin-top:8px">Ready</div>
+            <div class="subcard" id="shazamHistory" style="margin-top:10px;max-height:145px;overflow:auto"><div class="section-note">No recognized songs yet.</div></div>
+          </div>
+          <div class="card">
+            <h3>Rusk Laserdome OSC <span class="pill off" id="ruskState">off</span></h3>
+            <div class="section-note">Native MIT-licensed compatibility for Laserdome 1/2 and related pickup parameters. It watches new VRChat log lines and sends avatar OSC parameters.</div>
+            <label style="margin-top:10px">VRChat log folder</label><input type="text" id="ruskLogDirectory" />
+            <label class="switch" style="margin-top:8px"><input type="checkbox" id="ruskScanExisting"> Scan the current log from the beginning</label>
+            <h4 style="margin:12px 0 7px">Parameters</h4>
+            <div class="grid cols-2" id="ruskFeatures">
+              <label class="switch"><input type="checkbox" data-rusk-feature="dead" checked> LD/Dead</label>
+              <label class="switch"><input type="checkbox" data-rusk-feature="team" checked> LD/Team</label>
+              <label class="switch"><input type="checkbox" data-rusk-feature="pistol" checked> IR/Pistol</label>
+              <label class="switch"><input type="checkbox" data-rusk-feature="fire" checked> IR/Fire</label>
+              <label class="switch"><input type="checkbox" data-rusk-feature="weld" checked> IR/Weld</label>
+              <label class="switch"><input type="checkbox" data-rusk-feature="duoRight" checked> Duo/Right</label>
+              <label class="switch"><input type="checkbox" data-rusk-feature="duoLeft" checked> Duo/Left</label>
+              <label class="switch"><input type="checkbox" data-rusk-feature="aviWeapon" checked> Avi/Weapon</label>
+              <label class="switch"><input type="checkbox" data-rusk-feature="uasrfWeapon" checked> UASRF/Weapon</label>
+            </div>
+            <div class="row" style="margin-top:10px"><button class="btn" id="ruskStart">Start</button><button class="btn ghost" id="ruskStop">Stop</button></div>
+            <div class="section-note" id="ruskOut" style="margin-top:8px">Enable VRChat debug logging before starting.</div>
+            <div class="subcard" style="margin-top:10px"><div id="ruskValues" class="section-note">Dead: false · Team: 0 · no pickups held</div></div>
+          </div>
+          <div class="card">
+            <h3>Twitch Interactive <span class="pill off" id="twitchInteractiveState">off</span></h3>
+            <div class="section-note">Native command and channel-reward support for Fooma's Twitch to VRChat Interaction System. Authorize Twitch on the OAuth Accounts page first; this keeps running while you use other pages.</div>
+            <div class="grid cols-2" style="margin-top:9px">
+              <div><label>Avatar integer parameter</label><input type="text" id="twitchInteractiveParameter" value="twitch" placeholder="twitch"></div>
+              <div><label>Reset pulse (ms)</label><input type="number" id="twitchInteractivePulse" min="100" max="10000" step="50" value="750"></div>
+            </div>
+            <label style="margin-top:9px">Command and reward mappings</label>
+            <textarea id="twitchInteractiveMappings" rows="7" spellcheck="false" placeholder="command | !bonk | 1&#10;reward | Throw Tomato | 2"></textarea>
+            <div class="section-note" style="margin-top:6px">Format: <code>command | !name | value</code> or <code>reward | exact title or reward ID | value</code>. Values 1–255 must match your purchased Unity setup; the parameter resets to 0 after each trigger.</div>
+            <div class="row" style="margin-top:10px"><button class="btn" id="twitchInteractiveStart">Start</button><button class="btn ghost" id="twitchInteractiveStop">Stop</button></div>
+            <div class="section-note" id="twitchInteractiveOut" style="margin-top:8px">Stopped</div>
+          </div>
+          <div class="card">
+            <h3>OSC Realistic Leash <span class="pill off" id="realLeashState">off</span></h3>
+            <div class="section-note">Native compatibility for YimuQr's BOOTH avatar system. Receives its avatar parameters and sends VRChat movement inputs; the paid product itself is not included.</div>
+            <label class="switch" style="margin-top:10px"><input type="checkbox" id="realLeashEnable"> Enable Realistic Leash input</label>
+            <div class="grid cols-2" style="margin-top:9px">
+              <div><label>Pull strength</label><input type="number" id="realLeashStrength" min="0.1" max="1" step="0.1" value="1"></div>
+              <label class="switch" style="margin:20px 0 0"><input type="checkbox" id="realLeashRun"> Run when pulled</label>
+            </div>
+            <label style="margin-top:9px">Unknown JumpQ action</label>
+            <select id="realLeashJumpQ"><option value="ignore">Ignore (recommended)</option><option value="jump">Jump only</option><option value="forward">Jump forward</option><option value="right">Jump right</option></select>
+            <div class="subcard" style="margin-top:10px">
+              <div class="section-note"><b>Directions:</b> MOF forward · MOB back · MOL left · MOR right · MOFL/MOFR/MOBL/MOBR diagonals · STOP releases movement.</div>
+              <div class="section-note" style="margin-top:6px"><b>Jump:</b> Jump = vertical jump · JumpS = jump back · JumpA = jump left. JumpQ stays ignored unless configured above.</div>
+            </div>
+            <div class="section-note" id="realLeashOut" style="margin-top:8px">Stopped</div>
+          </div>
+          <div class="card">
+            <h3>OSC Digital Clock <span class="pill off" id="oscClockState">off</span></h3>
+            <div class="section-note">Sends the five float parameters shown by the OSCClock avatar setup. Values use its original five-decimal <code>value / 127</code> encoding.</div>
+            <label class="switch" style="margin-top:10px"><input type="checkbox" id="oscClockEnable"> Send clock in the background</label>
+            <div class="grid cols-2" style="margin-top:9px">
+              <div><label>Update every (seconds)</label><input type="number" id="oscClockInterval" min="1" max="300" step="1" value="10"></div>
+              <label class="switch" style="margin:20px 0 0"><input type="checkbox" id="oscClockLegacyDow" checked> Also send legacy <code>DoWF</code></label>
+            </div>
+            <div class="subcard" style="margin-top:10px">
+              <div class="section-note"><code>OSCClock/MonthF</code> · <code>DayF</code> · <code>HourF</code> · <code>MinuteF</code> · <code>DOWF</code></div>
+              <div class="section-note" style="margin-top:6px">24-hour local time. Day of week is Sunday 0 through Saturday 6.</div>
+            </div>
+            <label class="switch" style="margin-top:10px"><input type="checkbox" id="oscClockVrcosc" checked> Send normalized <code>VRCOSC/Clock/Hours</code> and <code>Minutes</code></label>
+            <label class="switch"><input type="checkbox" id="oscClock24Hour"> Use 24-hour normalization (off matches VRCOSC's 12-hour default)</label>
+            <label class="switch"><input type="checkbox" id="oscClockDateTimeInts" checked> Send raw <code>DateTimeHour/Minute/Day/Month</code> integers</label>
+            <div class="row" style="margin-top:10px"><button class="btn ghost" id="oscClockSync">Sync now</button></div>
+            <div class="section-note" id="oscClockOut" style="margin-top:8px">Not sending</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VRCHAT TOOLS -->
+      <section id="vrctools" class="tabpanel">
+        <div class="card">
+          <h3>🧰 VRChat Tools</h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">External, file-based maintenance only — nothing here modifies or injects into VRChat.</div>
+          <div class="row">
+            <button class="btn" id="ytFix">▶️ YouTube fix (update yt-dlp)</button>
+          </div>
+          <div class="muted" id="ytFixOut" style="margin-top:6px;font-size:.78rem">Updates yt-dlp.exe in VRChat's Tools folder so world video players work.</div>
+          <div class="row" style="margin-top:12px">
+            <button class="btn ghost" id="cacheCheck">Check cache size</button>
+            <button class="btn danger" id="cacheClear">Clear cache</button>
+          </div>
+          <div class="muted" id="cacheOut" style="margin-top:6px;font-size:.78rem">—</div>
+          <label style="margin-top:12px">Open folder</label>
+          <div class="row" style="flex-wrap:wrap;gap:8px">
+            <button class="btn ghost" data-folder="data">VRChat data</button>
+            <button class="btn ghost" data-folder="cache">Cache</button>
+            <button class="btn ghost" data-folder="tools">Tools</button>
+            <button class="btn ghost" data-folder="photos">Photos</button>
+          </div>
+        </div>
+        <div class="card">
+          <h3>🎞️ VRCVideoCacher</h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Runs the standalone VRCVideoCacher proxy that caches world video URLs. External helper process — it does not modify VRChat. Install once, then Start before playing; Stop when done.</div>
+          <div class="row" style="flex-wrap:wrap;gap:8px">
+            <button class="btn" id="vvcInstall">⬇️ Install / Update</button>
+            <button class="btn ghost" id="vvcStart">▶️ Start</button>
+            <button class="btn danger" id="vvcStop">⏹️ Stop</button>
+          </div>
+          <div class="muted" id="vvcOut" style="margin-top:6px;font-size:.78rem">—</div>
+        </div>
+      </section>
+
+      <!-- FRIEND DEN -->
+      <section id="friendden" class="tabpanel">
+        <div class="card">
+          <h3>🫂 Friend Den <span class="pill" id="friendCount">0</span></h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">All your friends (online first), where they are, and the languages they speak 🏳️ — via the VRChat API. The count shows online / total friends on your account. Needs VRChat login (VRChat tab).</div>
+          <div class="row"><button class="btn" id="friendRefresh">Refresh</button><label class="switch" style="margin:0"><input type="checkbox" id="friendAuto" checked> Auto-refresh (60s)</label></div>
+          <div id="friendList" class="muted" style="margin-top:10px;max-height:460px;overflow:auto;font-size:.84rem">Not loaded.</div>
+        </div>
+      </section>
+
+      <!-- COMMUNITY RANKS (KitsuNexus OG ranks — Veteran / Legend) -->
+      <section id="ranks" class="tabpanel">
+        <div class="card">
+          <h3>🏅 KitsuNexus Community Ranks</h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:10px">An independent community reputation system that brings back the spirit of the retired VRChat <b>Veteran</b> &amp; <b>Legend</b> ranks. <b>Not affiliated with or endorsed by VRChat</b> — these are KitsuNexus Community Ranks. Off by default.</div>
+          <label class="switch" style="margin:4px 0"><input type="checkbox" id="ranksEnabled"> <b>Enable Community Ranks</b></label>
+          <label class="switch" style="margin:4px 0"><input type="checkbox" id="ranksOgMode"> Show the <b>OG tiers</b> (Veteran &amp; Legend) — turn the old ranks back on</label>
+          <div class="muted" style="font-size:.72rem;margin:2px 0 12px">With OG tiers off, the ladder still scores you but caps the visible rank at Trusted User.</div>
+          <div class="row"><button class="btn" id="ranksRefresh">Refresh my rank</button></div>
+          <div id="ranksCard" class="muted" style="margin-top:12px;font-size:.85rem">Enable the feature to compute your rank.</div>
+        </div>
+        <div class="card">
+          <h3>🏆 Leaderboard</h3>
+          <div class="muted" style="font-size:.72rem;margin-bottom:8px">Ranked KitsuNexus members by community score.</div>
+          <div id="ranksLeaderboard" class="muted" style="font-size:.84rem">—</div>
+        </div>
+      </section>
+
+      <!-- EVENT SCOUT -->
+      <section id="eventscout" class="tabpanel">
+        <div class="card">
+          <h3>🔭 Event Scout</h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Track upcoming events across multiple VRChat groups. Tick the groups to watch; events from all of them are merged below.</div>
+          <div class="row"><button class="btn" id="eventLoadGroups">Load my groups</button><button class="btn ghost" id="eventRefresh">Refresh events</button></div>
+          <div id="eventGroups" class="muted" style="margin-top:10px;font-size:.82rem">No groups loaded.</div>
+          <hr style="border:none;border-top:1px solid var(--border);margin:12px 0" />
+          <div id="eventList" class="muted" style="max-height:360px;overflow:auto;font-size:.84rem">No events.</div>
+        </div>
+      </section>
+
+      <!-- INVENTORY -->
+      <section id="inventory" class="tabpanel">
+        <div class="card">
+          <h3>🎒 Inventory</h3>
+          <div class="modal-tabs" style="padding:0 0 10px">
+            <button class="mtab active" data-inv="icon">Icons</button>
+            <button class="mtab" data-inv="emoji">Emoji</button>
+            <button class="mtab" data-inv="sticker">Stickers</button>
+            <button class="mtab" data-inv="prints">Prints</button>
+          </div>
+          <div id="invGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px">Log in on the VRChat tab.</div>
+        </div>
+      </section>
+
+      <!-- AVATARS BROWSE -->
+      <section id="avatars" class="tabpanel">
+        <div class="card">
+          <h3>🧍 Avatar Search <span class="muted" style="font-size:.72rem">(avtrdb + custom providers)</span></h3>
+          <div class="row">
+            <select id="avProvider" style="max-width:170px"></select>
+            <input type="text" id="avQuery" placeholder="Search avatars…" />
+            <button class="btn" id="avSearch">Search</button>
+          </div>
+          <label style="margin-top:8px">Add custom provider <span class="muted" style="font-size:.7rem">(URL with {query} and {page})</span></label>
+          <div class="row"><input type="text" id="avCustomUrl" placeholder="https://your-server/search/{query}?page={page}" /><button class="btn ghost" id="avAddProvider">Add</button></div>
+          <div id="avResults" style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px"><div class="muted">Search an avatar database. Click a result to view, wear, or favourite.</div></div>
+        </div>
+      </section>
+
+      <!-- FAVORITES -->
+      <section id="favorites" class="tabpanel">
+        <div class="card">
+          <h3>⭐ Favorites <span class="muted" style="font-size:.72rem">(official VRChat favorites + your Local Favorites)</span></h3>
+          <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
+            <div class="pill-group" id="favSourcePills">
+              <button class="pill-btn active" data-source="official">🦊 Official (VRChat)</button>
+              <button class="pill-btn" data-source="local">☆ Local Favorites</button>
+            </div>
+            <div class="pill-group" id="favTypePills">
+              <button class="pill-btn active" data-type="all">All</button>
+              <button class="pill-btn" data-type="friend">👤 Friends</button>
+              <button class="pill-btn" data-type="world">🌐 Worlds</button>
+              <button class="pill-btn" data-type="avatar">🧍 Avatars</button>
+              <button class="pill-btn" data-type="group">👥 Groups</button>
+            </div>
+          </div>
+          <div class="row" style="margin-top:10px;flex-wrap:wrap">
+            <input type="text" id="favSearchBox" placeholder="Filter by name…" style="max-width:220px" />
+            <input type="text" id="favCollectionFilter" placeholder="Collection (Local only)" style="max-width:170px;display:none" />
+            <button class="btn ghost" id="favPageRefresh">↻ Refresh</button>
+          </div>
+          <div class="fav-toolbar" id="favToolbar" style="display:none">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="favSelectAll" /> Select all</label>
+            <span class="muted grow" id="favSelectedCount">0 selected</span>
+            <button class="btn ghost" id="favBulkMoveCloud" style="padding:5px 12px;font-size:.75rem;display:none">☁ Move selected to Cloud</button>
+            <button class="btn ghost" id="favBulkRestore" style="padding:5px 12px;font-size:.75rem;display:none">🎮 Restore selected to VRChat</button>
+            <button class="btn danger" id="favBulkRemove" style="padding:5px 12px;font-size:.75rem">Remove selected</button>
+          </div>
+          <div id="favPageBody" class="muted" style="margin-top:8px">Loading…</div>
+        </div>
+        <div class="card">
+          <h3>➕ Add to Local Favorites by ID</h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Works for anyone — friend or not — and any world/avatar/group ID. Paste a VRChat ID (usr_…/wrld_…/avtr_…/grp_…).</div>
+          <div class="row">
+            <select id="favAddType" style="max-width:120px"><option value="friend">Friend/User</option><option value="world">World</option><option value="avatar">Avatar</option><option value="group">Group</option></select>
+            <input type="text" id="favAddId" placeholder="usr_… / wrld_… / avtr_… / grp_…" />
+            <input type="text" id="favAddNote" placeholder="Note (optional)" />
+            <button class="btn" id="favAddBtn">Add</button>
+          </div>
+          <div class="muted" id="favAddOut" style="margin-top:6px;font-size:.78rem"></div>
+        </div>
+      </section>
+
+      <!-- MESSENGER -->
+      <section id="messenger" class="tabpanel">
+        <div class="card">
+          <h3>✉️ Messenger <span class="muted" style="font-size:.72rem">(your invite / response message slots)</span></h3>
+          <select id="msgType">
+            <option value="message">Invite messages</option>
+            <option value="response">Invite responses</option>
+            <option value="request">Request invite</option>
+            <option value="requestResponse">Request responses</option>
+          </select>
+          <div id="msgList" class="muted" style="margin-top:10px">Log in on the VRChat tab.</div>
+        </div>
+      </section>
+
+      <!-- SEARCH -->
+      <section id="search" class="tabpanel">
+        <div class="card">
+          <h3>🔗 Open by ID / URL</h3>
+          <div class="row"><input type="text" id="idLoadInput" placeholder="usr_… / wrld_… / grp_… or a vrchat.com link" /><button class="btn" id="idLoadBtn">Open</button></div>
+          <div class="muted" id="idLoadOut" style="margin-top:6px;font-size:.78rem">Paste a VRChat ID or profile/world/group link.</div>
+        </div>
+        <div class="card">
+          <h3>🔍 Search</h3>
+          <div class="row">
+            <select id="searchType" style="max-width:150px"><option value="friends">My friends (instant)</option><option value="users">Users</option><option value="worlds">Worlds</option><option value="groups">Groups</option></select>
+            <input type="text" id="searchQuery" placeholder="Search…" />
+            <button class="btn" id="searchBtn">Search</button>
+          </div>
+          <div id="searchResults" class="muted" style="margin-top:12px">Type a query and search.</div>
+        </div>
+      </section>
+
+      <!-- NOTIFY -->
+      <section id="notify" class="tabpanel">
+        <div class="card">
+          <h3>🔔 Notifications <span class="muted" style="font-size:.72rem">(cached until you act / dismiss)</span></h3>
+          <div class="row"><button class="btn" id="notifRefreshPage">Refresh</button><button class="btn ghost" id="notifMarkReadPage">✓ Mark all read</button><button class="btn danger" id="notifClearAll">Clear all</button></div>
+          <div id="notifPageList" class="muted" style="margin-top:10px">No notifications.</div>
+        </div>
+      </section>
+
+      <!-- MEDIA LIBRARY -->
+      <section id="media" class="tabpanel">
+        <div class="card">
+          <h3>🖼 Media Library</h3>
+          <div class="row"><button class="btn" id="mediaRefresh">Refresh</button><button class="btn ghost" data-folder="photos">Open folder</button></div>
+          <div id="mediaGrid" style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">Loading…</div>
+        </div>
+      </section>
+
+      <!-- HISTORY -->
+      <section id="history" class="tabpanel">
+        <div class="card">
+          <h3>📜 History <span class="muted" style="font-size:.72rem">(saved locally to SQLite)</span></h3>
+          <div class="row">
+            <select id="histType" style="max-width:160px">
+              <option value="">All events</option>
+              <option value="join">Player joins</option>
+              <option value="leave">Player leaves</option>
+              <option value="friend_add">Friend added</option>
+              <option value="friend_remove">Friend removed</option>
+              <option value="world">World visits</option>
+              <option value="video">Videos</option>
+              <option value="portal">Portals</option>
+              <option value="name_change">Name changes</option>
+              <option value="alert">Alerts</option>
+              <option value="group">Group</option>
+            </select>
+            <button class="btn" id="histRefresh">Refresh</button>
+            <button class="btn ghost" id="histImport" title="Import history from an existing VRCX install">Import VRCX</button>
+            <button class="btn danger" id="histClear">Clear</button>
+          </div>
+          <div id="histHeatmap" style="margin:12px 0"></div>
+          <div id="histList" class="muted" style="margin-top:10px;max-height:520px;overflow:auto;font-size:.82rem">Loading…</div>
+        </div>
+      </section>
+
+      <!-- GROUPS -->
+      <section id="groups" class="tabpanel">
+        <div class="card">
+          <h3>👥 My Groups</h3>
+          <div class="row"><button class="btn" id="myGroupsRefresh">Refresh</button></div>
+          <div id="myGroupsList" class="muted" style="margin-top:10px">Log in on the VRChat tab.</div>
+        </div>
+      </section>
+
+      <!-- CONTENT -->
+      <section id="content" class="tabpanel">
+        <div class="card">
+          <h3>🌐 My Content</h3>
+          <div class="modal-tabs" style="padding:0 0 10px">
+            <button class="mtab active" data-ctab="worlds">Worlds</button>
+            <button class="mtab" data-ctab="avatars">Avatars</button>
+          </div>
+          <div id="myContentBody" class="muted">Log in on the VRChat tab.</div>
+        </div>
+      </section>
+
+      <!-- PAWPRINTS -->
+      <section id="pawprints" class="tabpanel">
+        <div class="card">
+          <h3>🐾 Pawprints</h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Time you've spent in each VRChat world (tracked locally from the log).</div>
+          <div class="row"><button class="btn" id="pawRefresh">Refresh</button><button class="btn danger" id="pawClear">Clear</button></div>
+          <div id="pawList" class="muted" style="margin-top:10px;max-height:460px;overflow:auto;font-size:.84rem">No data yet.</div>
+        </div>
+      </section>
+
+      <!-- TOOLS -->
+      <section id="tools" class="tabpanel">
+        <div class="card">
+          <h3>⏱ Stopwatch</h3>
+          <div class="stat-big" id="swDisplay" style="font-variant-numeric:tabular-nums">00:00:00.0</div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn" id="swStartStop">Start</button>
+            <button class="btn ghost" id="swReset">Reset</button>
+            <button class="btn ghost" id="swSend">Send to chatbox</button>
+          </div>
+          <label class="switch" style="margin-top:10px"><input type="checkbox" id="swLiveChatbox"> Live-update a chatbox line while running</label>
+          <div class="muted" id="swOut" style="margin-top:6px">Stopped</div>
+        </div>
+
+        <div class="card">
+          <h3>🧮 Calculator</h3>
+          <input type="text" id="calcInput" placeholder="e.g. (12 * 3) + sqrt(81) / 2" />
+          <div class="row" style="margin-top:8px">
+            <button class="btn" id="calcEval">=</button>
+            <button class="btn ghost" id="calcClear">Clear</button>
+            <button class="btn ghost" id="calcSend">Send to chatbox</button>
+          </div>
+          <div class="stat-big" id="calcResult" style="margin-top:8px">0</div>
+          <div class="muted" style="font-size:.72rem;margin-top:4px">Powered by mathjs — supports + - * / ^, sqrt(), sin(), %, parentheses, etc.</div>
+        </div>
+
+        <div class="card">
+          <h3>🎚 Param Lab <span class="muted" style="font-size:.72rem">(send any OSC avatar parameter)</span></h3>
+          <input type="text" id="paramAddr" placeholder="/avatar/parameters/MyParam" />
+          <div class="row" style="margin-top:8px">
+            <select id="paramType" style="max-width:110px"><option value="bool">Bool</option><option value="int">Int</option><option value="float">Float</option></select>
+            <input type="text" id="paramValue" placeholder="true / 1 / 0.5" />
+            <button class="btn" id="paramSend">Send</button>
+          </div>
+          <div class="muted" id="paramOut" style="margin-top:6px;font-size:.78rem"></div>
+        </div>
+
+        <div class="card">
+          <h3>📏 <span data-i18n="avatarScaling.title">Avatar Scaling</span> <span class="muted" style="font-size:.72rem" data-i18n="avatarScaling.subtitle">(VRChat's native OSC height scaling — works on any avatar)</span></h3>
+          <label class="switch"><input type="checkbox" id="avatarScalingEnable"> <span data-i18n="avatarScaling.enable">Enable avatar scaling</span></label>
+          <div class="row" style="margin-top:10px;align-items:center;gap:8px">
+            <label style="min-width:90px" data-i18n="avatarScaling.scaleLabel">Scale (m)</label>
+            <input type="range" id="avatarScalingSlider" min="0" max="1" step="0.001" value="0.333" style="flex:1" />
+            <input type="number" id="avatarScalingValue" min="0.01" max="10000" step="0.01" value="1.00" style="width:100px" />
+          </div>
+          <div class="row" style="margin-top:8px;flex-wrap:wrap;gap:14px">
+            <label class="switch" style="margin:0"><input type="checkbox" id="avatarScalingSafety"> <span data-i18n="avatarScaling.safety">Safety limits (0.1m–100m)</span></label>
+            <label class="switch" style="margin:0"><input type="checkbox" id="avatarScalingSaveWorlds"> <span data-i18n="avatarScaling.saveWorlds">Save scale between worlds</span></label>
+          </div>
+          <div class="row" style="margin-top:10px;align-items:center;gap:8px">
+            <label style="min-width:90px" data-i18n="avatarScaling.smoothing">Smoothing</label>
+            <input type="range" id="avatarScalingSmoothing" min="0" max="100" step="1" value="50" style="flex:1" />
+            <span id="avatarScalingSmoothingVal" class="muted" style="width:36px;text-align:right">50</span>
+          </div>
+          <div class="row" style="margin-top:10px;flex-wrap:wrap;gap:8px">
+            <button class="btn ghost" id="avatarScalingRecordUp" style="padding:4px 10px;font-size:.75rem"><span data-i18n="avatarScaling.recordUp">Record scale-up key</span>: <span id="avatarScalingKeyUp">none</span></button>
+            <button class="btn ghost" id="avatarScalingRecordDown" style="padding:4px 10px;font-size:.75rem"><span data-i18n="avatarScaling.recordDown">Record scale-down key</span>: <span id="avatarScalingKeyDown">none</span></button>
+          </div>
+          <div class="muted" style="font-size:.72rem;margin-top:6px" data-i18n="avatarScaling.hotkeyHint">Hotkeys work globally (even while VRChat has focus). If a key won't record, you can still use the slider above.</div>
+          <div class="muted" id="avatarScalingOut" style="margin-top:6px;font-size:.78rem" data-i18n="avatarScaling.off">Avatar scaling is off</div>
+        </div>
+
+        <div class="card">
+          <h3>🪧 ToN Tablet OSC <span class="muted" style="font-size:.72rem">(drive Terror Tablet / Gridring from ToN tracking)</span></h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Forwards the core ToN state (round type, terror, map, item, alive, started) to your avatar's <code>ToN_</code> params — drives both the Terror Tablet and Gridring. ToNSaveManager still drives the full terror-grid buffer. Needs the ToN connection on (Terrors tab).</div>
+          <label class="switch"><input type="checkbox" id="tonOscEnable"> Send ToN params to avatar</label>
+          <div class="row" style="margin-top:8px"><button class="btn" id="tonOscRefresh" style="padding:4px 10px;font-size:.75rem">Resend now</button><button class="btn ghost" id="tonOscRaw" style="padding:4px 10px;font-size:.75rem">Show raw WS</button></div>
+          <div id="tonOscOut" class="muted" style="margin-top:8px;font-size:.74rem;max-height:160px;overflow:auto;white-space:pre-wrap;font-family:Consolas,monospace"></div>
+        </div>
+
+        <div class="card">
+          <h3>💎 Emerald Sound System (rf_ESS)</h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Drive your <code>rf_ESS/</code> avatar params. The Float can follow your audio (AudioLink) and the bools are manual toggles.</div>
+          <label class="switch"><input type="checkbox" id="essAudio"> Audio-reactive <code>rf_ESS/Float</code> (follow AudioLink volume)</label>
+          <div class="row" style="margin-top:8px;align-items:center;gap:8px"><label style="min-width:90px">Float (manual)</label><input type="range" id="essFloat" min="0" max="1" step="0.01" value="0.5" style="flex:1" /><span id="essFloatVal" class="muted" style="width:36px;text-align:right">0.50</span></div>
+          <div class="row" style="margin-top:10px;flex-wrap:wrap;gap:6px">
+            <label class="switch" style="margin:0"><input type="checkbox" class="ess-bool" data-ess="Global"> Global</label>
+            <label class="switch" style="margin:0"><input type="checkbox" class="ess-bool" data-ess="Have"> Have</label>
+            <label class="switch" style="margin:0"><input type="checkbox" class="ess-bool" data-ess="Less"> Less</label>
+            <label class="switch" style="margin:0"><input type="checkbox" class="ess-bool" data-ess="Set"> Set</label>
+            <label class="switch" style="margin:0"><input type="checkbox" class="ess-bool" data-ess="Toggle"> Toggle</label>
+          </div>
+          <div id="essOut" class="muted" style="margin-top:6px;font-size:.74rem"></div>
+        </div>
+
+        <div class="card">
+          <h3>📸 Photo Relay <span class="muted" style="font-size:.72rem">(VRChat screenshots → Discord)</span></h3>
+          <label>Discord webhook URL</label>
+          <input type="password" id="photoWebhook" placeholder="https://discord.com/api/webhooks/..." autocomplete="off" />
+          <label class="switch" style="margin-top:8px"><input type="checkbox" id="photoRelayEnable"> Auto-send new VRChat photos</label>
+          <div class="muted" id="photoRelayOut" style="margin-top:6px;font-size:.78rem"></div>
+        </div>
+
+        <div class="card">
+          <h3>🏷️ Screenshot Metadata <span class="muted" style="font-size:.72rem">(VRCX-style world/instance/players)</span></h3>
+          <div class="muted" style="font-size:.78rem">
+            Embeds the world, instance, and the players who were with you into every new
+            VRChat screenshot (same format VRCX uses), so tools that read VRCX metadata can
+            read these too. The image itself is unaffected - only invisible metadata is added.
+          </div>
+          <label class="switch" style="margin-top:8px"><input type="checkbox" id="screenshotMetaEnable"> Add metadata to new screenshots</label>
+          <div class="muted" id="screenshotMetaOut" style="margin-top:6px;font-size:.78rem"></div>
+        </div>
+
+        <div class="card">
+          <h3>🔊 Soundpad <span class="pill off" id="soundpadState">—</span></h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Controls Leppsoft Soundpad via its Remote Control pipe. Soundpad must be running.</div>
+          <div class="row">
+            <input type="number" id="soundpadIndex" placeholder="sound #" value="1" min="1" style="max-width:120px" />
+            <button class="btn" id="soundpadPlay">Play</button>
+            <button class="btn ghost" id="soundpadStop">Stop</button>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <button class="btn ghost" id="soundpadPrev">⏮ Prev</button>
+            <button class="btn ghost" id="soundpadPause">⏯ Pause</button>
+            <button class="btn ghost" id="soundpadNext">⏭ Next</button>
+            <button class="btn ghost" id="soundpadRandom">🎲 Random</button>
+            <button class="btn ghost" id="soundpadRefresh">Load list</button>
+          </div>
+          <div id="soundpadList" class="muted" style="margin-top:8px;max-height:160px;overflow:auto;font-size:.8rem"></div>
+          <div class="muted" id="soundpadOut" style="margin-top:6px"></div>
+        </div>
+
+        <div class="card">
+          <h3>💤 Auto-AFK <span class="pill off" id="afkState">off</span></h3>
+          <label class="switch"><input type="checkbox" id="afkEnable"> Detect idle and announce AFK</label>
+          <div class="grid cols-2" style="margin-top:8px">
+            <div><label>Go AFK after (seconds idle)</label><input type="number" id="afkThreshold" value="120" min="10" /></div>
+            <label class="switch"><input type="checkbox" id="afkToChatbox" checked> Post AFK line to chatbox</label>
+          </div>
+          <label style="margin-top:8px">AFK message <span class="muted" style="font-size:.72rem">tokens: {mins} {time}</span></label>
+          <input type="text" id="afkMessage" placeholder="💤 AFK since {time} ({mins}m)" />
+          <label style="margin-top:8px">Back message</label>
+          <input type="text" id="afkBackMessage" placeholder="👋 Back!" />
+          <div class="muted" id="afkOut" style="margin-top:6px">Active</div>
+        </div>
+      </section>
+
+      <section id="settings" class="tabpanel">
+        <div class="card">
+          <h3>⚙️ OSC</h3>
+          <div class="grid cols-2">
+            <div><label>OSC Send Port (to VRChat)</label><input type="number" id="portInput" placeholder="9000" /></div>
+            <div><label>VRChat Receive Port</label><input type="number" id="receiverPortInput" placeholder="9001" /></div>
+          </div>
+          <label style="margin-top:10px">Extra OSC send targets <span class="muted" style="font-size:.72rem">(optional, one per line)</span></label>
+          <textarea id="extraOscTargets" rows="3" placeholder="127.0.0.1:9002"></textarea>
+          <div class="muted" id="extraOscTargetsOut" style="font-size:.75rem;margin-top:6px">For multiple VRChat clients, keep the first on 9000/9001 and add the second client's send-to-VRChat port here, for example 9002.</div>
+          <label style="margin-top:10px">Extra OSC receive ports <span class="muted" style="font-size:.72rem">(optional, one per line)</span></label>
+          <textarea id="extraOscReceivers" rows="2" placeholder="9003"></textarea>
+          <div class="muted" id="extraOscReceiversOut" style="font-size:.75rem;margin-top:6px">If a second VRChat client sends OSC back on 9003, add 9003 here so listeners such as KAT can hear it.</div>
+          <label class="switch" style="margin-top:12px"><input type="checkbox" id="enableReceive"> Enable VRChat OSC receive (needed for KAT auto-detect)</label>
+        </div>
+        <div class="card">
+          <h3>🎨 Theme</h3>
+          <label>Color theme</label>
+          <select id="themeSelect">
+            <option value="auto">Auto (seasonal — default Black &amp; Green, holidays override)</option>
+            <option value="blackgreen">Black &amp; Green (default)</option>
+            <option value="blackpurple">Black &amp; Purple</option>
+            <option value="blackpink">Black &amp; Pink</option>
+            <option value="blackcyan">Black &amp; Cyan</option>
+            <option value="blackgold">Black &amp; Gold</option>
+            <option value="midnight">Midnight (purple/cyan)</option>
+            <option value="dark">Dark (pink/cyan)</option>
+            <option value="neon">Neon</option>
+            <option value="pink">Pink</option>
+            <option value="green">Green</option>
+            <option value="rainbow">Rainbow (Pride)</option>
+            <option value="light">Light</option>
+          </select>
+          <div class="muted" style="font-size:.75rem;margin-top:6px">"Auto" defaults to Black &amp; Green. Halloween runs October 1–31; Christmas/Pride/Easter follow their seasonal dates. Event themes override even custom picks and your chosen colours return automatically when the event ends.</div>
+        </div>
+        <div class="card" id="boosterPanel">
+          <h3>Community Booster <span id="boosterBadge" class="booster-badge" hidden>Supporter</span></h3>
+          <p class="muted" style="font-size:.8rem">Optional LinkUp rewards change this app's appearance only. Every normal theme and VRChat/OSC feature stays available without boosting. No Discord bot token is needed.</p>
+          <div class="row" style="gap:8px;flex-wrap:wrap;margin:10px 0">
+            <button class="btn" id="boosterConnect">Connect LinkUp</button>
+            <button class="btn ghost" id="boosterDisconnect">Disconnect</button>
+            <button class="btn ghost" id="boosterRefresh">Refresh rewards</button>
+          </div>
+          <div class="muted" role="status" aria-live="polite" id="boosterStatus">Checking local LinkUp state…</div>
+          <div class="muted" id="boosterAuth" style="font-size:.8rem;margin-top:8px" hidden>
+            In your browser, enter code <b id="boosterCode"></b> on the LinkUp authorization page.
+          </div>
+          <div class="grid cols-2" style="margin-top:12px">
+            <label class="switch"><input type="checkbox" id="boosterAccent"> Glow · UI accent (2+ boosts)</label>
+            <label class="switch"><input type="checkbox" id="boosterBorder"> Glow · card borders (2+ boosts)</label>
+            <label class="switch"><input type="checkbox" id="boosterFrame"> Constellation · frame (5+ boosts)</label>
+          </div>
+          <label for="boosterDecoration" style="margin-top:10px">Nameplate and panel decoration</label>
+          <select id="boosterDecoration">
+            <option value="none">None</option>
+            <option value="nova">Nova · star details (3+ boosts)</option>
+            <option value="constellation">Constellation · star map (5+ boosts)</option>
+          </select>
+          <div class="booster-preview" id="boosterPreview" data-decoration="none">
+            <strong>KitsuNexus</strong> <span class="muted" id="boosterPreviewLevel">Base theme</span>
+            <div class="muted" style="font-size:.75rem">Cosmetics are local to this app. Your saved choices are kept if a boost ends.</div>
+          </div>
+          <p class="muted" style="font-size:.74rem">Spark (1 boost) adds a small badge, Glow (2) adds accents and borders, Nova (3–4) adds decorations, Constellation (5+) adds star styling and a frame. LinkUp must support verified desktop linking before any tier can be awarded.</p>
+        </div>
+        <div class="card">
+          <h3>🖼️ Background</h3>
+          <div class="row" style="flex-wrap:wrap;gap:6px;margin-bottom:12px">
+            <button class="btn ghost bg-type-btn active" data-src="none">None</button>
+            <button class="btn ghost bg-type-btn" data-src="preset">Preset</button>
+            <button class="btn ghost bg-type-btn" data-src="custom">Custom image</button>
+            <button class="btn ghost bg-type-btn" data-src="photo">VRChat photos</button>
+          </div>
+          <div id="bgPresetPanel" style="display:none">
+            <div class="bg-preset-grid" id="bgPresetGrid"></div>
+          </div>
+          <div id="bgCustomPanel" style="display:none">
+            <div class="row" style="margin-top:4px">
+              <button class="btn ghost" id="bgPickFile">Choose file…</button>
+              <span class="muted" id="bgCustomName" style="font-size:.8rem">No file selected.</span>
+            </div>
+          </div>
+          <div id="bgPhotoPanel" style="display:none">
+            <button class="btn ghost" id="bgLoadPhotos" style="margin-top:4px">Load VRChat photos</button>
+            <div class="bg-photo-grid" id="bgPhotoGrid"></div>
+          </div>
+          <div id="bgSliders" style="display:none;margin-top:14px">
+            <label>Dim <span id="bgOpacityVal" class="muted" style="font-size:.75rem">35%</span></label>
+            <input type="range" id="bgOpacity" min="5" max="85" value="35" />
+            <label style="margin-top:8px">Blur <span id="bgBlurVal" class="muted" style="font-size:.75rem">8px</span></label>
+            <input type="range" id="bgBlur" min="0" max="24" value="8" />
+            <div class="row" style="margin-top:10px">
+              <button class="btn danger" id="bgClear" style="padding:6px 12px;font-size:.82rem">Remove background</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>🌍 <span data-i18n="settingsLanguage.title">Language</span></h3>
+          <label data-i18n="settingsLanguage.label">App language</label>
+          <select id="languageSelect"></select>
+        </div>
+        <div class="card">
+          <h3>🚀 Startup</h3>
+          <div class="grid cols-2">
+            <label class="switch"><input type="checkbox" id="autoLaunch"> Launch on system login</label>
+            <label class="switch"><input type="checkbox" id="autoMinimized"> Start minimized to tray</label>
+          </div>
+          <label style="margin-top:10px">Auto-start these when the app opens</label>
+          <div class="grid cols-2" style="margin-top:6px">
+            <label class="switch"><input type="checkbox" id="autoDiscord"> 💜 Discord Rich Presence</label>
+            <label class="switch"><input type="checkbox" id="autoHeartrate"> ❤️ Heart rate</label>
+            <label class="switch"><input type="checkbox" id="autoStats"> 🖥 Component stats</label>
+            <label class="switch"><input type="checkbox" id="autoNet"> 🌐 Network stats</label>
+            <label class="switch"><input type="checkbox" id="autoWindow"> 🪟 Window activity</label>
+            <label class="switch"><input type="checkbox" id="autoTon"> 👻 Terrors of Nowhere</label>
+            <label class="switch"><input type="checkbox" id="autoTikTokFollowers"> TikTok followers</label>
+            <label class="switch"><input type="checkbox" id="autoTwitch"> 🟣 Twitch followers</label>
+            <label class="switch"><input type="checkbox" id="autoKick"> 🟢 Kick followers</label>
+          </div>
+          <div class="muted" style="font-size:.75rem; margin-top:6px">Saved tokens/IDs are reused — no need to press Connect each launch.</div>
+        </div>
+        <div class="card">
+          <h3>🚀 Configured Start</h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Launch companion apps (SlimeVR, VRCFaceTracking, …) with one click.</div>
+          <label>App paths (one per line)</label>
+          <textarea id="startApps" rows="3" placeholder="C:\Program Files\SlimeVR Server\SlimeVR.exe"></textarea>
+          <label class="switch" style="margin-top:8px"><input type="checkbox" id="startWithVrc"> Also launch VRChat</label>
+          <label class="switch" style="margin-top:8px"><input type="checkbox" id="autoRejoin"> Auto-rejoin VRChat if it crashes (relaunch last instance)</label>
+          <div class="row" style="margin-top:8px"><button class="btn" id="startLaunch">Launch now</button></div>
+          <div class="muted" id="startOut" style="margin-top:6px;font-size:.78rem"></div>
+        </div>
+        <div class="card">
+          <h3>🚫 Blocked &amp; Muted</h3>
+          <button class="btn" id="modRefresh">Refresh</button>
+          <div id="modList" class="muted" style="margin-top:8px">Log in on the VRChat tab.</div>
+        </div>
+        <div class="card">
+          <h3>💾 Backup &amp; data</h3>
+          <div class="row"><button class="btn" id="dataExport">Export data</button><button class="btn ghost" id="dataImport">Import data</button></div>
+          <div class="muted" id="dataOut" style="margin-top:6px;font-size:.78rem">Export settings + history to a JSON file (import after a reinstall).</div>
+          <div class="row" style="margin-top:8px"><button class="btn ghost" id="favExport">Export favorites</button><button class="btn ghost" id="favImport">Import favorites</button></div>
+          <div class="muted" id="favOut" style="margin-top:4px;font-size:.75rem">Backup your favorite worlds &amp; friends to JSON, or restore from a backup.</div>
+        </div>
+        <div class="card">
+          <h3>☆ Local Favorites</h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Independent of VRChat's own favorites — works for non-friends, supports notes, and is stored in its own file you can relocate (e.g. onto a synced drive).</div>
+          <div class="muted" id="localFavPath" style="font-size:.75rem;word-break:break-all;margin-bottom:6px">Loading path…</div>
+          <div class="row"><button class="btn ghost" id="localFavChoosePath">Change storage location…</button></div>
+          <div class="row" style="margin-top:8px"><button class="btn ghost" id="localFavExport">Export Local Favorites</button><button class="btn ghost" id="localFavImport">Import Local Favorites</button></div>
+          <div class="muted" id="localFavOut" style="margin-top:4px;font-size:.75rem"></div>
+        </div>
+        <div class="card">
+          <h3>☁ Cloud Sync <span class="muted" style="font-size:.72rem">(optional — self-hosted)</span></h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Sync your Local Favorites to a self-hosted <code>kitsunexus-server</code> so they follow you to other devices. Nothing is sent anywhere unless you connect below.</div>
+          <div id="cloudSyncDisconnected">
+            <div class="row"><input type="text" id="cloudSyncUrl" placeholder="https://your-server.example.com" value="https://kitsunexus.nekosunevr.co.uk" style="flex:1" /><button class="btn" id="cloudSyncConnect">Connect…</button></div>
+            <div class="muted" style="font-size:.75rem;margin-top:4px">Defaults to the official KitsuNexus server — clear this and enter your own URL if you're self-hosting.</div>
+          </div>
+          <div id="cloudSyncPairing" style="display:none;margin-top:10px">
+            <div class="muted" style="font-size:.8rem">Enter this code on your server's <code>/pair</code> page:</div>
+            <div id="cloudSyncCode" style="font-size:1.6rem;font-weight:800;letter-spacing:.2em;margin:6px 0"></div>
+            <div class="muted" id="cloudSyncPairOut" style="font-size:.78rem">Waiting…</div>
+          </div>
+          <div id="cloudSyncConnected" style="display:none">
+            <div class="row" style="justify-content:space-between;align-items:center">
+              <span class="muted" id="cloudSyncServerLabel" style="font-size:.8rem"></span>
+              <label class="switch"><input type="checkbox" id="cloudSyncEnabled" /> Sync favorites</label>
+            </div>
+            <div class="row" style="margin-top:8px"><button class="btn ghost" id="cloudSyncNowBtn">Sync favorites now</button><button class="btn danger" id="cloudSyncDisconnectBtn">Disconnect</button></div>
+            <div class="muted" id="cloudSyncStatusOut" style="margin-top:6px;font-size:.75rem"></div>
+            <hr style="border-color:var(--border);margin:12px 0" />
+            <div class="row" style="justify-content:space-between;align-items:center">
+              <span class="muted" style="font-size:.8rem">World visit history — separate opt-in</span>
+              <label class="switch"><input type="checkbox" id="cloudSyncHistoryEnabled" /> Sync history</label>
+            </div>
+            <div class="row" style="margin-top:8px"><button class="btn ghost" id="cloudSyncHistoryNowBtn">Sync history now</button></div>
+            <div class="muted" id="cloudSyncHistoryOut" style="margin-top:6px;font-size:.75rem"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>👋 Auto-Greeter</h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">Auto-accept incoming friend requests via the VRChat API (needs VRChat login). Polls every 60s.</div>
+          <label class="switch"><input type="checkbox" id="greeterEnable"> Auto-accept friend requests</label>
+          <label style="margin-top:8px">Who</label>
+          <select id="greeterMode"><option value="all">Everyone</option><option value="list">Allow-list only</option></select>
+          <label style="margin-top:8px">Allow-list <span class="muted" style="font-size:.72rem">(comma-separated usernames)</span></label>
+          <input type="text" id="greeterAllow" placeholder="name1, name2" />
+          <div class="muted" id="greeterOut" style="margin-top:6px;font-size:.78rem"></div>
+        </div>
+        <div class="card">
+          <h3>🌐 <span data-i18n="translator.title">Translator</span></h3>
+          <label data-i18n="translator.provider">Provider</label>
+          <select id="translatorProvider">
+            <option value="libretranslate">LibreTranslate (self-hosted / your own instance)</option>
+            <option value="deepl">DeepL</option>
+            <option value="google">Google Translate</option>
+          </select>
+          <div id="translatorEndpointRow" style="margin-top:8px">
+            <label data-i18n="translator.endpoint">Endpoint URL</label>
+            <input type="text" id="translatorEndpoint" placeholder="https://your-libretranslate-instance/translate" />
+          </div>
+          <div id="translatorKeyRow" style="margin-top:8px">
+            <label data-i18n="translator.apiKey">API key</label>
+            <input type="password" id="translatorApiKey" placeholder="key" />
+          </div>
+          <div id="translatorDeeplTypeRow" style="margin-top:8px">
+            <label data-i18n="translator.deeplType">DeepL account type</label>
+            <select id="translatorDeeplType"><option value="free">Free</option><option value="pro">Pro</option></select>
+          </div>
+          <div class="grid cols-2" style="margin-top:8px">
+            <div>
+              <label data-i18n="translator.sourceLang">Source language</label>
+              <select id="translatorSource"><option value="auto">Auto-detect</option></select>
+            </div>
+            <div>
+              <label data-i18n="translator.targetLang">Target language</label>
+              <select id="translatorTarget"></select>
+            </div>
+          </div>
+          <label class="switch" style="margin-top:8px"><input type="checkbox" id="translatorAiGrammarFix"> <span data-i18n="translator.aiGrammarFix">Fix grammar with AI first (uses the IntelliChat provider on the AI tab)</span></label>
+          <div class="muted" style="font-size:.75rem;margin-top:6px" data-i18n="translator.note">Used by the Live Typing chatbox translation option and anywhere else in the app that offers "Translate before sending."</div>
+        </div>
+      </section>
+
+      <!-- DOCS -->
+      <section id="docs" class="tabpanel">
+        <div class="card">
+          <h3>🚀 First-time setup</h3>
+          <ol class="muted" style="line-height:1.9; padding-left:18px">
+            <li>In VRChat: <b>Action Menu → Options → OSC → Enabled</b>.</li>
+            <li>In <b>Settings</b> tab: OSC send port <code>9000</code>, receive <code>9001</code> (defaults are fine).</li>
+            <li>Enable the sources you want, then open <b>Chatbox</b> and press <b>Start</b>.</li>
+          </ol>
+        </div>
+
+        <div class="card">
+          <h3>🎬 TikTok</h3>
+          <div class="muted" style="line-height:1.8">
+            <b>Followers without being live:</b> type the creator's <code>@username</code> and press <b>Track followers</b>. Reads the public profile, refreshes every 2 min.<br>
+            <b>Live (viewers + new follows):</b> press <b>Connect live</b> — the creator must be streaming.<br>
+            <b>SignatureError / 404?</b> TikTok requests are signed via <a href="https://www.eulerstream.com" target="_blank">Euler Stream</a>. Get a <b>free API key</b> there and paste it in the TikTok card.<br>
+            <b>"Unexpected server response: 200"</b> = the live event socket couldn't open (free signing tier). Follower tracking still works.
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔗 OAuth redirect URLs (one shared port)</h3>
+          <div class="muted" style="line-height:1.8">
+            KitsuNexus uses a single local port (<b>3737</b>) for all logins, namespaced by service. Register these in each developer portal:<br>
+            • <b>Twitch</b>: <code id="docsTwitchRedirect">http://localhost:3737/oauth2/twitch/callback</code><br>
+            • <b>Discord</b> (voice only): <code>http://localhost:3737/oauth2/discord/callback</code><br>
+            Nothing is exposed to the internet — these are loopback URLs the app listens on only during login.
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🟣 Twitch (OAuth2)</h3>
+          <div class="muted" style="line-height:1.8">
+            1. Create an app at <a href="https://dev.twitch.tv/console" target="_blank">dev.twitch.tv/console</a> and copy its Client ID.<br>
+            2. Add the Twitch redirect URL above to the app's <b>OAuth Redirect URLs</b>.<br>
+            3. Copy the <b>Client ID</b> into OAuth Accounts → Twitch. <b>Client Secret is optional</b> — leave it blank for a quick login, or add it to get auto-refreshing tokens.<br>
+            4. Press <b>🔑 Login with Twitch</b>, then approve follower, chat-read, and channel-reward permissions.<br>
+            5. Enter your <b>channel login</b> and press <b>Start</b>.
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🟢 Kick</h3>
+          <div class="muted" style="line-height:1.8">
+            Enter your channel slug (the part after <code>kick.com/</code>) and press Connect. No login needed.
+            If it shows <b>403 (Cloudflare)</b>, Kick is blocking the request — a browser fallback can be enabled (ask to wire it).
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>❤️ Pulsoid heart rate</h3>
+          <div class="muted" style="line-height:1.8">
+            Authorize Pulsoid from the Heart Rate page, then press Start monitoring. The line shows <code>bpm | avg | max | min</code>.
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🤖 IntelliChat AI</h3>
+          <div class="muted" style="line-height:1.8">
+            Pick a <b>Provider</b> on the <b>AI</b> tab. Any OpenAI-compatible gateway works:<br>
+            • <b>OpenAI</b> — key from <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a><br>
+            • <b>Ollama (local)</b> — run <code>ollama serve</code>, base <code>http://localhost:11434/v1</code>, no key<br>
+            • <b>LiteLLM</b> — point base URL at your gateway (e.g. <code>http://localhost:4000/v1</code>)<br>
+            • <b>xAI (Grok)</b>, <b>Google Gemini</b>, <b>Groq</b>, <b>OpenRouter</b>, <b>Anthropic</b> — pick the preset and paste that provider's key<br>
+            • <b>Custom</b> — any other compatible endpoint.
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>💜 Discord</h3>
+          <div class="muted" style="line-height:1.8">
+            <b>Rich Presence</b> (show VRChat status on your profile): create an app at
+            <a href="https://discord.com/developers/applications" target="_blank">discord.com/developers</a>,
+            paste its Application (Client) ID into the Discord card, and press <b>Connect</b> —
+            no secret, no redirect needed.<br><br>
+            <b>Voice detection</b> (channel name, speaking, mute/deafen) needs Discord's private
+            <code>rpc.voice.read</code> scope, which Discord only grants to <b>allowlisted apps</b>.
+            Unapproved apps get <code>invalid_scope</code> and the app falls back to Rich Presence.
+            To enable it you must apply for RPC access for your Discord application at
+            <a href="https://discord.com/developers/docs/topics/rpc" target="_blank">Discord's RPC docs</a>,
+            then add a Client Secret + the Discord redirect URL above. Once approved, the login is
+            remembered (no re-auth each launch).
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🖥 OBS overlay</h3>
+          <div class="muted" style="line-height:1.8">
+            Hosted by your KitsuNexus server, not this app — pair a device in Settings ▸ Cloud
+            Sync, then open the Overlay tab for your account's URL and add it as a Browser
+            Source in OBS. It updates automatically while KitsuNexus is running.
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔋 VR gear battery — does it work without VR?</h3>
+          <div class="muted" style="line-height:1.8">
+            <b>No.</b> VR battery reads your <b>SteamVR / OpenVR devices</b> (headset, controllers, trackers). With no VR headset and SteamVR not running there are no devices to report, so it stays <b>"unavailable"</b>. It is only useful while you're in VR with SteamVR running — desktop-only users can leave it off.
+          </div>
+        </div>
+      </section>
+
+      <!-- ABOUT -->
+      <section id="about" class="tabpanel">
+        <div class="card" style="text-align:center">
+          <img src="assets/logo.png" alt="KitsuNexus" style="width:92px;height:92px;border-radius:22px;object-fit:cover" />
+          <h2 style="margin:10px 0 2px">KitsuNexus</h2>
+          <div class="muted" id="aboutVersion" style="font-size:.82rem">version —</div>
+          <p class="muted" style="font-size:.86rem;max-width:560px;margin:10px auto 0">
+            A VRChat OSC companion — chatbox, status, social suite, component stats, heart rate,
+            AudioLink, Now Playing, Terrors of Nowhere tools, and more. Everything runs on your own
+            PC; nothing is collected.
+          </p>
+        </div>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3>👤 Created by NekoSuneVR</h3>
+            <p class="muted" style="font-size:.84rem">Designed, built and maintained by <b>NekoSuneVR</b>.</p>
+            <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px">
+              <button class="btn ghost" data-ext="https://github.com/NekoSuneVR">🐙 NekoSuneVR on GitHub</button>
+              <button class="btn ghost" data-ext="https://github.com/NekoSuneProjects/KitsuNexus">📦 Repository</button>
+              <button class="btn ghost" data-ext="https://github.com/NekoSuneProjects/KitsuNexus/releases">⬇ Releases</button>
+              <button class="btn ghost" data-ext="https://github.com/NekoSuneProjects/KitsuNexus/issues">🐞 Report an issue</button>
+              <button class="btn ghost" data-ext="https://discord.gg/vMW78yTG6s">💬 Discord — Support / Help / Suggestions</button>
+            </div>
+          </div>
+          <div class="card">
+            <h3>🔄 Updates</h3>
+            <div class="muted" id="aboutUpdate" style="font-size:.84rem">—</div>
+            <button class="btn" id="aboutCheckUpdate" style="margin-top:10px">Check for updates</button>
+          </div>
+          <div class="card">
+            <h3>🤝 Contributors &amp; collaborators</h3>
+            <div class="muted" style="font-size:.78rem;margin-bottom:6px">Auto-detected from the GitHub repository.</div>
+            <div id="aboutContributors" class="muted" style="font-size:.84rem">Loading…</div>
+          </div>
+          <div class="card">
+            <h3>💖 Supporters</h3>
+            <div class="muted" style="font-size:.78rem;margin-bottom:6px">Thank you to everyone supporting NekoSuneVR on Patreon &amp; Ko-fi.</div>
+            <div id="aboutSupporters" style="display:flex;flex-wrap:wrap;gap:8px">Loading…</div>
+            <div class="muted" style="font-size:.78rem;margin-top:12px">
+              You can support this project on Patreon or Ko-fi — every bit helps keep it going, and
+              honestly goes toward tea and crumpets and the occasional hardware upgrade. 💛
+            </div>
+            <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:10px">
+              <button class="btn ghost" data-ext="https://www.patreon.com/c/nekosunevr" style="padding:4px 10px;font-size:.78rem">🧡 Patreon</button>
+              <button class="btn ghost" data-ext="https://ko-fi.com/nekosunevr" style="padding:4px 10px;font-size:.78rem">☕ Ko-fi</button>
+            </div>
+            <div class="muted" style="font-size:.72rem;margin-top:8px">Already support and want your name here? Link your Discord at <button class="btn ghost" data-ext="https://linkup.nekosunevr.co.uk/" style="padding:1px 6px;font-size:.72rem">linkup.nekosunevr.co.uk</button> to show up in this list.</div>
+          </div>
+          <div class="card">
+            <h3>⚖️ License &amp; credits</h3>
+            <div class="muted" style="font-size:.84rem">
+              See <button class="btn ghost" data-ext="https://github.com/NekoSuneProjects/KitsuNexus/blob/main/LICENSE" style="padding:2px 8px;font-size:.74rem">LICENSE</button>.
+              Not affiliated with VRChat, Discord, or any third party. All trademarks belong to their owners.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- LOG -->
+      <section id="log" class="tabpanel">
+        <div class="card">
+          <h3>📜 OSC messages</h3>
+          <canvas id="oscGraph" height="180"></canvas>
+          <textarea id="oscLogText" rows="8" readonly style="margin-top:12px"></textarea>
+          <button class="btn danger" id="clearLog" style="margin-top:10px">Clear log</button>
+        </div>
+      </section>
+    </main>
+
+    <!-- Right friends panel -->
+    <aside class="rightbar" id="rightbar">
+      <div class="rb-profile">
+        <img id="rbAvatar" src="assets/vrchat.png" alt="" onerror="this.onerror=null;this.src='assets/vrchat.png'" />
+        <div class="meta" style="min-width:0">
+          <div class="nm" id="rbName">Not logged in</div>
+          <div class="muted" id="rbStatus" style="font-size:.74rem">VRChat tab → log in</div>
+        </div>
+      </div>
+      <div class="rb-card">
+        <div id="rbWorld" style="font-weight:600;font-size:.85rem">Not in a world</div>
+        <div class="muted" id="rbInstCount" style="font-size:.74rem;margin-top:2px">—</div>
+      </div>
+      <input type="text" id="rbSearch" class="rb-search" placeholder="Search friends..." />
+      <div id="rbFriends" class="muted" style="font-size:.82rem">Log in to see friends.</div>
+    </aside>
+  </div>
+
+  <!-- User profile modal -->
+  <div id="languagePickerModal" class="modal-overlay" style="display:none">
+    <div class="modal-card language-picker-card">
+      <h3 data-i18n="languagePicker.title">Choose your language</h3>
+      <p class="muted" data-i18n="languagePicker.subtitle">You can change this later in Settings.</p>
+      <select id="languagePickerSelect" style="margin-top:10px"></select>
+      <div class="row" style="margin-top:14px;justify-content:flex-end">
+        <button class="btn" id="languagePickerContinue" type="button" data-i18n="languagePicker.continue">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="userModal" class="modal-overlay" style="display:flex">
+    <div class="modal-card">
+      <button id="userModalClose" class="modal-close">×</button>
+      <div class="modal-banner" id="umBanner"></div>
+      <div class="modal-head">
+        <img id="umAvatar" class="modal-ava" src="assets/logo.png" referrerpolicy="no-referrer" alt="Profile picture" />
+        <div style="min-width:0;padding-bottom:6px">
+          <div class="modal-name" id="umName">Spooky Friend</div>
+          <div class="muted" id="umStatusDesc" style="font-size:.84rem">What a terrifying night!</div>
+          <div class="modal-tags" id="umTags"></div>
+        </div>
+      </div>
+      <div class="modal-actions um-actions-bar">
+        <button class="icon-btn" id="umFav" title="Official VRChat Favorite">⭐</button>
+        <button class="icon-btn" id="umLocalFav" title="Local Favorite — works even if you're not friends, and supports notes">☆</button>
+        <div class="um-more-wrap">
+          <button class="icon-btn" id="umMoreBtn" title="More actions">⋯</button>
+          <div class="um-more-menu" id="umMoreMenu" hidden>
+            <button id="umInvite">📨 Invite</button>
+            <button id="umRequestInvite">✉️ Request Invite</button>
+            <button id="umBoop">👉 Send Boop</button>
+            <div class="um-more-sep"></div>
+            <button id="umMute">🔇 Mute</button>
+            <button id="umBlock" class="danger">🚫 Block</button>
+            <div class="um-more-sep"></div>
+            <button id="umAddFriend">➕ Add Friend</button>
+          </div>
+        </div>
+      </div>
+      <div id="umActionOut" class="muted" style="padding:6px 20px 0;font-size:.78rem"></div>
+      <div class="modal-tabs">
+        <button class="mtab active" data-mtab="info">Info</button>
+        <button class="mtab" data-mtab="groups">Groups</button>
+        <button class="mtab" data-mtab="mutuals">Mutuals</button>
+        <button class="mtab" data-mtab="content">Content</button>
+        <button class="mtab" data-mtab="favs">Favs.</button>
+      </div>
+      <div class="modal-body" id="umTabBody"></div>
+    </div>
+  </div>
+
+  <!-- World / Group detail modal -->
+  <div id="detailModal" class="modal-overlay" style="display:none">
+    <div class="modal-card">
+      <button id="detailModalClose" class="modal-close">×</button>
+      <div class="modal-banner" id="dmBanner"></div>
+      <div class="modal-head">
+        <img id="dmImage" class="modal-ava" src="assets/logo.png" alt="" />
+        <div style="min-width:0;padding-bottom:6px">
+          <div class="modal-name" id="dmName">—</div>
+          <div class="muted" id="dmSub" style="font-size:.84rem"></div>
+        </div>
+      </div>
+      <div class="modal-actions" id="dmActions"></div>
+      <div class="modal-body" id="dmBody"></div>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <!-- Confirm (Yes/No) modal -->
+  <div id="confirmModal" class="modal-overlay" style="display:none">
+    <div class="modal-card" style="width:380px">
+      <div class="modal-body">
+        <div id="confirmText" style="font-size:.95rem">Are you sure?</div>
+        <div class="row" style="justify-content:flex-end;margin-top:16px;gap:8px">
+          <button class="btn ghost" id="confirmNo">No</button>
+          <button class="btn danger" id="confirmYes">Yes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Text prompt modal (Electron has no window.prompt) -->
+  <div id="promptModal" class="modal-overlay" style="display:none">
+    <div class="modal-card" style="width:380px">
+      <div class="modal-body">
+        <div id="promptText" style="font-size:.95rem;margin-bottom:10px">Enter a value</div>
+        <input type="text" id="promptInput" style="width:100%" />
+        <div class="row" style="justify-content:flex-end;margin-top:16px;gap:8px">
+          <button class="btn ghost" id="promptCancel">Cancel</button>
+          <button class="btn" id="promptOk">OK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Update available modal -->
+  <div id="updateModal" class="modal-overlay" style="display:none">
+    <div class="modal-card" style="width:440px">
+      <div class="modal-body">
+        <div style="font-weight:700;font-size:1.05rem;margin-bottom:6px">🎉 Update available</div>
+        <div id="updateText" class="muted" style="font-size:.9rem">A new version of KitsuNexus is available.</div>
+        <div id="updateNotes" style="display:none;max-height:220px;overflow:auto;font-size:.8rem;line-height:1.5;background:var(--panel2,#1a1a1a);padding:10px 12px;border-radius:8px;margin-top:8px"></div>
+        <div id="updateProgressWrap" style="display:none;margin-top:10px">
+          <div style="height:6px;border-radius:3px;background:var(--panel2,#1a1a1a);overflow:hidden"><div id="updateProgressBar" style="height:100%;width:0%;background:var(--accent,#7c5cff)"></div></div>
+          <div id="updateProgressText" class="muted" style="font-size:.75rem;margin-top:4px">Downloading…</div>
+        </div>
+        <div class="row" style="justify-content:flex-end;margin-top:16px;gap:8px">
+          <button class="btn ghost" id="updateLater">Remind me later</button>
+          <button class="btn" id="updateInstall">⬇ Download &amp; install</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Friend picker modal -->
+  <div id="pickerModal" class="modal-overlay" style="display:none">
+    <div class="modal-card" style="width:460px">
+      <button id="pickerClose" class="modal-close">×</button>
+      <div class="modal-body">
+        <div id="pickerTitle" style="font-weight:700;margin-bottom:8px">Invite friends</div>
+        <input type="text" id="pickerSearch" placeholder="Search friends…" />
+        <div id="pickerList" style="max-height:48vh;overflow:auto;margin-top:8px">Loading…</div>
+        <div class="row" style="justify-content:flex-end;margin-top:10px;gap:8px">
+          <button class="btn ghost" id="pickerCancel">Cancel</button>
+          <button class="btn" id="pickerConfirm">Invite selected</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FumikoEcho easter egg modal -->
+  <div id="fumikoModal" class="modal-overlay" style="display:none">
+    <div class="modal-card" style="max-width:480px;text-align:center">
+      <button id="fumikoClose" class="modal-close">×</button>
+      <div style="padding:28px 24px 24px">
+        <div style="font-size:2.2rem;margin-bottom:6px">🦊✨</div>
+        <div style="font-size:1.15rem;font-weight:800;color:var(--accent);margin-bottom:4px">FumikoEcho was here</div>
+        <div class="muted" style="font-size:.78rem;margin-bottom:18px">contact@fumikoecho.ca · github.com/FumikoEcho</div>
+        <div style="text-align:left;font-size:.82rem;line-height:1.7;border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--bg2)">
+          <div style="font-weight:700;margin-bottom:8px;color:var(--accent)">Contributions &amp; fixes</div>
+          <div>🔧 <b>Fixed sidebar layout</b> — no longer scrolls off-screen; sticky position</div>
+          <div>💬 <b>Added sidebar tooltips</b> — hover labels on all nav buttons</div>
+          <div>🖼️ <b>Added profile avatar</b> to sidebar from your VRChat account</div>
+          <div>📏 <b>Fixed squashed buttons</b> in constrained sidebar flex layout</div>
+          <div>🎨 <b>Fixed default theme</b> — replaced forced green with midnight</div>
+          <div>🎨 <b>Added 8-theme swatch picker</b> in Settings (midnight, dark, neon, pink, green, rainbow, light, seasonal)</div>
+          <div>👥 <b>Fixed Contributors tab</b> — shows all contributors with clickable links</div>
+          <div>📝 <b>Fixed bio preservation</b> — app no longer nukes your VRChat bio on update</div>
+          <div>🖼️ <b>Added userIcon field</b> — profile picture data flows through correctly</div>
+        </div>
+        <div class="muted" style="font-size:.72rem;margin-top:14px">You found the secret! ↑↑↓↓←→←→BA</div>
+      </div>
+    </div>
+  </div>
+
+  
+</body>
+</html>
