@@ -29,5 +29,8 @@ test('respects source preference, native playing sessions and native Spotify pau
   assert.equal(shouldTrySpotifyWindowFallback({ found: true, sourceAppId: 'firefox.exe', status: 'Playing', title: 'Video' }, 'Spotify.exe'), true)
   assert.equal(shouldTrySpotifyWindowFallback({ found: true, sourceAppId: 'firefox.exe', status: 'Paused', title: '' }, 'firefox.exe'), false)
   assert.equal(shouldTrySpotifyWindowFallback({ found: true, sourceAppId: 'Spotify.exe', status: 'Paused', title: 'Song' }, ''), false)
+  assert.equal(shouldTrySpotifyWindowFallback({ found: true, sourceAppId: 'Spotify.exe', status: 'Playing', title: 'Song' }, 'Spotify.exe'), false)
+  assert.equal(shouldTrySpotifyWindowFallback({ found: true, sourceAppId: 'Spotify.exe', status: 'Paused', title: '' }, 'Spotify.exe'), false)
+  assert.equal(shouldTrySpotifyWindowFallback({ found: true, sourceAppId: 'firefox.exe', status: 'Paused', title: 'Video', sessions: [{ appId: 'Spotify.exe', status: 'Paused' }] }, ''), false)
   assert.equal(shouldTrySpotifyWindowFallback({ found: true, sourceAppId: 'Spotify.exe', status: 'Playing', title: '' }, ''), true)
 })

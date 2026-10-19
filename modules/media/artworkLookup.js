@@ -3,6 +3,15 @@ const https = require('https')
 const cache = new Map()
 const cacheTtlMs = 30 * 60 * 1000
 const requestTimeoutMs = 3500
+const maxResponseBytes = 1024 * 1024
+const maxCacheEntries = 200
+
+function cacheArtwork (key, result) {
+  // Long-running sessions should not retain an unlimited number of tracks.
+  if (cache.has(key)) cache.delete(key)
+  cache.set(key, { cachedAt: Date.now(), result })
+  if (cache.size > maxCacheEntries) cache.delete(cache.keys().next().value)
+}
 
 function normalizeKeyPart (value) {
   return String(value || '')
@@ -34,6 +43,20 @@ function isCloseMatch (candidate, media) {
   )
 }
 
+function safeArtworkUrl (value, allowedRoot) {
+  try {
+    const url = new URL(String(value || ''))
+    const hostname = url.hostname.toLowerCase()
+    // Artwork URLs are sent to the renderer. Do not let a provider response
+    // turn a music search into a request to an arbitrary/local URL.
+    if (url.protocol !== 'https:' || url.username || url.password ||
+        (hostname !== allowedRoot && !hostname.endsWith(`.${allowedRoot}`))) return ''
+    return url.href
+  } catch {
+    return ''
+  }
+}
+
 function getJson (url) {
   return new Promise((resolve, reject) => {
     const request = https.get(url, {
@@ -47,9 +70,22 @@ function getJson (url) {
         return
       }
 
+      if (Number(response.headers['content-length']) > maxResponseBytes) {
+        response.destroy()
+        reject(new Error('Artwork response exceeds size limit'))
+        return
+      }
+
       let body = ''
+      let bytes = 0
       response.setEncoding('utf8')
       response.on('data', chunk => {
+        bytes += Buffer.byteLength(chunk, 'utf8')
+        if (bytes > maxResponseBytes) {
+          response.destroy()
+          reject(new Error('Artwork response exceeds size limit'))
+          return
+        }
         body += chunk
       })
       response.on('end', () => {
@@ -59,6 +95,8 @@ function getJson (url) {
           reject(error)
         }
       })
+      response.on('error', reject)
+      response.on('aborted', () => reject(new Error('Artwork response interrupted')))
     })
 
     request.setTimeout(requestTimeoutMs, () => {
@@ -70,7 +108,7 @@ function getJson (url) {
 
 function getBestItunesArtworkUrl (result) {
   const image = result.artworkUrl100 || result.artworkUrl60 || result.artworkUrl30 || ''
-  return image.replace(/\d+x\d+bb\.(jpg|png)$/i, '600x600bb.$1')
+  return safeArtworkUrl(image.replace(/\d+x\d+bb\.(jpg|png)$/i, '600x600bb.$1'), 'mzstatic.com')
 }
 
 async function lookupItunesArtwork (media) {
@@ -88,7 +126,7 @@ async function lookupItunesArtwork (media) {
   const result = (data.results || []).find(item => isCloseMatch({
     title: item.trackName,
     artist: item.artistName
-  }, media)) || data.results?.[0]
+  }, media))
 
   const image = result ? getBestItunesArtworkUrl(result) : ''
   if (!image) return null
@@ -117,9 +155,9 @@ async function lookupDeezerArtwork (media) {
   const result = (data.data || []).find(item => isCloseMatch({
     title: item.title,
     artist: item.artist?.name
-  }, media)) || data.data?.[0]
+  }, media))
 
-  const image = result?.album?.cover_xl || result?.album?.cover_big || result?.artist?.picture_xl || ''
+  const image = safeArtworkUrl(result?.album?.cover_xl || result?.album?.cover_big || result?.artist?.picture_xl || '', 'dzcdn.net')
   if (!image) return null
 
   return {
@@ -147,7 +185,7 @@ async function lookupArtwork (media) {
     try {
       const result = await lookup(media)
       if (result?.image) {
-        cache.set(cacheKey, { cachedAt: Date.now(), result })
+        cacheArtwork(cacheKey, result)
         return result
       }
     } catch {
@@ -155,7 +193,7 @@ async function lookupArtwork (media) {
     }
   }
 
-  cache.set(cacheKey, { cachedAt: Date.now(), result: null })
+  cacheArtwork(cacheKey, null)
   return null
 }
 

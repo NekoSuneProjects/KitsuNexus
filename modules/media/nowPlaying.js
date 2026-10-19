@@ -14,6 +14,7 @@ let stableMedia = null
 let stableMediaKey = ''
 let stableMediaSeenAt = 0
 let transientMisses = 0
+let requestGeneration = 0
 
 const MEDIA_SESSION_SCRIPT = [
   "$ErrorActionPreference = 'Stop'",
@@ -52,11 +53,11 @@ const MEDIA_SESSION_SCRIPT = [
   "if ($pref -ne '') {",
   '  foreach ($c in $sessions) { if (([string]$c.SourceAppUserModelId).ToLower().Contains($pref.ToLower())) { $session = $c; break } }',
   '}',
-  'if ($null -eq $session) {',
+  'if ($null -eq $session -and $pref -eq "") {',
   "  foreach ($c in $sessions) { try { if ($c.GetPlaybackInfo().PlaybackStatus.ToString() -eq 'Playing') { $session = $c; break } } catch {} }",
   '}',
-  'if ($null -eq $session) { try { $session = $manager.GetCurrentSession() } catch {} }',
-  'if ($null -eq $session -and $sessions.Count -gt 0) { $session = $sessions[0] }',
+  'if ($null -eq $session -and $pref -eq "") { try { $session = $manager.GetCurrentSession() } catch {} }',
+  'if ($null -eq $session -and $pref -eq "" -and $sessions.Count -gt 0) { $session = $sessions[0] }',
   'if ($null -eq $session) {',
   '  @{ found = $false; sessions = @($list) } | ConvertTo-Json -Compress -Depth 4',
   '  exit 0',
@@ -212,7 +213,7 @@ async function normalizeMedia (media) {
   return normalized
 }
 
-async function resolveNowPlayingResult (media) {
+async function resolveNowPlayingResult (media, generation) {
   // Some Spotify desktop versions do not expose a WinRT media session, even
   // while a song is playing. A valid native session always wins, including a
   // paused Spotify session (the window title cannot tell play from pause).
@@ -225,7 +226,7 @@ async function resolveNowPlayingResult (media) {
         ...spotify,
         found: true,
         sourceAppId: 'Spotify.exe',
-        status: 'Playing', // Window titles do not expose playback state; best effort.
+        status: 'Unknown', // Window titles cannot verify playing or paused state.
         detectionMethod: 'spotify-window-title',
         sessions: [...sessions.filter(s => !String(s?.appId || '').toLowerCase().includes('spotify')),
           { appId: 'Spotify.exe', status: 'Unknown' }],
@@ -234,6 +235,7 @@ async function resolveNowPlayingResult (media) {
     }
   }
   const normalized = await normalizeMedia(media)
+  if (generation !== requestGeneration) return null
   const mediaKey = getMediaKey(normalized)
 
   if (!mediaKey) {
@@ -278,6 +280,7 @@ function getNowPlaying () {
     return inFlight
   }
 
+  const generation = requestGeneration
   inFlight = new Promise(resolve => {
     execFile(
       'powershell.exe',
@@ -298,34 +301,39 @@ function getNowPlaying () {
         env: { ...process.env, NP_SOURCE: preferredSource || '' }
       },
       async (error, stdout, stderr) => {
+        if (generation !== requestGeneration) {
+          resolve(getNowPlaying())
+          return
+        }
+        let result
         if (error) {
           // Surface the real reason (timeout, WinRT load failure, Constrained
           // Language Mode, etc.) so the UI can show something actionable.
           const detail = (stderr || '').toString().trim().split(/\r?\n/)[0]
           const msg = error.killed ? 'Media detector timed out (slow PC or PowerShell blocked)'
             : (detail || error.message)
-          cachedResult = await resolveNowPlayingResult({
+          result = await resolveNowPlayingResult({
             found: false,
             error: msg
-          })
-          cachedAt = Date.now()
-          inFlight = null
-          resolve(cachedResult)
+          }, generation)
+        } else {
+          try {
+            result = await resolveNowPlayingResult(JSON.parse(stdout.trim() || '{}'), generation)
+          } catch (parseError) {
+            result = await resolveNowPlayingResult({
+              found: false,
+              error: parseError.message
+            }, generation)
+          }
+        }
+        if (generation !== requestGeneration) {
+          resolve(getNowPlaying())
           return
         }
-
-        try {
-          cachedResult = await resolveNowPlayingResult(JSON.parse(stdout.trim() || '{}'))
-        } catch (parseError) {
-          cachedResult = await resolveNowPlayingResult({
-            found: false,
-            error: parseError.message
-          })
-        }
-
+        cachedResult = result
         cachedAt = Date.now()
         inFlight = null
-        resolve(cachedResult)
+        resolve(result)
       }
     )
   })
@@ -337,8 +345,12 @@ function getNowPlaying () {
 function setPreferredSource (value) {
   const v = String(value || '').trim().toLowerCase()
   preferredSource = (v === 'auto') ? '' : v
+  requestGeneration++ // Ignore any previous in-flight detector result.
   cachedResult = null // re-query immediately with the new preference
   cachedAt = 0
+  inFlight = null
+  transientMisses = 0
+  clearStableMedia()
 }
 function getPreferredSource () { return preferredSource }
 // The media sources seen most recently (for the UI dropdown).

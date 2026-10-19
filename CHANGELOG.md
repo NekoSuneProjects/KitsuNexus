@@ -7,6 +7,17 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Now Playing source switching and playback-state accuracy.** Keep a manually
+  selected source from silently falling back to another native app, let valid
+  Spotify sessions override title-based detection, and discard old media polls
+  after the user switches sources. Title-only tracks now report unknown playback
+  state instead of claiming they are playing.
+
+- **Unbounded artwork lookup responses and incorrect covers.** Enforce a 1 MiB
+  response limit and a 200-entry cache limit for artwork services. Ignore unrelated
+  search results instead of displaying the first returned cover as a match, and
+  restrict remote artwork images to trusted HTTPS image hosts.
+
 - **Spotify songs disappearing from Now Playing while Spotify is still playing.**
   Some desktop builds expose the track in Spotify's window title but stop publishing
   a Windows media session. When no usable Windows session is playing, Now Playing

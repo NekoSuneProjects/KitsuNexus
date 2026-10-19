@@ -25,9 +25,15 @@ function shouldTrySpotifyWindowFallback (media, preferredSource) {
   const preference = String(preferredSource || '').toLowerCase()
   const nativeSource = String(media?.sourceAppId || '').toLowerCase()
   if (preference && !preference.includes('spotify')) return false
-  // A paused native Spotify session is authoritative: its window title may
-  // still contain the last song even though playback has stopped.
-  if (nativeSource.includes('spotify') && (media?.title || media?.status !== 'Playing')) return false
+  // A valid Spotify session is authoritative, even if Spotify was explicitly
+  // selected. Window titles cannot prove whether a track is actually playing.
+  if (nativeSource.includes('spotify') && media?.found &&
+      (media.title || media.status !== 'Playing')) return false
+  // Spotify may be listed but not selected. Never present its stale window
+  // title as playing if Windows reports that the Spotify session is paused.
+  const sessions = Array.isArray(media?.sessions) ? media.sessions : (media?.sessions ? [media.sessions] : [])
+  if (sessions.some(s => String(s?.appId || '').toLowerCase().includes('spotify') &&
+      ['Paused', 'Stopped', 'Closed'].includes(s?.status))) return false
   if (preference.includes('spotify')) return true
   return !(media?.found && media?.title && media?.status === 'Playing')
 }

@@ -2,6 +2,12 @@
 
 ## Now Playing
 - [x] Detect Spotify songs from its desktop window title when Windows media sessions disappear, while retaining native session priority and reporting fallback limitations.
+- [x] Keep manually selected media sources authoritative and ignore results from older polls after source switching.
+- [x] Avoid claiming Spotify is actively playing when window-title fallback cannot verify playback.
+- [x] Limit remote artwork response and cache memory usage; reject unrelated search results and unsafe artwork URLs.
+
+## Security
+- [ ] Replace the legacy Node-enabled Electron renderer with an isolated preload API and finish auditing untrusted HTML/attribute interpolation. This needs a coordinated migration because the renderer currently imports many Node modules directly.
 
 ## CI/CD
 - [x] Fix Linux ARM64 packaging rebuilding x64 native modules by letting each matrix job select one architecture.

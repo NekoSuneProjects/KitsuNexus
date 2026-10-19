@@ -493,7 +493,7 @@ const MEDIA_BAR_STYLES = {
 
 function buildSong (m) {
   if (!m || !m.found || !m.title) return ''
-  if (m.status && m.status !== 'Playing') return ''
+  if (m.status && m.status !== 'Playing' && m.detectionMethod !== 'spotify-window-title') return ''
   return [m.artist, m.title].filter(Boolean).join(' - ')
 }
 function formatMediaTime (ms) {
