@@ -1,5 +1,9 @@
 # KitsuNexus — TODO / Roadmap
 
+## UI layout
+- [x] Prevent Heart Rate panels, OSC outputs, and Community Booster option cards from overflowing the center pane at reduced widths.
+- [ ] Review Avatar Locker's fixed minimum grid widths for the same narrow-center-pane issue.
+
 ## Now Playing
 - [x] Detect Spotify songs from its desktop window title when Windows media sessions disappear, while retaining native session priority and reporting fallback limitations.
 - [x] Keep manually selected media sources authoritative and ignore results from older polls after source switching.

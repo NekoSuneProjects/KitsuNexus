@@ -5,6 +5,14 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Fixed
+
+- **Heart Rate and Community Booster cards overflowing the app pane.** The Heart Rate
+  layout used fixed minimum column widths that extended beyond the main card when
+  the right sidebar reduced the available space. Heart Rate panels and their OSC
+  options now wrap to fit the center pane; Community Booster option tiles do the
+  same, and the main grid can shrink without pushing cards off screen.
+
 ## [1.0.79] - 2026-10-19
 
 This release improves Spotify Now Playing detection, source selection, and artwork lookup safety, and corrects Linux ARM64 packaging.

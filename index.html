@@ -79,8 +79,8 @@
       background: radial-gradient(1200px 600px at 0% 0%, var(--bg2), var(--bg) 60%);
       color: var(--text); height: 100%; overflow: hidden; transition: background .3s, color .3s;
     }
-    .app { display: grid; grid-template-columns: 190px 1fr 280px; height: 100vh; }
-    @media (max-width: 900px){ .app { grid-template-columns: 190px 1fr; } .rightbar { display:none !important; } }
+    .app { display: grid; grid-template-columns: 190px minmax(0,1fr) 280px; height: 100vh; }
+    @media (max-width: 900px){ .app { grid-template-columns: 190px minmax(0,1fr); } .rightbar { display:none !important; } }
 
     /* Right friends panel (VRChat) */
     .rightbar { background:var(--bg2); border-left:1px solid var(--border); padding:14px 12px; display:flex; flex-direction:column; gap:10px; overflow-y:auto; }
@@ -224,7 +224,7 @@
     .toast b { color:var(--accent2); }
 
     /* Main */
-    .main { padding: 22px 26px; overflow:auto; }
+    .main { min-width:0; padding: 22px 26px; overflow:auto; }
     .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
     .topbar h2 { margin:0; font-size:1.4rem; font-weight:800; }
     select, input[type="text"], input[type="number"], input[type="password"], textarea {
@@ -241,7 +241,11 @@
     .metric-tile { background:var(--panel2); border:1px solid var(--border); border-radius:12px; padding:12px; min-width:0; }
     .metric-tile small { display:block; color:var(--muted); font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; }
     .metric-tile b { display:block; margin-top:5px; font-size:1.35rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .hr-layout { display:grid; grid-template-columns:minmax(320px,.85fr) minmax(380px,1.15fr); gap:16px; align-items:start; }
+    /* Let heart-rate panels stack when the center pane is narrower than two cards. */
+    .hr-layout { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr)); gap:16px; align-items:start; }
+    .hr-layout > *, .hr-layout .subcard { min-width:0; }
+    .hr-layout .muted, .hr-layout .section-note { overflow-wrap:anywhere; }
+    #heartrate .row { flex-wrap:wrap; }
     .hr-device-grid { display:grid; grid-template-columns:minmax(0,1fr) 145px; gap:10px; align-items:end; }
     .locker-layout { display:grid; grid-template-columns:minmax(280px,.8fr) minmax(380px,1.2fr); gap:16px; align-items:start; }
     .locker-list { display:flex; flex-direction:column; gap:8px; max-height:430px; overflow:auto; }
@@ -253,7 +257,10 @@
     .grid { display:grid; gap:14px; }
     .grid.cols-2 { grid-template-columns:1fr 1fr; }
     .grid.cols-3 { grid-template-columns:repeat(3,1fr); }
-    @media (max-width: 820px){ .grid.cols-2,.grid.cols-3,.hr-layout,.locker-layout { grid-template-columns:1fr; } .app{ grid-template-columns:64px 1fr; } .brand h1,.navbtn .lbl,.navlabel{display:none;} .sidebar{ padding:12px 0; align-items:center; } .navbtn{ justify-content:center; width:48px; padding:0; } }
+    /* Form cards should respond to the pane width, not just the window width. */
+    #heartrate .grid.cols-2, #boosterPanel .grid.cols-2 { grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); }
+    #heartrate .grid > *, #boosterPanel .grid > * { min-width:0; overflow-wrap:anywhere; }
+    @media (max-width: 820px){ .grid.cols-2,.grid.cols-3,.hr-layout,.locker-layout { grid-template-columns:1fr; } .app{ grid-template-columns:64px minmax(0,1fr); } .brand h1,.navbtn .lbl,.navlabel{display:none;} .sidebar{ padding:12px 0; align-items:center; } .navbtn{ justify-content:center; width:48px; padding:0; } }
     @media (max-width: 620px){ .metric-row,.hr-device-grid { grid-template-columns:1fr; } }
     .btn { border:none; border-radius:10px; padding:9px 14px; font-weight:600; cursor:pointer; color:#fff; background:linear-gradient(135deg,var(--accent),var(--accent2)); transition:.15s; }
     .btn:hover { filter:brightness(1.1); }
