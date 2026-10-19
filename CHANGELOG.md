@@ -5,6 +5,14 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+
+- **Manual release builds create missing tags automatically.** The workflow
+  accepts `vX.Y.Z` or `X.Y.Z`, checks whether the tag exists, and creates it
+  at the selected branch commit when absent before any platform checkout.
+  Existing tags are reused. Installer version metadata is stamped from the
+  requested release version in CI, without changing the repository version.
+
 ### Fixed
 
 - **Manual release checkout failed for v1.0.78.** The release tag existed only
