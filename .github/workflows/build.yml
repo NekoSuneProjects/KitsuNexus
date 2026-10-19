@@ -1,42 +1,69 @@
 name: Build KitsuNexus
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
+    inputs:
+      runner_type:
+        description: 'Runner pool (self-hosted Windows builds need a Windows runner)'
+        type: choice
+        required: true
+        default: github-hosted
+        options:
+          - github-hosted
+          - self-hosted
+      build_target:
+        description: 'Platforms to build (Linux-only avoids requiring a Windows runner)'
+        type: choice
+        required: true
+        default: all
+        options:
+          - all
+          - windows
+          - linux
+          - linux-x64
+          - linux-arm64
+      upload_artifacts:
+        description: 'Keep build downloads in Actions for 1 day (automatic for releases)'
+        type: boolean
+        required: true
+        default: false
+      publish_release:
+        description: 'Publish the installers to a GitHub Release and notify Discord'
+        type: boolean
+        required: true
+        default: false
+      release_tag:
+        description: 'Existing release tag to build (e.g. v1.0.78); required when publishing'
+        type: string
+        required: false
+        default: ''
 
-# softprops/action-gh-release needs write access to create the release + upload assets.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
-    name: Build (${{ matrix.artifact }})
-    # Windows has no self-hosted box yet, so it always runs on GitHub-hosted
-    # windows-latest. Both Linux legs (x64 and arm64) run on the same
-    # self-hosted Linux server - it cross-builds both arches itself, so
-    # there's no separate arm64 machine to detect.
-    runs-on: ${{ matrix.runner }}
+    name: Build (${{ matrix.platform }})
+    # GitHub-hosted jobs use native Windows/x64, Linux/x64 and Linux/ARM64.
+    # Self-hosted Windows requires a registered Windows runner; neko-build
+    # cross-builds both Linux architectures, as in the previous workflow.
+    runs-on: ${{ inputs.runner_type == 'self-hosted' && fromJSON(matrix.platform == 'windows' && '["self-hosted","Windows","X64"]' || '["self-hosted","Linux","neko-build"]') || (matrix.platform == 'windows' && 'windows-latest' || matrix.platform == 'linux-arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04') }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - artifact: windows
-            os_family: windows
-            arch: x64
-            runner: windows-latest
-          - artifact: linux-x64
-            os_family: linux
-            arch: x64
-            runner: [self-hosted, neko-build]
-          - artifact: linux-arm64
-            os_family: linux
-            arch: arm64
-            runner: [self-hosted, neko-build]
+        platform: ${{ fromJSON(inputs.build_target == 'all' && '["windows","linux-x64","linux-arm64"]' || inputs.build_target == 'linux' && '["linux-x64","linux-arm64"]' || format('["{0}"]', inputs.build_target)) }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+
+      - name: Verify release version before publishing
+        if: ${{ inputs.publish_release }}
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: node -e "const tag = process.env.RELEASE_TAG; const version = require('./package.json').version; if (tag !== 'v' + version) { console.error('Publish requires an existing v' + version + ' tag matching package.json'); process.exit(1) }"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -48,7 +75,7 @@ jobs:
       # On self-hosted runners these are usually pre-installed; apt-get is a
       # cheap no-op if so.
       - name: Install Linux build deps
-        if: matrix.os_family == 'linux'
+        if: startsWith(matrix.platform, 'linux')
         run: sudo apt-get update && sudo apt-get install -y rpm fakeroot dpkg libudev-dev
 
       # onnxruntime-node (pulled in by @huggingface/transformers for local Whisper STT) tries
@@ -60,17 +87,6 @@ jobs:
         env:
           ONNXRUNTIME_NODE_INSTALL: skip
 
-      # OPTIONAL self-hosted-only patch. runner.environment is 'self-hosted' on
-      # the Linux legs (both run on our own box) and 'github-hosted' on the
-      # windows-latest leg, which skips this step. Put the global sed
-      # substitution here.
-      - name: Self-hosted patch (sed global)
-        if: runner.environment == 'self-hosted'
-        run: |
-          echo "Running on self-hosted runner - applying patch."
-          # TODO: replace with your actual global sed, e.g.:
-          # sed -i 's|OLD|NEW|g' path/to/file
-
       # Builds the standalone update helper (updater/) for this OS and
       # normalizes its output to a fixed, predictable path/name so the main
       # app's extraFiles/extraResources config (package.json) doesn't need
@@ -80,7 +96,7 @@ jobs:
         run: npm install
 
       - name: Build updater helper (Windows)
-        if: matrix.os_family == 'windows'
+        if: matrix.platform == 'windows'
         working-directory: updater
         run: |
           npx electron-builder --win --publish never
@@ -88,52 +104,56 @@ jobs:
         shell: pwsh
 
       - name: Build updater helper (Linux)
-        if: matrix.os_family == 'linux'
+        if: startsWith(matrix.platform, 'linux')
         working-directory: updater
         run: |
-          npx electron-builder --linux dir --${{ matrix.arch }} --publish never
+          npx electron-builder --linux dir --${{ matrix.platform == 'linux-arm64' && 'arm64' || 'x64' }} --publish never
           BIN_DIR=$(find dist -maxdepth 1 -iname '*-unpacked' | head -1)
           rm -rf linux-unpacked
           cp -R "$BIN_DIR" linux-unpacked
 
       - name: Build app (Windows)
-        if: matrix.os_family == 'windows'
+        if: matrix.platform == 'windows'
         run: npx electron-builder --win --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build app (Linux)
-        if: matrix.os_family == 'linux'
-        run: npx electron-builder --linux --${{ matrix.arch }} --publish never
+        if: startsWith(matrix.platform, 'linux')
+        run: npx electron-builder --linux --${{ matrix.platform == 'linux-arm64' && 'arm64' || 'x64' }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload artifacts
+        if: ${{ inputs.publish_release || inputs.upload_artifacts }}
         uses: actions/upload-artifact@v4
         with:
-          name: KitsuNexus-${{ matrix.artifact }}
-          retention-days: 14
+          name: KitsuNexus-${{ matrix.platform }}
+          retention-days: 1
           path: |
             dist/*.exe
             dist/*.msi
             dist/*.zip
             dist/*.AppImage
             dist/*.deb
-          if-no-files-found: ignore
+            dist/*.tar.gz
+          if-no-files-found: error
 
   release:
     name: Publish release
     needs: [build]
-    # Publish on ANY tag (v1.0.7 or 1.0.7). !cancelled() lets the release run and
-    # attach whatever built even if one OS/arch leg failed.
-    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/') }}
-    # Same self-hosted Linux box used for the build legs. NOTE: this job
-    # relies on gh, jq, curl and awk - make sure they're installed there, or
-    # the VirusTotal/Discord/changelog steps will fail.
-    runs-on: [self-hosted, neko-lite]
+    permissions:
+      contents: write
+    # Publishing is a separate manual choice. An existing tag is mandatory.
+    if: ${{ inputs.publish_release }}
+    runs-on: ${{ inputs.runner_type == 'self-hosted' && fromJSON('["self-hosted", "Linux", "neko-lite"]') || 'ubuntu-24.04' }}
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -200,7 +220,7 @@ jobs:
 
       - name: Build release notes from CHANGELOG
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${RELEASE_TAG#v}"
           echo "Extracting CHANGELOG notes for $VERSION"
           # Pull the section for this version (everything between its ## [x.y.z] header
           # and the next ## [ header) — gives the What's Added / Changed / Fixed lists.
@@ -222,6 +242,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.release_tag }}
           files: artifacts/**/*
           body_path: NOTES.md
           generate_release_notes: true
@@ -243,8 +264,8 @@ jobs:
             exit 0
           fi
 
-          VERSION="${GITHUB_REF_NAME#v}"
-          RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}"
+          VERSION="${RELEASE_TAG#v}"
+          RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}"
           ICON_URL="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/assets/logo.png"
 
           # Release notes body, trimmed to fit under Discord's 4096-char embed description limit
@@ -270,7 +291,7 @@ jobs:
               *)                  continue ;;
             esac
             DOWNLOADS="${DOWNLOADS}[${label}](${url})"$'\n'
-          done < <(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | [.name, .url] | @tsv')
+          done < <(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | [.name, .url] | @tsv')
 
           if [ -z "$DOWNLOADS" ]; then DOWNLOADS="_No build assets were attached to this release._"; fi
 

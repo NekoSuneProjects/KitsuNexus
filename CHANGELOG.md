@@ -5,6 +5,15 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Changed
+
+- **GitHub Actions builds are now started manually with a runner choice.** Choose
+  GitHub-hosted or self-hosted runners and Windows/Linux targets for desktop builds.
+  Installer releases require an explicit publish selection and a matching existing
+  version tag; temporary build artifacts are retained for one day only when requested
+  or needed to publish. Docker builds likewise run manually, selecting either runner
+  pool and optionally publishing multi-architecture images to GHCR.
+
 ## [1.0.78] - 2026-10-19
 
 This release includes the Windows updater reliability fixes and the optional Community Booster theme integration. The standalone updater is now version 1.0.4.

@@ -1,5 +1,10 @@
 # KitsuNexus — TODO / Roadmap
 
+## CI/CD
+- [x] Switch desktop and Docker workflows to manual dispatch with a GitHub-hosted / self-hosted runner choice and optional publishing.
+- [x] Support targeted desktop builds to avoid waiting for an unregistered self-hosted Windows runner.
+- [x] Keep build-only runs free of GitHub Actions artifact uploads / GHCR pushes by default.
+
 ## Updater
 - [x] Store the standalone Windows updater under `%LOCALAPPDATA%\KitsuNexus-updater\Update.exe`, refresh by MD5 and recover from locked helper executables.
 - [x] Pass a shared ready/ack directory to the updater to avoid first-run timeouts caused by different TEMP locations.

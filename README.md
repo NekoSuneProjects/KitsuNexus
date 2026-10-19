@@ -233,9 +233,20 @@ npx electron-builder --linux   # AppImage + deb
 npx electron-builder --mac     # dmg + zip (run on macOS)
 ```
 
-CI builds all three OSes on every push via
-[`.github/workflows/build.yml`](.github/workflows/build.yml). Pushing a `vX.Y.Z` tag also
-publishes a GitHub Release with the installers attached. The app ships **no native
+Builds are manual under **GitHub Actions -> Build KitsuNexus -> Run workflow**.
+Select **GitHub-hosted** or **self-hosted** runners and which platform(s) to build
+(Windows, Linux x64, Linux ARM64, or all). The self-hosted Windows option needs a
+registered Windows runner; the `neko-build` Linux runner handles Linux builds.
+The default build keeps no Actions artifacts. Select **Upload artifacts** to keep
+downloadable builds for one day. To publish installers directly to a GitHub Release,
+select **Publish release** and enter an existing tag matching the app's version
+(such as `v1.0.78`); the workflow temporarily uses one-day Actions artifacts to
+pass installers between jobs. Commits and tags never start builds automatically.
+
+The backend has a separate **Build KitsuNexus Server Docker** workflow in Actions.
+Choose either runner pool and optionally **Publish image** to push `latest` and
+`sha-<server commit>` multi-architecture images to GHCR. Build-only runs publish
+no package or Actions cache. The app ships **no native
 node-gyp modules**, so Windows/macOS/Linux all build without a C++/Python toolchain
 (window-activity uses the OS's own CLI: PowerShell / `osascript` / `xdotool`).
 
