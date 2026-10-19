@@ -226,6 +226,107 @@ if ($('themeSelect')) {
 // (or starting while it's open) recolors without needing a restart.
 setInterval(() => { api.getSetting('uiTheme', 'auto').then(applyTheme) }, 30 * 60 * 1000)
 
+/* ---------------- optional Community Booster cosmetics ---------------- */
+const boosterChoicesDefault = { accent: false, border: false, frame: false, decoration: 'none' }
+let boosterChoices = { ...boosterChoicesDefault }
+let boosterSnapshot = { state: 'unlinked', boostCount: 0, tier: 'none', linked: false }
+let boosterTimer = null
+
+function applyBoosterVisuals () {
+  const root = document.documentElement
+  const active = ['verified', 'offline'].includes(boosterSnapshot.state)
+  const count = active ? boosterSnapshot.boostCount : 0
+  const accent = count >= 2 && boosterChoices.accent
+  const border = count >= 2 && boosterChoices.border
+  const frame = count >= 5 && boosterChoices.frame
+  const decoration = boosterChoices.decoration === 'constellation' && count >= 5
+    ? 'constellation' : boosterChoices.decoration === 'nova' && count >= 3 ? 'nova' : 'none'
+  root.dataset.boosterAccent = accent ? 'on' : 'off'
+  root.dataset.boosterBorder = border ? 'on' : 'off'
+  root.dataset.boosterFrame = frame ? 'on' : 'off'
+  root.dataset.boosterDecoration = decoration
+  $('boosterPreview').dataset.decoration = decoration
+  const badge = $('boosterBadge')
+  badge.hidden = count < 1
+  badge.textContent = `${count >= 5 ? 'Constellation' : count >= 3 ? 'Nova' : count >= 2 ? 'Glow' : 'Spark'} supporter`
+  $('boosterPreviewLevel').textContent = count ? `· ${badge.textContent}` : '· Base theme'
+}
+
+function drawBoosterStatus (snapshot) {
+  boosterSnapshot = snapshot || boosterSnapshot
+  const descriptions = {
+    unlinked: 'Not linked. All normal features and themes are available.',
+    authorizing: 'Waiting for LinkUp browser authorization…',
+    verified: `Verified ${snapshot.boostCount} active boost${snapshot.boostCount === 1 ? '' : 's'} · ${snapshot.tier} theme available.`,
+    expired: 'Verification expired. Your base theme is active; your choices are saved.',
+    revoked: 'LinkUp revoked access. Your base theme is active.',
+    offline: 'LinkUp temporarily offline. Only unexpired verified cosmetics remain active.',
+    unavailable: 'LinkUp desktop authorization is not available yet.'
+  }
+  $('boosterStatus').textContent = descriptions[snapshot.state] || 'LinkUp status unavailable.'
+  const auth = snapshot.state === 'authorizing' && !!snapshot.userCode
+  $('boosterAuth').hidden = !auth
+  $('boosterCode').textContent = auth ? snapshot.userCode : ''
+  $('boosterDisconnect').disabled = !snapshot.linked && !auth
+  $('boosterConnect').disabled = auth
+  applyBoosterVisuals()
+  if (boosterTimer) clearTimeout(boosterTimer)
+  const delay = auth ? Math.max(5, snapshot.intervalSeconds || 5) * 1000 : 60 * 1000
+  boosterTimer = setTimeout(() => updateBoosterStatus(auth ? 'poll' : 'status'), delay)
+}
+
+async function updateBoosterStatus (action = 'status') {
+  try {
+    const result = action === 'poll' ? await api.boosterPoll()
+      : action === 'start' ? await api.boosterStart()
+        : action === 'disconnect' ? await api.boosterDisconnect()
+          : await api.boosterStatus(action === 'force')
+    drawBoosterStatus(result)
+  } catch (err) {
+    $('boosterStatus').textContent = action === 'start'
+      ? 'LinkUp desktop authorization is currently unavailable. Try again when the LinkUp API is ready.'
+      : 'Unable to check LinkUp right now. Saved cosmetic choices are unchanged.'
+    if (action !== 'start') {
+      // Keep the last verified display only until the main-process expiry.
+      try { drawBoosterStatus(await api.boosterStatus()) } catch (_) { drawBoosterStatus({ state: 'offline', boostCount: 0, tier: 'none', linked: false }) }
+    }
+  }
+}
+
+api.getSetting('communityBoosterCosmetics', boosterChoicesDefault).then(choices => {
+  if (choices && typeof choices === 'object') {
+    boosterChoices = {
+      accent: choices.accent === true,
+      border: choices.border === true,
+      frame: choices.frame === true,
+      decoration: ['nova', 'constellation'].includes(choices.decoration) ? choices.decoration : 'none'
+    }
+  }
+  $('boosterAccent').checked = boosterChoices.accent
+  $('boosterBorder').checked = boosterChoices.border
+  $('boosterFrame').checked = boosterChoices.frame
+  $('boosterDecoration').value = boosterChoices.decoration
+  applyBoosterVisuals()
+}).catch(() => {})
+
+function saveBoosterChoices () {
+  boosterChoices = {
+    accent: $('boosterAccent').checked,
+    border: $('boosterBorder').checked,
+    frame: $('boosterFrame').checked,
+    decoration: $('boosterDecoration').value
+  }
+  api.saveSetting('communityBoosterCosmetics', boosterChoices)
+  applyBoosterVisuals()
+}
+;['boosterAccent', 'boosterBorder', 'boosterFrame', 'boosterDecoration'].forEach(id => {
+  $(id).addEventListener('change', saveBoosterChoices)
+})
+$('boosterConnect').addEventListener('click', () => updateBoosterStatus('start'))
+$('boosterDisconnect').addEventListener('click', () => updateBoosterStatus('disconnect'))
+$('boosterRefresh').addEventListener('click', () => updateBoosterStatus('force'))
+updateBoosterStatus()
+
 /* ---------------- i18n ---------------- */
 // Foundation only: covers the sidebar nav labels, common buttons, and the
 // newly-added Avatar Scaling / Translator / Live Typing / language-picker

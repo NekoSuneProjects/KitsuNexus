@@ -1,5 +1,11 @@
 # KitsuNexus — TODO / Roadmap
 
+## Community Booster integration
+- [x] Add optional local-only Spark / Glow / Nova / Constellation visuals and saved cosmetic choices, without gating standard features.
+- [x] Add LinkUp device grant client with state/PKCE checks, encrypted local credentials when available, and verified reward snapshots.
+- [ ] Implement and deploy the scoped LinkUp endpoints described in `docs/community-booster-linkup.md`; verify production device linking and boost changes end-to-end.
+- [ ] Migrate the legacy Node-enabled Electron renderer to context isolation and narrowed IPC while preserving OSC/audio/BLE.
+
 Feature-parity checklist toward **VRCX** + **VRCNext**, our own version. Sources:
 [VRCX](https://github.com/vrcx-team/VRCX), [VRCNext](https://github.com/shinyflvre/VRCNext).
 

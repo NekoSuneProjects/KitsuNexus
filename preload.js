@@ -6,6 +6,10 @@ window.electronAPI = {
   // generic
   getSetting: (key, def) => ipcRenderer.invoke('getSetting', key, def),
   saveSetting: (key, value) => ipcRenderer.invoke('saveSetting', key, value),
+  boosterStatus: (force = false) => ipcRenderer.invoke('booster:status', force),
+  boosterStart: () => ipcRenderer.invoke('booster:start'),
+  boosterPoll: () => ipcRenderer.invoke('booster:poll'),
+  boosterDisconnect: () => ipcRenderer.invoke('booster:disconnect'),
   getOscPort: () => ipcRenderer.invoke('getOscPort'),
   updateOscPort: port => ipcRenderer.send('updateOscPort', port),
   updateOscTargets: targets => ipcRenderer.send('updateOscTargets', targets),

@@ -38,6 +38,37 @@
     [data-theme="halloween"] { --bg:#140a04; --bg2:#1c0f06; --panel:#241408; --panel2:#301a0a; --border:#4a2a10; --text:#ffe9d6; --muted:#d8a06a; --accent:#ff7518; --accent2:#8b5cf6; }
     [data-theme="easter"]    { --bg:#120f18; --bg2:#181522; --panel:#201a2e; --panel2:#28213a; --border:#3a3052; --text:#fdeafd; --muted:#c9b8e0; --accent:#f9a8d4; --accent2:#6ee7b7; }
 
+    /* Community Booster cosmetics apply only after a main-process verified grant. */
+    html[data-booster-accent="on"] .topbar h2 { text-decoration:underline; text-decoration-color:#c4a1ff; text-underline-offset:8px; }
+    html[data-booster-accent="on"] .navbtn.active { box-shadow:inset 4px 0 #c4a1ff; }
+    html[data-theme="light"][data-booster-accent="on"] .topbar h2 { text-decoration-color:#7137a2; }
+    html[data-booster-border="on"] .card, html[data-booster-border="on"] .rb-card,
+    html[data-booster-border="on"] .modal-card {
+      border-color:#9e77cf; box-shadow:inset 0 0 0 1px rgba(158,119,207,.3);
+    }
+    html[data-theme="light"][data-booster-border="on"] .card,
+    html[data-theme="light"][data-booster-border="on"] .rb-card,
+    html[data-theme="light"][data-booster-border="on"] .modal-card { border-color:#7137a2; }
+    .booster-badge { display:inline-block; border:1px solid var(--accent); border-radius:999px; padding:3px 10px; font-weight:700; font-size:.78rem; }
+    .booster-badge[hidden], #boosterAuth[hidden] { display:none !important; }
+    .booster-preview { position:relative; isolation:isolate; overflow:hidden; margin-top:10px; padding:16px;
+      border-radius:12px; border:1px solid var(--border); background:var(--panel2); }
+    .booster-preview[data-decoration="nova"]::before { content:'✦    ✧    ✦'; color:#c4a1ff; display:block; letter-spacing:8px; }
+    .booster-preview[data-decoration="constellation"] { border:2px solid #b8a4fa;
+      background:radial-gradient(circle at 15% 25%, #9fafff 1px, transparent 2px),
+        radial-gradient(circle at 65% 38%, #a4e2ff 1px, transparent 2px),
+        radial-gradient(circle at 88% 82%, #c8a0ff 1px, transparent 2px), var(--panel2);
+      background-size:100% 100%; }
+    .booster-preview[data-decoration="constellation"]::before { content:'✧ ── ✦ ─── ✧'; color:#c4a1ff;
+      display:block; letter-spacing:4px; }
+    html[data-booster-decoration="nova"] .topbar h2::after { content:' ✦'; color:#c4a1ff; }
+    html[data-booster-decoration="constellation"] .topbar { border-bottom:2px solid #ac97e4; border-radius:5px; }
+    html[data-booster-decoration="constellation"] .topbar h2::after { content:' ✧ ✦ ✧'; color:#c4a1ff; }
+    html[data-booster-frame="on"] .app { outline:2px solid #a99ad7; outline-offset:-3px; }
+    @media (prefers-reduced-motion: reduce) {
+      .booster-preview, .booster-preview *, html[data-booster-frame="on"] .app { animation:none !important; transition:none !important; }
+    }
+
     * { box-sizing: border-box; }
     /* Hide scrollbars everywhere but keep scrolling (tidy) */
     * { scrollbar-width: none; -ms-overflow-style: none; }
@@ -1993,6 +2024,35 @@
             <option value="light">Light</option>
           </select>
           <div class="muted" style="font-size:.75rem;margin-top:6px">"Auto" defaults to Black &amp; Green. Halloween/Christmas/Pride/Easter always take over automatically during those windows — even over a custom pick below — then your pick resumes once the event ends.</div>
+        </div>
+        <div class="card" id="boosterPanel">
+          <h3>Community Booster <span id="boosterBadge" class="booster-badge" hidden>Supporter</span></h3>
+          <p class="muted" style="font-size:.8rem">Optional LinkUp rewards change this app's appearance only. Every normal theme and VRChat/OSC feature stays available without boosting. No Discord bot token is needed.</p>
+          <div class="row" style="gap:8px;flex-wrap:wrap;margin:10px 0">
+            <button class="btn" id="boosterConnect">Connect LinkUp</button>
+            <button class="btn ghost" id="boosterDisconnect">Disconnect</button>
+            <button class="btn ghost" id="boosterRefresh">Refresh rewards</button>
+          </div>
+          <div class="muted" role="status" aria-live="polite" id="boosterStatus">Checking local LinkUp state…</div>
+          <div class="muted" id="boosterAuth" style="font-size:.8rem;margin-top:8px" hidden>
+            In your browser, enter code <b id="boosterCode"></b> on the LinkUp authorization page.
+          </div>
+          <div class="grid cols-2" style="margin-top:12px">
+            <label class="switch"><input type="checkbox" id="boosterAccent"> Glow · UI accent (2+ boosts)</label>
+            <label class="switch"><input type="checkbox" id="boosterBorder"> Glow · card borders (2+ boosts)</label>
+            <label class="switch"><input type="checkbox" id="boosterFrame"> Constellation · frame (5+ boosts)</label>
+          </div>
+          <label for="boosterDecoration" style="margin-top:10px">Nameplate and panel decoration</label>
+          <select id="boosterDecoration">
+            <option value="none">None</option>
+            <option value="nova">Nova · star details (3+ boosts)</option>
+            <option value="constellation">Constellation · star map (5+ boosts)</option>
+          </select>
+          <div class="booster-preview" id="boosterPreview" data-decoration="none">
+            <strong>KitsuNexus</strong> <span class="muted" id="boosterPreviewLevel">Base theme</span>
+            <div class="muted" style="font-size:.75rem">Cosmetics are local to this app. Your saved choices are kept if a boost ends.</div>
+          </div>
+          <p class="muted" style="font-size:.74rem">Spark (1 boost) adds a small badge, Glow (2) adds accents and borders, Nova (3–4) adds decorations, Constellation (5+) adds star styling and a frame. LinkUp must support verified desktop linking before any tier can be awarded.</p>
         </div>
         <div class="card">
           <h3>🖼️ Background</h3>

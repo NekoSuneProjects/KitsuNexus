@@ -5,6 +5,23 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+
+- **Optional Community Booster visual themes.** Settings now provides saved local
+  Spark/Glow/Nova/Constellation decoration choices, a LinkUp connect/disconnect
+  panel and clear offline, expired and revoked states. The main process implements
+  a nonce/PKCE-guarded device authorization client with protected credential
+  storage and five-minute entitlement caching. LinkUp must implement the new
+  scoped server endpoints before the rewards can activate; no VRChat/OSC features
+  depend on them. See `docs/community-booster-linkup.md`.
+
+### Known issues
+
+- **Legacy Electron isolation.** Main app renderer still uses Node integration
+  without context isolation to support its existing OSC/audio modules. The LinkUp
+  token is withheld from IPC and encrypted when supported, but complete renderer
+  isolation needs a separate migration.
+
 ## [1.0.77] - 2026-09-09
 
 ### Changed

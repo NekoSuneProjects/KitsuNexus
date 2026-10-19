@@ -7,6 +7,15 @@
 A standalone **VRChat OSC companion** by **NekoSuneVR** — chatbox, heart rate, now
 playing, Discord, world radar & more, in one polished themed app.
 
+**Community Booster (optional, preview integration):** Settings includes local
+Spark, Glow, Nova and Constellation visual choices. Verified rewards require
+LinkUp's upcoming desktop account-link API; until that backend is implemented,
+the app keeps the base theme. OSC, chatbox, VRChat, audio and accessibility
+features remain free for everyone. See
+[LinkUp integration contract](docs/community-booster-linkup.md) for the proposed
+server endpoints, token privacy rules and limitations. Run `npm test` for the
+booster authorization and OSC/chatbox smoke tests.
+
 > Chatbox · Status · AudioLink · Now Playing (KAT) · Component & Network stats ·
 > Heart rate (Pulsoid / HypeRate / local device bridge) · Avatar Locker · TikTok / Twitch / Kick counters · TikTok TTS ·
 > IntelliChat · Discord Rich Presence (world + Join button) · Discord Voice Bot ·

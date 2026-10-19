@@ -1,10 +1,11 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, shell, dialog, clipboard, desktopCapturer } = require('electron')
+const { app, BrowserWindow, ipcMain, Tray, Menu, shell, dialog, clipboard, desktopCapturer, safeStorage } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { spawn, execFile } = require('child_process')
 const axios = require('axios')
 app.setName('KitsuNexus')
 const settings = require('./settings')
+const { createCommunityBooster } = require('./modules/integrations/discord/communityBooster')
 
 // ffmpeg-static's own path points inside app.asar when packaged, which can't
 // be executed directly - asarUnpack (package.json build config) places the
@@ -128,6 +129,14 @@ if (process.platform === 'linux') {
 }
 
 let mainWindow
+let communityBooster
+function getCommunityBooster () {
+  if (!communityBooster) communityBooster = createCommunityBooster({
+    userData: app.getPath('userData'), safeStorage,
+    openExternal: url => shell.openExternal(url)
+  })
+  return communityBooster
+}
 let tray
 let bleSelectCallback = null
 let blePairingCallback = null
@@ -215,6 +224,12 @@ function createWindow () {
   })
 
   mainWindow.loadFile('index.html')
+
+  // Keep the Node-enabled legacy renderer on the packaged local document.
+  // LinkUp authorization always uses the user's external browser.
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  mainWindow.webContents.on('will-navigate', event => { event.preventDefault() })
+  mainWindow.webContents.on('will-attach-webview', event => { event.preventDefault() })
 
   // OSCQR, ShazamOSC, desktop STT/OCR and the SOS instant-replay buffer all
   // share this one handler (Electron only allows one per session), so there
@@ -398,6 +413,18 @@ app.on('before-quit', () => {
 /* ------------------------------------------------------------------ */
 ipcMain.handle('getSetting', (e, key, def) => settings.get(key, def))
 ipcMain.handle('saveSetting', (e, key, value) => { settings.set(key, value); return value })
+// The bridge returns display-only snapshots. Credentials and raw grants never
+// pass through generic settings, OSC, overlays, chatbox, or renderer IPC.
+function requireBoosterFrame (event) {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents ||
+      event.senderFrame !== mainWindow.webContents.mainFrame) {
+    throw new Error('Community Booster requests must come from the app window')
+  }
+}
+ipcMain.handle('booster:status', async (e, force) => { requireBoosterFrame(e); return getCommunityBooster().refresh(force === true) })
+ipcMain.handle('booster:start', async e => { requireBoosterFrame(e); return getCommunityBooster().start() })
+ipcMain.handle('booster:poll', async e => { requireBoosterFrame(e); return getCommunityBooster().poll() })
+ipcMain.handle('booster:disconnect', async e => { requireBoosterFrame(e); return getCommunityBooster().disconnect() })
 ipcMain.handle('getOscPort', () => settings.get('oscPort', 9000))
 ipcMain.on('updateOscPort', (e, port) => settings.set('oscPort', port))
 ipcMain.on('updateOscTargets', (e, targets) => {
