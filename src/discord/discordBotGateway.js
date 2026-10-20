@@ -35,13 +35,15 @@ let statusIndex = 0
 // for guilds the bot was already sitting in when it started.
 const JOIN_GRACE_MS = 15_000
 
-// Only /oauth2/discord/authorize-bot is allowed to let a guild keep the bot —
-// leave anything else, whether it's a guild added before this whitelist
-// existed or one added via a leaked raw invite link. The official KitsuNexus
-// guild (config.discordOfficialGuildId) is exempt regardless of how the bot
-// got there or whether it's in the persisted whitelist file at all.
+// Only /oauth2/discord/authorize-bot authorizes arbitrary guilds. The
+// configured official and booster guilds are also explicitly allowed, so the
+// startup whitelist sweep cannot disconnect required verification servers.
+function isProtectedGuild (guildId) {
+  return !!guildId && (guildId === config.discordOfficialGuildId ||
+    (config.discordBoosterGuildIds || []).includes(guildId))
+}
 async function enforceWhitelist (guild) {
-  if (config.discordOfficialGuildId && guild.id === config.discordOfficialGuildId) return
+  if (isProtectedGuild(guild.id)) return
   if (authorizedGuilds.isAuthorized(guild.id)) return
   console.warn(`[discordBotGateway] leaving unauthorized guild "${guild.name}" (${guild.id}) — never went through /oauth2/discord/authorize-bot`)
   try { await guild.leave() } catch (err) { console.warn('[discordBotGateway] failed to leave guild:', err.message) }
@@ -116,6 +118,8 @@ async function start () {
   // require() cycle (banUser -> this file, for the reverse "ban them on Discord too" direction).
   client.on(Events.GuildBanAdd, async ban => {
     try {
+      // Booster-only/third-party guilds must never trigger KitsuNexus account erasure.
+      if (!config.discordOfficialGuildId || ban.guild.id !== config.discordOfficialGuildId) return
       const { DiscordLink } = require('../db')
       const link = await DiscordLink.findOne({ where: { discordId: ban.user.id } })
       if (!link) return
@@ -300,4 +304,4 @@ async function banFromOfficialGuild (discordUserId, reason) {
   await guild.members.ban(discordUserId, { reason: reason || 'Banned from KitsuNexus' })
 }
 
-module.exports = { start, startWithRetry, isReady, isInGuild, fetchGuildMember, getLastError, getUserVoiceState, getChannelRoster, setMute, setDeaf, leaveGuild, hasManagePermission, setMemberRankRole, banFromOfficialGuild }
+module.exports = { start, startWithRetry, isReady, isInGuild, isProtectedGuild, fetchGuildMember, getLastError, getUserVoiceState, getChannelRoster, setMute, setDeaf, leaveGuild, hasManagePermission, setMemberRankRole, banFromOfficialGuild }

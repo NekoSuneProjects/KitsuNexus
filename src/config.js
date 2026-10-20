@@ -47,12 +47,28 @@ module.exports = {
   // /oauth2/discord/authorize-bot) and the only guild services/banUser.js's Discord-side ban
   // ever touches, regardless of what other guilds the bot happens to be in.
   discordOfficialGuildId: process.env.DISCORD_OFFICIAL_GUILD_ID || '',
+  // Booster recognition is independent of the official guild used for moderation
+  // and Community Rank sync. Defaults to the official guild for existing installs.
+  discordBoosterGuildIds: (() => {
+    const guilds = (process.env.DISCORD_BOOST_GUILD_IDS || '').trim()
+    return guilds
+      ? [...new Set(guilds.split(/[\s,]+/).filter(Boolean))]
+      : (process.env.DISCORD_OFFICIAL_GUILD_ID ? [process.env.DISCORD_OFFICIAL_GUILD_ID] : [])
+  })(),
   // Optional guild roles assigned by staff/automation for 2+, 3+, and 5+
   // booster reward tiers. Discord's member API reports boost status, not the
   // number of boosts each member supplied; roles only upgrade active boosters.
   discordBoostTierRoles: (() => {
     try {
       const roles = JSON.parse(process.env.DISCORD_BOOST_TIER_ROLES || '{}')
+      return roles && typeof roles === 'object' && !Array.isArray(roles) ? roles : {}
+    } catch (_) { return {} }
+  })(),
+  // Optional guild-specific role thresholds for multi-server boosters. Legacy
+  // DISCORD_BOOST_TIER_ROLES applies only to the official guild.
+  discordBoostTierRolesByGuild: (() => {
+    try {
+      const roles = JSON.parse(process.env.DISCORD_BOOST_TIER_ROLES_BY_GUILD || '{}')
       return roles && typeof roles === 'object' && !Array.isArray(roles) ? roles : {}
     } catch (_) { return {} }
   })(),

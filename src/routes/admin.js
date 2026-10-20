@@ -144,8 +144,8 @@ router.post('/admin/users/:id/set-role', requireAdmin, asyncHandler(async (req, 
 // same protection enforceWhitelist gives it against the automatic leave-unauthorized sweep.
 router.post('/admin/guilds/:guildId/revoke', requireAdmin, asyncHandler(async (req, res) => {
   const guildId = req.params.guildId
-  if (config.discordOfficialGuildId && guildId === config.discordOfficialGuildId) {
-    return res.status(400).send('Cannot remove the bot from the official guild.')
+  if (botGateway.isProtectedGuild(guildId)) {
+    return res.status(400).send('Cannot remove the bot from a configured official or booster guild.')
   }
   authorizedGuilds.revoke(guildId)
   await botGateway.leaveGuild(guildId)

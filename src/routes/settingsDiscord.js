@@ -50,6 +50,7 @@ router.post('/settings/discord/unlink', requireAuth, asyncHandler(async (req, re
 // Removing the bot from a guild. Re-checks Manage Server live server-side — never trust that
 // the "Remove" button was correctly hidden client-side.
 router.post('/settings/discord/guilds/:guildId/revoke', requireAuth, asyncHandler(async (req, res) => {
+  if (botGateway.isProtectedGuild(req.params.guildId)) return res.redirect('/settings/discord')
   const link = await DiscordLink.findOne({ where: { userId: req.user.id } })
   if (link && await botGateway.hasManagePermission(req.params.guildId, link.discordId)) {
     authorizedGuilds.revoke(req.params.guildId)

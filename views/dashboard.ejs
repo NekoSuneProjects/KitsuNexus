@@ -135,9 +135,12 @@
         <% if (boosterUnavailable) { %>
           <p class="muted">Discord verification is currently unavailable or has not been configured on this server. Your rewards cannot be confirmed right now. Check back when the bot is online.</p>
         <% } else if (!boosterGrant.linkedDiscord) { %>
-          <p class="muted">Link your Discord account to verify whether you are boosting the official server.</p>
+          <p class="muted">Link your Discord account to verify boosts in the configured community servers.</p>
         <% } else { %>
-          <div class="stat-row"><span>Active Discord boost</span><b><%= boosterGrant.activeBoostCount ? 'Verified' : 'Not detected' %></b></div>
+          <div class="stat-row"><span>Servers actively boosting</span><b><%= boosterGrant.activeBoostCount %></b></div>
+          <% (boosterGrant.guildStatuses || []).forEach(guild => { %>
+            <div class="stat-row"><span>Discord server <%= guild.guildId %></span><b><%= guild.active ? 'Boost verified' : 'No boost' %></b></div>
+          <% }) %>
           <div class="stat-row"><span>Reward tier</span><b><%= boosterGrant.tier === 'none' ? 'None' : boosterCatalogue.tiers.find(t => t.id === boosterGrant.tier).label %></b></div>
           <div class="stat-row"><span>Reward level</span><b><%= boosterGrant.rewardLevel %></b></div>
           <% if (boosterGrant.source === 'discord_tier_role') { %>
