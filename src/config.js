@@ -29,6 +29,8 @@ module.exports = {
   // gateway when discordBotToken is set, and every Discord route degrades to a clear error
   // instead of crashing the process if these are blank.
   discordClientId: process.env.DISCORD_CLIENT_ID || '',
+  // Public desktop Rich Presence ID, independent of the bot/OAuth application.
+  discordRichPresenceAppId: process.env.DISCORD_RICH_PRESENCE_APP_ID || '1536095795667795998',
   discordClientSecret: process.env.DISCORD_CLIENT_SECRET || '',
   discordBotToken: process.env.DISCORD_BOT_TOKEN || '',
   discordRedirectUri: process.env.DISCORD_REDIRECT_URI || '',

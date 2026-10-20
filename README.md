@@ -38,6 +38,11 @@ Discord backend, which this project absorbs. Intended production domain:
   Optional — leave the `DISCORD_*` env vars blank and the site runs fine without it.
   `/settings/discord` links a Discord identity to your website account (separate from the
   Electron app's own narrower Discord bearer-token flow, which is unchanged and still works).
+- ✅ **Desktop update/config endpoints** — `GET /api/desktop/updates/latest` caches the
+  official GitHub release metadata for desktop update checks; `GET /api/desktop/config`
+  supplies the default Discord Rich Presence Application ID. Both are public and require
+  no paired account. Override `DISCORD_RICH_PRESENCE_APP_ID` to configure that desktop ID
+  independently of `DISCORD_CLIENT_ID` (used for the server's OAuth/bot).
 - ✅ Docker (`Dockerfile` + `docker-compose.yml`) + manual CI
   (`.github/workflows/docker.yml`). Under **Actions -> Build KitsuNexus Server
   Docker -> Run workflow**, choose **GitHub-hosted** (`ubuntu-24.04`) or **self-hosted**
