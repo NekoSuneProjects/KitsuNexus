@@ -1,6 +1,11 @@
 # Maintenance integrations
 
-- `updater.js` checks KitsuNexus GitHub releases and hands updates to the separately packaged
+- `updater.js` reads official GitHub release metadata through the configured KitsuNexus server's
+  public `/api/desktop/updates/latest` endpoint. Older or offline servers fall back to the
+  GitHub Releases API; installers are still restricted to verified GitHub release downloads.
+  `serverConfig.js` also retrieves the read-only Discord Rich Presence Application ID from the
+  server's `/api/desktop/config` endpoint, falling back to the bundled official ID offline.
+  The updater hands updates to the separately packaged
   `%LOCALAPPDATA%\KitsuNexus-updater\Update.exe` helper. The bundled updater is copied and
   compared by MD5 on every app launch; a changed binary is staged and verified before replacing
   it. A running locked updater uses the verified staged executable until the next launch, and

@@ -46,16 +46,13 @@ const { loginDiscordIdentity } = require('./modules/oauth/providers/discordIdent
 const twitchInteractive = require('./modules/live/twitch/interactive')
 const { startDiscord, stopDiscord, updateActivity, setVrcContext, setExtraOscTargets: setDiscordExtraOscTargets, getVrcContextSnapshot } = require('./modules/integrations/discord/discord')
 const { startStatusPush, stopStatusPush } = require('./modules/integrations/discord/statusPush')
-// Fixed KitsuNexus Discord Rich Presence Application ID — must match
-// DEFAULT_DISCORD_APP_ID in renderer.js. Not user-editable.
-const DISCORD_APP_ID = '1536095795667795998'
 // KitsuNexus backend (feature/discord-backend-server, deployed separately)
 // for the Discord Activity panel + official shared bot — holds the bot
 // token/OAuth secret, never this app. Defaults to the official NekoSuneVR
-// deployment, but — unlike DISCORD_APP_ID — users may point this at their own
+// deployment, but users may point this at their own
 // self-hosted instance instead (see #nekosuneBackendUrl in index.html), since
 // a self-hoster runs their own backend with their own bot/OAuth app entirely;
-// nothing here needs to match DISCORD_APP_ID for that to work.
+// the desktop Rich Presence ID comes from that server's public config endpoint.
 const DEFAULT_NEKOSUNE_BACKEND_URL = 'https://kitsunexus.nekosunevr.co.uk'
 function getNekosuneBackendUrl () {
   return String(settings.get('nekosuneBackendUrl', '') || '').trim() || DEFAULT_NEKOSUNE_BACKEND_URL
@@ -89,6 +86,7 @@ const tonSaveCodec = require('./modules/integrations/ton/tonSaveCodec')
 const tonUnlockDecoder = require('./modules/integrations/ton/tonUnlockDecoder')
 const { startTonLog, stopTonLog } = require('./modules/integrations/ton/tonLogReader')
 const updater = require('./modules/integrations/maintenance/updater')
+const { getDiscordAppId } = require('./modules/integrations/maintenance/serverConfig')
 const tonManager = require('./modules/integrations/ton/tonManager')
 const vrNotify = require('./modules/integrations/maintenance/vrNotify')
 const ranks = require('./modules/ranks')
@@ -379,7 +377,7 @@ app.whenReady().then(async () => {
   setTimeout(startFriendDiff, 8000)
   setTimeout(startNotifPoll, 14000)
   setTimeout(startGroupAlerts, 22000)
-  // Check GitHub for a newer release and tell the renderer once it's loaded.
+  // Check the KitsuNexus server for a newer release and notify the renderer.
   setTimeout(async () => {
     const info = await checkAndCacheUpdate()
     if (info && info.ok && info.available) push('update:available', info)
@@ -824,7 +822,7 @@ ipcMain.handle('app:openExternal', async (e, url) => {
 })
 let verifiedUpdateAsset = null
 async function checkAndCacheUpdate () {
-  const result = await updater.check(app.getVersion())
+  const result = await updater.check(app.getVersion(), getNekosuneBackendUrl())
   verifiedUpdateAsset = result?.ok && result.available && result.updateAssetUrl
     ? { url: result.updateAssetUrl, name: result.updateAssetName, version: result.latest, digest: result.updateAssetDigest }
     : null
@@ -1352,11 +1350,13 @@ ipcMain.handle('oauth:twitchLogin', async (e, { clientId, clientSecret, scopes }
 /* ------------------------------------------------------------------ */
 /* Discord RPC                                                         */
 /* ------------------------------------------------------------------ */
+ipcMain.handle('discord:appId', () => getDiscordAppId(getNekosuneBackendUrl()))
 ipcMain.handle('discord:start', async (e, cfg) => {
   const oscPort = settings.get('oscPort', 9000)
-  // Discord Application ID is fixed (official KitsuNexus app) — never take
-  // it from renderer input, no matter what cfg claims.
-  const r = await startDiscord({ ...(cfg || {}), clientId: DISCORD_APP_ID, oscPort, extraOscTargets: settings.get('extraOscTargets', []) }, s => push('discord:update', s))
+  // Always use the server's public default with an offline fallback; never
+  // accept an arbitrary renderer-supplied Application ID.
+  const discordAppId = await getDiscordAppId(getNekosuneBackendUrl())
+  const r = await startDiscord({ ...(cfg || {}), clientId: discordAppId, oscPort, extraOscTargets: settings.get('extraOscTargets', []) }, s => push('discord:update', s))
   // Seed the presence with the world we've already detected.
   const w = getVrcWorld()
   setVrcContext({ worldName: w.inWorld ? w.worldName : '', joinUrl: w.joinUrl, worldUrl: w.worldUrl, profileUrl: w.profileUrl })

@@ -87,10 +87,9 @@ function debounce (fn, ms) {
 // ID below (owned by KitsuNexus, not user data). Users still enter their own
 // Twitch/bot IDs and secrets (see Docs / Setup) — never hardcode those.
 const DEFAULT_TWITCH_CLIENT_ID = ''
-// Fixed KitsuNexus Discord Rich Presence Application ID. Intentionally not
-// user-editable (see #discordAppId in index.html) — locked so RP always shows
-// as the official app regardless of what's in a user's saved config.
-const DEFAULT_DISCORD_APP_ID = '1536095795667795998'
+// Server-managed default Rich Presence ID, with the official ID as an offline
+// fallback. The input stays read-only and main.js enforces this value.
+let DEFAULT_DISCORD_APP_ID = '1536095795667795998'
 
 let isAnalyzing = false
 let beatState = false
@@ -2606,7 +2605,7 @@ $('vrOverlayToggle').addEventListener('click', async () => {
 let discordAccessToken = ''
 function currentDiscordCfg () {
   return {
-    clientId: DEFAULT_DISCORD_APP_ID, // fixed — see DEFAULT_DISCORD_APP_ID comment
+    clientId: DEFAULT_DISCORD_APP_ID, // server-managed read-only default
     clientSecret: $('discordSecret').value,
     accessToken: discordAccessToken,
     enableRichPresence: $('discordRP').checked,
@@ -2621,6 +2620,8 @@ function currentDiscordCfg () {
   }
 }
 $('discordStart').addEventListener('click', async () => {
+  DEFAULT_DISCORD_APP_ID = await api.discordAppId()
+  $('discordAppId').value = DEFAULT_DISCORD_APP_ID
   const cfg = currentDiscordCfg()
   await api.saveSetting('discord', cfg)
   setText('discordOut', 'Connecting...')
@@ -3234,7 +3235,11 @@ async function refreshDiscordIdentityStatus () {
   const loggedIn = await api.discordIdentityStatus()
   setText('discordIdentityOut', loggedIn ? 'Logged in with Discord' : 'Not logged in')
 }
-$('nekosuneBackendUrl').addEventListener('change', () => api.saveSetting('nekosuneBackendUrl', $('nekosuneBackendUrl').value.trim()))
+$('nekosuneBackendUrl').addEventListener('change', async () => {
+  await api.saveSetting('nekosuneBackendUrl', $('nekosuneBackendUrl').value.trim())
+  DEFAULT_DISCORD_APP_ID = await api.discordAppId()
+  $('discordAppId').value = DEFAULT_DISCORD_APP_ID
+})
 $('discordIdentityLogin').addEventListener('click', async () => {
   setText('discordIdentityOut', 'Opening Discord login…')
   const r = await api.discordIdentityLogin()
@@ -5597,9 +5602,9 @@ async function init () {
   try { renderHrSessions(await api.hrSessions()) } catch (_) {}
   const dc = await api.getSetting('discord', {})
   discordAccessToken = dc.accessToken || ''
-  // The Discord Application ID is fixed to DEFAULT_DISCORD_APP_ID and not
-  // user-editable — force it every load regardless of what's saved, so old
-  // or tampered config values never take effect.
+  // Refresh the read-only Discord Application ID from kitsunexus-server.
+  // Never trust an older value persisted in the local settings file.
+  DEFAULT_DISCORD_APP_ID = await api.discordAppId()
   if (dc.clientId !== DEFAULT_DISCORD_APP_ID) {
     dc.clientId = DEFAULT_DISCORD_APP_ID
     await api.saveSetting('discord', dc) // persist so it sticks + auto-start uses it

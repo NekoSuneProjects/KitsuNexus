@@ -98,6 +98,7 @@ window.electronAPI = {
   clipboardWrite: text => ipcRenderer.invoke('app:clipboard', text),
   openExternal: url => ipcRenderer.invoke('app:openExternal', url),
   updateCheck: () => ipcRenderer.invoke('update:check'),
+  discordAppId: () => ipcRenderer.invoke('discord:appId'),
   updateStart: opts => ipcRenderer.invoke('update:startUpdate', opts),
   vrOverlayIsAvailable: () => ipcRenderer.invoke('vrOverlay:isAvailable'),
   vrOverlayStart: () => ipcRenderer.invoke('vrOverlay:start'),

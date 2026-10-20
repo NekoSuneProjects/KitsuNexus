@@ -7,6 +7,12 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Server-managed desktop updates and Discord Rich Presence ID.** The desktop checks
+  `kitsunexus-server` for cached GitHub release metadata and reads its default Discord
+  Application ID from the public configuration endpoint. Older/offline servers fall back
+  to GitHub for update checks and the bundled official Rich Presence ID respectively.
+  Download links remain restricted to official GitHub releases.
+
 - **Ghostface-inspired Halloween dialogue.** The masked figure now displays a speech bubble
   on the event placard and home hero, cycling through twelve horror lines every five
   seconds with pop-in and fade-out transitions. The bubble hides when Halloween ends,

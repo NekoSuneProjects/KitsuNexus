@@ -1,6 +1,6 @@
 // modules/integrations/maintenance/updater.js
-// Update checker + installer launcher for KitsuNexus - asks the GitHub
-// Releases API for the latest release and compares it to the running
+// Update checker + installer launcher for KitsuNexus - asks kitsunexus-server
+// for the latest GitHub release and compares it to the running
 // version. The actual update is handled by a fully separate helper app
 // (updater/ - its own little Electron app, packaged as updater.exe on
 // Windows / bundled inside the .app on Mac / alongside the binary on Linux)
@@ -17,6 +17,7 @@ const os = require('os')
 const crypto = require('crypto')
 const { spawn } = require('child_process')
 const { validateUpdateUrl, validateUpdateName, validateUpdateDigest } = require('../../../updater/updateSecurity')
+const { desktopEndpoint } = require('./serverConfig')
 
 const REPO = 'NekoSuneProjects/KitsuNexus'
 const API = `https://api.github.com/repos/${REPO}/releases/latest`
@@ -51,12 +52,24 @@ function pickUpdateAsset (assets) {
   return null
 }
 
-async function check (currentVersion) {
+async function check (currentVersion, backendUrl, http = axios) {
   try {
-    const { data } = await axios.get(API, {
-      timeout: 12000,
-      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'KitsuNexus-Updater' }
-    })
+    let data
+    try {
+      const response = await http.get(desktopEndpoint(backendUrl, '/api/desktop/updates/latest'), { timeout: 12000 })
+      if (response.data?.ok !== true || !response.data.release || !Array.isArray(response.data.release.assets)) {
+        throw new Error('KitsuNexus server returned invalid update metadata')
+      }
+      data = response.data.release
+    } catch (_) {
+      // Keep update checking functional while the server is offline or a
+      // self-hosted installation is still running an older API version.
+      const response = await http.get(API, {
+        timeout: 12000,
+        headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'KitsuNexus-Updater' }
+      })
+      data = response.data
+    }
     const latest = String(data.tag_name || data.name || '').replace(/^v/i, '')
     if (!latest) return { ok: true, available: false, current: currentVersion }
     const assets = Array.isArray(data.assets) ? data.assets : []
@@ -65,6 +78,14 @@ async function check (currentVersion) {
     const pick = re => assets.find(a => re.test(a.name || ''))
     const installer = pick(/Setup.*\.exe$/i) || pick(/\.exe$/i) || pick(/\.msi$/i) || pick(/\.dmg$/i) || pick(/\.appimage$/i)
     const updateAsset = pickUpdateAsset(assets)
+    // A self-hosted backend's response must not let a download or a manual
+    // browser fallback point at an arbitrary installer host.
+    const releaseUrl = /^https:\/\/github\.com\/NekoSuneProjects\/KitsuNexus\/releases(?:\/tag\/[^/?#]+)?\/?$/i.test(String(data.html_url || ''))
+      ? data.html_url : RELEASES_PAGE
+    let installerUrl = releaseUrl
+    if (installer) {
+      try { installerUrl = validateUpdateUrl(installer.browser_download_url) } catch (_) {}
+    }
     if (updateAsset) {
       validateUpdateUrl(updateAsset.browser_download_url)
       validateUpdateName(updateAsset.name)
@@ -76,8 +97,8 @@ async function check (currentVersion) {
       current: currentVersion,
       latest,
       notes: String(data.body || '').slice(0, 4000),
-      url: data.html_url || RELEASES_PAGE,
-      installerUrl: installer ? installer.browser_download_url : (data.html_url || RELEASES_PAGE),
+      url: releaseUrl,
+      installerUrl,
       updateAssetUrl: updateAsset ? updateAsset.browser_download_url : null,
       updateAssetName: updateAsset ? updateAsset.name : null,
       updateAssetSize: updateAsset ? updateAsset.size : null,

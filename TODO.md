@@ -1,5 +1,7 @@
 # KitsuNexus — TODO / Roadmap
 
+- [x] Fetch desktop update metadata and the default Discord Rich Presence Application ID from kitsunexus-server, with safe offline fallbacks.
+
 ## UI layout
 - [x] Give KitsuNexus an October 1–31 Halloween horror theme with haunted artwork, spooky details and automatic seasonal switching.
 - [x] Expand the October horror decorations with a masked stalker, zombies, drifting ghosts, toxic green goo, bloody drips and hands rising from the grave, with responsive text shading.
