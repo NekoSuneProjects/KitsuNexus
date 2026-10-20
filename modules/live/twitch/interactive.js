@@ -14,6 +14,7 @@ let ircReconnectTimer = null
 let config = null
 let update = () => {}
 let sendParam = null
+let generation = 0
 let broadcasterId = ''
 let authLogin = ''
 let mappings = []
@@ -108,12 +109,14 @@ function openIrc () {
   const socket = new WebSocket(IRC_URL)
   irc = socket
   socket.on('open', () => {
+    if (irc !== socket || !state.running) return
     socket.send('CAP REQ :twitch.tv/tags twitch.tv/commands')
     socket.send(`PASS oauth:${cleanToken(config.token)}`)
     socket.send(`NICK ${authLogin}`)
     socket.send(`JOIN #${cleanLogin(config.login)}`)
   })
   socket.on('message', raw => {
+    if (irc !== socket || !state.running) return
     for (const line of raw.toString().split('\r\n')) {
       if (line.startsWith('PING')) { socket.send(line.replace(/^PING/, 'PONG')); continue }
       if (/ 001 | JOIN #/i.test(line)) emit({ chatConnected: true })
@@ -125,7 +128,7 @@ function openIrc () {
       if (mapping) trigger(mapping, 'command', { user: msg.tags['display-name'] || msg.user, message: msg.message })
     }
   })
-  socket.on('error', err => emit({ chatConnected: false, error: `Twitch chat: ${err.message}` }))
+  socket.on('error', err => { if (irc === socket && state.running) emit({ chatConnected: false, error: `Twitch chat: ${err.message}` }) })
   socket.on('close', () => {
     if (irc !== socket) return
     emit({ chatConnected: false })
@@ -149,14 +152,17 @@ function openEventSub (url = EVENTSUB_URL, subscribe = true) {
   const socket = new WebSocket(url)
   eventsub = socket
   socket.on('message', async raw => {
+    if (eventsub !== socket || !state.running) return
     let message
     try { message = JSON.parse(raw.toString()) } catch (_) { return }
     const type = message.metadata?.message_type
     if (type === 'session_welcome') {
       try {
         if (subscribe) await subscribeRewards(message.payload.session.id)
+        if (eventsub !== socket || !state.running) return
         emit({ rewardsConnected: true, error: '' })
       } catch (err) {
+        if (eventsub !== socket || !state.running) return
         emit({ rewardsConnected: false, error: `Twitch rewards: ${err.response?.data?.message || err.message}. Reconnect Twitch with reward permission.` })
       }
     } else if (type === 'session_reconnect') {
@@ -179,7 +185,7 @@ function openEventSub (url = EVENTSUB_URL, subscribe = true) {
       emit({ rewardsConnected: false, error: `Twitch reward subscription revoked: ${message.payload?.subscription?.status || 'unknown reason'}` })
     }
   })
-  socket.on('error', err => emit({ rewardsConnected: false, error: `Twitch rewards: ${err.message}` }))
+  socket.on('error', err => { if (eventsub === socket && state.running) emit({ rewardsConnected: false, error: `Twitch rewards: ${err.message}` }) })
   socket.on('close', () => {
     if (eventsub !== socket) return
     emit({ rewardsConnected: false })
@@ -200,15 +206,15 @@ async function resolveUsers () {
   if (validation.data?.client_id && validation.data.client_id !== config.clientId) throw new Error('This OAuth token belongs to a different Twitch Client ID. Log in again.')
   const authUser = auth.data?.data?.[0]
   const channelUser = channel.data?.data?.[0]
-  authLogin = authUser?.login || ''
-  broadcasterId = channelUser?.id || ''
-  if (!authLogin) throw new Error('Could not identify the Twitch account for this token')
-  if (!broadcasterId) throw new Error(`Twitch channel "${config.login}" was not found`)
-  if (authUser.id !== broadcasterId) throw new Error('For reward redemptions, log in with the Twitch account that owns this channel.')
+  if (!authUser?.login) throw new Error('Could not identify the Twitch account for this token')
+  if (!channelUser?.id) throw new Error(`Twitch channel "${config.login}" was not found`)
+  if (authUser.id !== channelUser.id) throw new Error('For reward redemptions, log in with the Twitch account that owns this channel.')
+  return { login: authUser.login, channelId: channelUser.id }
 }
 
 async function start (options, oscSender, listener = () => {}) {
   stop(false)
+  const run = generation
   config = { parameter: 'twitch', pulseMs: 750, ...(options || {}) }
   update = listener
   sendParam = oscSender
@@ -219,10 +225,14 @@ async function start (options, oscSender, listener = () => {}) {
   if (!mappings.length) throw new Error('Add at least one command or reward mapping.')
   emit({ running: true, chatConnected: false, rewardsConnected: false, lastTrigger: null, error: '' })
   try {
-    await resolveUsers()
+    const identity = await resolveUsers()
+    if (run !== generation) return { running: false }
+    authLogin = identity.login
+    broadcasterId = identity.channelId
     openIrc()
     openEventSub()
   } catch (err) {
+    if (run !== generation) return { running: false }
     stop(false)
     emit({ error: err.response?.data?.message || err.message })
     throw err
@@ -231,6 +241,7 @@ async function start (options, oscSender, listener = () => {}) {
 }
 
 function stop (notify = true) {
+  generation++
   state.running = false
   clearTimeout(resetTimer)
   clearTimeout(reconnectTimer)

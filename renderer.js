@@ -1167,7 +1167,7 @@ api.on('twitch:update', s => {
   setText('twitchFollowers', (s.followers || 0).toLocaleString())
   composer.update({ twitchFollowers: s.followers || 0, twitchViewers: s.viewers || 0, twitchLive: !!s.connected })
   // the module may have auto-refreshed the access token; persist the new pair.
-  if (s.token && (s.token !== $('twitchToken').value || s.refreshToken !== twitchRefreshToken)) {
+  if (!twitchServerManaged && s.token && (s.token !== $('twitchToken').value || s.refreshToken !== twitchRefreshToken)) {
     $('twitchToken').value = s.token
     twitchRefreshToken = s.refreshToken || twitchRefreshToken
     setTwitchTokenState()
@@ -1175,9 +1175,11 @@ api.on('twitch:update', s => {
   }
 })
 function setTwitchTokenState () {
-  const has = !!$('twitchToken').value
+  const has = twitchServerManaged ? twitchServerConnected : !!$('twitchToken').value
   const login = $('twitchLogin').value.trim()
-  const summary = has
+  const summary = twitchServerManaged
+    ? (has ? `Synced from KitsuNexus server as ${login}` : 'Link Twitch on your KitsuNexus dashboard')
+    : has
     ? `Authorized${login ? ` as/for ${login}` : ''} · shared by Live and Twitch Interactive`
     : (login ? `${login} · application saved, login required` : 'Not configured')
   setPill('twitchTokenState', has, 'token ✓', 'no token')
@@ -1185,7 +1187,84 @@ function setTwitchTokenState () {
   setText('twitchLiveAccount', summary)
 }
 let twitchRefreshToken = ''
+let twitchServerManaged = false
+let twitchServerConnected = false
+let twitchLinkPollTimer = null
+let twitchUiRevision = 0
+
+async function refreshTwitchCloudUi () {
+  const revision = ++twitchUiRevision
+  const sync = await api.cloudSyncStatus()
+  if (revision !== twitchUiRevision) return { ok: false, error: 'Twitch UI changed' }
+  const paired = !!sync.paired
+  for (const id of ['twitchLogin', 'twitchClientId', 'twitchClientSecret', 'twitchOAuthSave']) $(id).disabled = paired
+  $('twitchLogin2').textContent = paired ? 'Link Twitch on server' : 'Login with Twitch'
+  $('twitchOAuthForget').textContent = paired ? 'Unlink Twitch' : 'Forget token'
+  if (!paired) {
+    const wasServerManaged = twitchServerManaged
+    twitchServerManaged = false
+    twitchServerConnected = false
+    const local = await api.getSetting('oauth.twitch', {})
+    if (revision !== twitchUiRevision) return { ok: false, error: 'Twitch UI changed' }
+    if (wasServerManaged || local.serverManaged) {
+      $('twitchLogin').value = local.serverManaged ? '' : (local.login || '')
+      $('twitchClientId').value = local.serverManaged ? DEFAULT_TWITCH_CLIENT_ID : (local.clientId || DEFAULT_TWITCH_CLIENT_ID)
+      $('twitchClientSecret').value = local.serverManaged ? '' : (local.clientSecret || '')
+      $('twitchToken').value = local.serverManaged ? '' : (local.token || '')
+      twitchRefreshToken = local.serverManaged ? '' : (local.refreshToken || '')
+    }
+    const redirect = await api.oauthTwitchRedirect()
+    if (revision !== twitchUiRevision) return { ok: false, error: 'Twitch UI changed' }
+    $('oauthTwitchRedirect').textContent = redirect
+    setTwitchTokenState()
+    return { ok: true, connected: false }
+  }
+  twitchServerManaged = true
+  $('oauthTwitchRedirect').textContent = sync.baseUrl + '/oauth2/twitch/callback'
+  const result = await api.cloudSyncTwitchCredentials()
+  if (revision !== twitchUiRevision) return { ok: false, error: 'Twitch UI changed' }
+  if (!result.ok) {
+    twitchServerConnected = false
+    setTwitchTokenState()
+    setText('oauthTwitchAccount', result.error)
+    return result
+  }
+  twitchServerConnected = !!result.connected
+  $('twitchLogin').value = result.connected ? result.login : ''
+  $('twitchClientId').value = result.connected ? result.clientId : ''
+  $('twitchClientSecret').value = ''
+  $('twitchToken').value = '' // Access token remains inside Electron main.
+  twitchRefreshToken = ''
+  setTwitchTokenState()
+  return result
+}
+api.on('cloudsync:twitchUpdate', () => { refreshTwitchCloudUi().catch(() => {}) })
+
 $('twitchLogin2').addEventListener('click', async () => {
+  const sync = await api.cloudSyncStatus()
+  if (sync.paired) {
+    // Browser uses the website's own login cookie. OAuth state and tokens stay
+    // on the server; the desktop watches only its paired device credentials.
+    clearInterval(twitchLinkPollTimer)
+    if (!await api.openExternal(sync.baseUrl + '/oauth2/twitch/authorize-link')) {
+      alert('Could not open the KitsuNexus Twitch authorization page.')
+      return
+    }
+    setText('oauthTwitchAccount', 'Complete Twitch authorization in your browser...')
+    let attempts = 0
+    let polling = false
+    twitchLinkPollTimer = setInterval(async () => {
+      if (polling) return
+      if (++attempts > 60) { clearInterval(twitchLinkPollTimer); twitchLinkPollTimer = null; return }
+      polling = true
+      try {
+        const result = await refreshTwitchCloudUi()
+        if (result.ok && result.connected) { clearInterval(twitchLinkPollTimer); twitchLinkPollTimer = null }
+        if (!(await api.cloudSyncStatus()).paired) { clearInterval(twitchLinkPollTimer); twitchLinkPollTimer = null }
+      } finally { polling = false }
+    }, 3000)
+    return
+  }
   const clientId = $('twitchClientId').value.trim()
   const clientSecret = $('twitchClientSecret').value.trim() // optional: blank = implicit (no refresh)
   if (!clientId) { alert('Enter your Twitch Client ID first.'); return }
@@ -1208,10 +1287,19 @@ function currentTwitchCfg () {
     clientId: $('twitchClientId').value,
     clientSecret: $('twitchClientSecret').value,
     token: $('twitchToken').value,
-    refreshToken: twitchRefreshToken
+    refreshToken: twitchRefreshToken,
+    serverManaged: twitchServerManaged
   }
 }
 $('twitchConnect').addEventListener('click', async () => {
+  const paired = (await api.cloudSyncStatus()).paired
+  if (paired) {
+    const result = await refreshTwitchCloudUi()
+    if (!result.ok || !result.connected) { alert(result.error || 'Link Twitch on the server dashboard first.'); return }
+    const started = await api.twitchStart({})
+    if (started?.error) alert(started.error)
+    return
+  }
   const cfg = currentTwitchCfg()
   if (!cfg.token) { alert('Authorize Twitch in OAuth Accounts first.'); return }
   await api.saveSetting('oauth.twitch', cfg); api.twitchStart(cfg)
@@ -1223,6 +1311,13 @@ $('twitchOAuthSave').addEventListener('click', async () => {
   setTwitchTokenState()
 })
 $('twitchOAuthForget').addEventListener('click', async () => {
+  if ((await api.cloudSyncStatus()).paired) {
+    if (!await confirmDialog('Unlink Twitch from your KitsuNexus account and all paired devices?')) return
+    const result = await api.cloudSyncTwitchUnlink()
+    if (!result.ok) { alert('Could not unlink Twitch: ' + result.error); return }
+    await refreshTwitchCloudUi()
+    return
+  }
   $('twitchToken').value = ''
   twitchRefreshToken = ''
   await api.saveSetting('oauth.twitch', currentTwitchCfg())
@@ -5372,7 +5467,11 @@ $('cloudSyncConnect').addEventListener('click', async () => {
     const p = await api.cloudSyncPollPairing()
     if (!p.ok) { setText('cloudSyncPairOut', 'Error: ' + p.error); clearInterval(cloudSyncPollTimer); return }
     if (p.expired) { setText('cloudSyncPairOut', 'Code expired — click Connect… to try again.'); clearInterval(cloudSyncPollTimer); return }
-    if (p.paired) { clearInterval(cloudSyncPollTimer); refreshCloudSyncUi() }
+    if (p.paired) {
+      clearInterval(cloudSyncPollTimer)
+      await refreshCloudSyncUi()
+      await refreshTwitchCloudUi()
+    }
   }, 3000)
 })
 $('cloudSyncEnabled').addEventListener('change', async e => { await api.cloudSyncSetEnabled(e.target.checked) })
@@ -5385,7 +5484,10 @@ $('cloudSyncNowBtn').addEventListener('click', async () => {
 $('cloudSyncDisconnectBtn').addEventListener('click', async () => {
   if (!await confirmDialog('Disconnect from this server? Local Favorites stay on this device either way.')) return
   await api.cloudSyncDisconnect()
-  refreshCloudSyncUi()
+  clearInterval(twitchLinkPollTimer)
+  twitchLinkPollTimer = null
+  await refreshCloudSyncUi()
+  await refreshTwitchCloudUi()
 })
 $('cloudSyncHistoryEnabled').addEventListener('change', async e => { await api.cloudSyncSetHistoryEnabled(e.target.checked) })
 $('cloudSyncHistoryNowBtn').addEventListener('click', async () => {
@@ -5569,12 +5671,14 @@ async function init () {
   $('twitchClientSecret').value = tw.clientSecret || ''
   $('twitchToken').value = tw.token || ''
   twitchRefreshToken = tw.refreshToken || ''
+  twitchServerManaged = !!tw.serverManaged
   setTwitchTokenState()
+  await refreshTwitchCloudUi()
   await restoreTwitchInteractive(true)
   try {
     const rdir = await api.oauthTwitchRedirect()
     if ($('docsTwitchRedirect')) $('docsTwitchRedirect').textContent = rdir
-    if ($('oauthTwitchRedirect')) $('oauthTwitchRedirect').textContent = rdir
+    if ($('oauthTwitchRedirect') && !twitchServerManaged) $('oauthTwitchRedirect').textContent = rdir
   } catch (_) {}
   $('pulsoidToken').value = await api.getSetting('pulsoidToken', '')
   $('hrProvider').value = await api.getSetting('hrProvider', 'pulsoid')

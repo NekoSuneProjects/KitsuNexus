@@ -1,5 +1,8 @@
 # KitsuNexus — TODO / Roadmap
 
+- [~] Link Twitch OAuth2 to the KitsuNexus website and sync the account to paired desktop installations for followers and Twitch Interactive. Server/client code, immediate pairing/unpairing UI updates, active-connection shutdown, in-flight request invalidation, first-poll token replacement, and automated auth/rotation/unlink/race regression tests are implemented; a real Twitch login and multi-device deployment test remain.
+- [ ] Verify the Twitch OAuth2 flow end-to-end on a configured HTTPS KitsuNexus server: login, pairing, authorization, follower polling, Interactive IRC/EventSub, refresh, cross-device unlink and unpaired fallback.
+
 - [x] Fetch desktop update metadata and the default Discord Rich Presence Application ID from kitsunexus-server, with safe offline fallbacks.
 
 ## UI layout

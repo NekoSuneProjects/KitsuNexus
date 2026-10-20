@@ -5,6 +5,8 @@ const { spawn, execFile } = require('child_process')
 const axios = require('axios')
 app.setName('KitsuNexus')
 const settings = require('./settings')
+// Discard server-issued access tokens written to disk by older builds.
+if (settings.get('oauth.twitch', {})?.serverManaged) settings.set('oauth.twitch', {})
 const { createCommunityBooster } = require('./modules/integrations/discord/communityBooster')
 const { safeHttpUrl } = require('./modules/security/rendererContent')
 
@@ -31,7 +33,7 @@ const hrOsc = require('./modules/heartrate/osc/profiles')
 const { startWindowActivity, stopWindowActivity } = require('./modules/activity/windowActivity')
 const { startAfk, stopAfk } = require('./modules/activity/afkModule')
 const { connectTikTok, disconnectTikTok, startTikTokFollowers, stopTikTokFollowers } = require('./modules/live/tiktokModule')
-const { startTwitch, stopTwitch } = require('./modules/live/twitch/followers')
+const { startTwitch, stopTwitch, getTwitchState } = require('./modules/live/twitch/followers')
 const { startKick, stopKick } = require('./modules/live/kickModule')
 const { getTikTokTtsAudio, TIKTOK_VOICES } = require('./modules/live/tiktokTts')
 const { intelliRewrite, AI_PROVIDERS } = require('./modules/ai/intelliChat')
@@ -329,6 +331,10 @@ app.whenReady().then(async () => {
   // so it stays blank (and the owner bypass silently never fires) for anyone who paired before
   // a relaunch, or before this role check even existed.
   if (cloudSync.isPaired()) cloudSync.refreshMe().catch(() => {})
+  if (cloudSync.isPaired()) syncTwitchFromServer().catch(() => {})
+  setInterval(() => {
+    if (cloudSync.isPaired() || twitchSession) syncTwitchFromServer().catch(() => {})
+  }, 60000)
   setInterval(() => {
     const s = cloudSync.status()
     if (s.paired) cloudSync.refreshMe().catch(() => {})
@@ -411,7 +417,12 @@ app.on('before-quit', () => {
 /* Generic settings + now playing (carried from OSCAudiolink)          */
 /* ------------------------------------------------------------------ */
 ipcMain.handle('getSetting', (e, key, def) => settings.get(key, def))
-ipcMain.handle('saveSetting', (e, key, value) => { settings.set(key, value); return value })
+ipcMain.handle('saveSetting', (e, key, value) => {
+  // The website owns Twitch credentials for paired installs.
+  if (key === 'oauth.twitch' && cloudSync.isPaired()) return { serverManaged: true }
+  settings.set(key, value)
+  return value
+})
 // The bridge returns display-only snapshots. Credentials and raw grants never
 // pass through generic settings, OSC, overlays, chatbox, or renderer IPC.
 function requireBoosterFrame (event) {
@@ -497,7 +508,12 @@ ipcMain.handle('oscApps:twitchInteractiveGet', () => ({
 ipcMain.handle('oscApps:twitchInteractiveStart', async (event, options) => {
   const value = { ...(options || {}), enabled: true }
   settings.set('oscApps.twitchInteractive', value)
-  const twitch = settings.get('oauth.twitch', settings.get('twitch', {}))
+  if (cloudSync.isPaired()) {
+    const synced = await syncTwitchFromServer()
+    if (!synced.ok || !synced.connected) return { running: false, error: synced.error || 'Link Twitch on your KitsuNexus dashboard first.' }
+  }
+  const twitch = currentTwitchConfig()
+  if (cloudSync.isPaired() && !twitch.token) return { running: false, error: 'Twitch is not linked on this server.' }
   return twitchInteractive.start({ ...value, ...twitch }, osc.sendParam, state => push('oscApps:twitchInteractiveUpdate', state))
 })
 ipcMain.handle('oscApps:twitchInteractiveStop', () => {
@@ -1078,8 +1094,13 @@ ipcMain.handle('tiktok:tts', async (e, { text, voice }) => {
 /* ------------------------------------------------------------------ */
 /* Twitch (followers)                                                  */
 /* ------------------------------------------------------------------ */
-ipcMain.handle('twitch:start', (e, cfg) => {
-  startTwitch(cfg, s => push('twitch:update', s))
+ipcMain.handle('twitch:start', async (e, cfg) => {
+  if (cloudSync.isPaired()) {
+    const synced = await syncTwitchFromServer()
+    if (!synced.ok || !synced.connected) return { ok: false, error: synced.error || 'Link Twitch on your KitsuNexus dashboard first.' }
+    cfg = currentTwitchConfig()
+  }
+  await startTwitch(cfg, cloudSync.isPaired() ? emitServerTwitchUpdate : s => push('twitch:update', s))
   return true
 })
 ipcMain.handle('twitch:stop', () => { stopTwitch(); return true })
@@ -1341,6 +1362,7 @@ ipcMain.handle('assistant:saveClip', async (e, { segments } = {}) => {
 /* ------------------------------------------------------------------ */
 ipcMain.handle('oauth:twitchRedirect', () => TWITCH_REDIRECT)
 ipcMain.handle('oauth:twitchLogin', async (e, { clientId, clientSecret, scopes }) => {
+  if (cloudSync.isPaired()) return { ok: false, error: 'Twitch is managed by your paired KitsuNexus server. Link it on the dashboard.' }
   try {
     const tokens = await loginTwitch(clientId, clientSecret, scopes)
     return { ok: true, ...tokens }
@@ -1497,14 +1519,116 @@ ipcMain.handle('localfav:import', async () => {
 // kitsunexus-server instance. See modules/favorites/cloudSync.js.
 ipcMain.handle('cloudsync:status', () => cloudSync.status())
 ipcMain.handle('cloudsync:startPairing', (e, { baseUrl, deviceName } = {}) => cloudSync.startPairing(baseUrl, deviceName))
-ipcMain.handle('cloudsync:pollPairing', () => cloudSync.pollPairing())
-ipcMain.handle('cloudsync:disconnect', () => cloudSync.disconnect())
+ipcMain.handle('cloudsync:pollPairing', async () => {
+  const result = await cloudSync.pollPairing()
+  if (result.paired) {
+    stopTwitch()
+    twitchInteractive.stop(false)
+    await syncTwitchFromServer()
+  }
+  return result
+})
+ipcMain.handle('cloudsync:disconnect', () => {
+  const result = cloudSync.disconnect()
+  clearServerTwitch()
+  return result
+})
 ipcMain.handle('cloudsync:setEnabled', (e, enabled) => cloudSync.setEnabled(enabled))
 ipcMain.handle('cloudsync:syncNow', () => cloudSync.syncNow())
 ipcMain.handle('cloudsync:setHistoryEnabled', (e, enabled) => cloudSync.setHistoryEnabled(enabled))
 ipcMain.handle('cloudsync:syncHistoryNow', () => cloudSync.syncWorldHistory())
 ipcMain.handle('cloudsync:isOwner', () => cloudSync.isOwner())
 ipcMain.handle('cloudsync:refreshMe', () => cloudSync.refreshMe())
+
+// Server access tokens exist only in the main process. Local OAuth settings
+// remain available when the user unpairs; server credentials never enter them.
+let twitchSession = null
+let twitchSyncPending = null
+let twitchSyncKey = ''
+let twitchSyncEpoch = 0
+function currentTwitchConfig () {
+  if (!cloudSync.isPaired()) return settings.get('oauth.twitch', settings.get('twitch', {}))
+  return twitchSession?.pairingKey === cloudSync.pairingKey() ? twitchSession : {}
+}
+function clearServerTwitch () {
+  // Invalidate requests already in flight, including when no session was
+  // installed yet. An unlink must never be undone by a late GET response.
+  twitchSyncEpoch++
+  if (!twitchSession) return
+  twitchSession = null
+  stopTwitch()
+  twitchInteractive.stop(false)
+  push('twitch:update', { connected: false, followers: 0 })
+  push('oscApps:twitchInteractiveUpdate', twitchInteractive.getState())
+  push('cloudsync:twitchUpdate', { connected: false })
+}
+function emitServerTwitchUpdate (state) {
+  const { token, refreshToken, ...publicState } = state
+  push('twitch:update', publicState)
+}
+async function syncTwitchFromServer () {
+  // If pairing changes during a request, let that request settle, then fetch
+  // the new account instead of reusing a result for the previous pairing.
+  if (twitchSyncPending) {
+    if (twitchSyncKey !== cloudSync.pairingKey()) return twitchSyncPending.then(() => syncTwitchFromServer())
+    return twitchSyncPending
+  }
+  twitchSyncKey = cloudSync.pairingKey()
+  twitchSyncPending = (async () => {
+    if (!cloudSync.isPaired()) {
+      clearServerTwitch()
+      return { ok: false, error: 'Pair with a server first.' }
+    }
+    const pairingKey = cloudSync.pairingKey()
+    if (twitchSession && twitchSession.pairingKey !== pairingKey) clearServerTwitch()
+    const epoch = twitchSyncEpoch
+    const result = await cloudSync.twitchCredentials()
+    if (epoch !== twitchSyncEpoch) return { ok: false, error: 'Twitch sync was superseded.' }
+    if (!result.ok) {
+      if (pairingKey !== cloudSync.pairingKey()) clearServerTwitch()
+      return result
+    }
+    if (result.pairingKey !== cloudSync.pairingKey()) {
+      clearServerTwitch()
+      return { ok: false, error: 'Device pairing changed while syncing Twitch.' }
+    }
+    if (!result.connected) {
+      clearServerTwitch()
+      return result
+    }
+    const before = twitchSession
+    twitchSession = {
+      pairingKey, login: result.login, clientId: result.clientId,
+      token: result.accessToken, clientSecret: '', refreshToken: ''
+    }
+    if (!before || before.login !== twitchSession.login || before.pairingKey !== pairingKey) {
+      push('cloudsync:twitchUpdate', { connected: true, login: twitchSession.login })
+    }
+    if (before && (before.token !== twitchSession.token || before.login !== twitchSession.login)) {
+      if (getTwitchState().running) {
+        await startTwitch(twitchSession, emitServerTwitchUpdate)
+      }
+      if (twitchInteractive.getState().running) {
+        try {
+          await twitchInteractive.start({ ...settings.get('oscApps.twitchInteractive', {}), ...twitchSession },
+            osc.sendParam, state => push('oscApps:twitchInteractiveUpdate', state))
+        } catch (err) { console.warn('[twitch] interactive reconnect:', err.message) }
+      }
+    }
+    return result
+  })().finally(() => { twitchSyncPending = null })
+  return twitchSyncPending
+}
+
+ipcMain.handle('cloudsync:twitchCredentials', async () => {
+  const { accessToken, pairingKey, ...result } = await syncTwitchFromServer()
+  return result
+})
+ipcMain.handle('cloudsync:twitchUnlink', async () => {
+  const result = await cloudSync.unlinkTwitch()
+  if (result.ok) clearServerTwitch()
+  return result
+})
 
 // Let the user relocate the local-favorites DB file (e.g. onto a synced drive).
 ipcMain.handle('localfav:choosePath', async () => {
@@ -1805,7 +1929,11 @@ ipcMain.handle('data:import', async () => {
   if (r.canceled || !r.filePaths[0]) return { ok: false, error: 'cancelled' }
   try {
     const data = JSON.parse(fs.readFileSync(r.filePaths[0], 'utf8'))
-    if (data.settings) settings.importAll(data.settings)
+    if (data.settings) {
+      settings.importAll(data.settings)
+      if (settings.get('oauth.twitch', {})?.serverManaged) settings.set('oauth.twitch', {})
+      clearServerTwitch()
+    }
     return { ok: true }
   } catch (err) { return { ok: false, error: err.message } }
 })

@@ -7,6 +7,15 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Website-linked Twitch OAuth2 shared with paired desktop devices.** KitsuNexus accounts
+  can authorize Twitch once in the server dashboard. The server encrypts access and refresh
+  tokens, rotates expiring access tokens and serves short-lived access to authenticated
+  desktop installations for follower tracking and Twitch Interactive. The app syncs the
+  linked account at startup and once per minute, while unpaired users retain local OAuth.
+  Pairing changes refresh the Twitch controls immediately; older Twitch Interactive
+  authorization requests cannot reopen connections after stopping or switching accounts.
+  Live Twitch authorization on a configured deployment still requires verification.
+
 - **Server-managed desktop updates and Discord Rich Presence ID.** The desktop checks
   `kitsunexus-server` for cached GitHub release metadata and reads its default Discord
   Application ID from the public configuration endpoint. Older/offline servers fall back
@@ -32,6 +41,15 @@ This project follows [Semantic Versioning](https://semver.org/).
   panel; stronger contrast at narrow widths keeps text readable over the art.
 
 ### Fixed
+
+- **Twitch tokens leaking into paired desktop settings and stale session reuse.**
+  Paired access tokens now remain in the Electron main process; the settings UI receives
+  connection status and identity only. Changing a pairing invalidates old responses, and
+  unlinking clears active Twitch features, including in-flight credential requests.
+  Follower tracking now handles token replacement during its first poll and clears
+  runtime tokens when stopped. OAuth callbacks use signed, browser-bound expiring
+  state that works across server restarts, and unlinking removes the server link
+  before attempting Twitch revocation so an overlapping new authorization survives.
 
 - **Friend profiles showing blank thumbnails or banners.** The renderer now considers
   public-profile `iconUrl` as well as avatar thumbnails and custom VRChat Plus

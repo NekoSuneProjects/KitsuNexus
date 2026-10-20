@@ -4,6 +4,7 @@
 // Settings > Cloud Sync — local favorites work fully offline without this. Runs in MAIN.
 
 const settings = require('../../settings')
+const crypto = require('node:crypto')
 const localFavoritesDb = require('./localFavoritesDb')
 const gamelog = require('../history/gamelog')
 
@@ -23,6 +24,11 @@ function cfg () {
 }
 
 function isPaired () { const c = cfg(); return !!(c.baseUrl && c.token) }
+// No bearer token is disclosed in UI or stored with Twitch credentials.
+function pairingKey () {
+  const c = cfg()
+  return isPaired() ? crypto.createHash('sha256').update(`${c.baseUrl}\n${c.deviceId}\n${c.token}`).digest('hex') : ''
+}
 function status () {
   const c = cfg()
   return { paired: isPaired(), baseUrl: c.baseUrl, enabled: c.enabled, lastSyncAt: c.lastSyncAt, historyEnabled: c.historyEnabled, historyLastSyncAt: c.historyLastSyncAt, role: settings.get('cloudSync.role', ''), overlayUrl: c.overlayUrl }
@@ -92,6 +98,42 @@ function disconnect () {
 
 function setEnabled (enabled) { settings.set('cloudSync.enabled', !!enabled); return status() }
 function setHistoryEnabled (enabled) { settings.set('cloudSync.historyEnabled', !!enabled); return status() }
+
+// The website owns the Twitch OAuth client secret and rotating refresh token.
+// Paired devices only fetch the access token required by Twitch's live APIs.
+async function twitchCredentials () {
+  const c = cfg()
+  if (!c.baseUrl || !c.token) return { ok: false, error: 'Pair KitsuNexus with a server first.' }
+  const key = pairingKey()
+  try {
+    const res = await fetch(`${c.baseUrl}/api/twitch/credentials`, {
+      headers: { Authorization: `Bearer ${c.token}` }, signal: AbortSignal.timeout(10000)
+    })
+    if (key !== pairingKey()) return { ok: false, error: 'Device pairing changed while syncing Twitch.' }
+    if (res.status === 401) { disconnect(); return { ok: false, error: 'Device token revoked. Pair again.' } }
+    const data = await res.json()
+    if (!res.ok || !data.ok) return { ok: false, error: data.error || `Server returned ${res.status}` }
+    if (data.connected && (!data.accessToken || !data.clientId || !data.login)) {
+      return { ok: false, error: 'Server returned incomplete Twitch credentials' }
+    }
+    return { ...data, pairingKey: key }
+  } catch (err) { return { ok: false, error: 'Could not reach server: ' + err.message } }
+}
+
+async function unlinkTwitch () {
+  const c = cfg()
+  if (!c.baseUrl || !c.token) return { ok: false, error: 'Pair KitsuNexus with a server first.' }
+  const key = pairingKey()
+  try {
+    const res = await fetch(`${c.baseUrl}/api/twitch/unlink`, {
+      method: 'POST', headers: { Authorization: `Bearer ${c.token}` }, signal: AbortSignal.timeout(10000)
+    })
+    if (key !== pairingKey()) return { ok: false, error: 'Device pairing changed while unlinking Twitch.' }
+    if (res.status === 401) { disconnect(); return { ok: false, error: 'Device token revoked. Pair again.' } }
+    const data = await res.json()
+    return res.ok ? data : { ok: false, error: data.error || `Server returned ${res.status}` }
+  } catch (err) { return { ok: false, error: 'Could not reach server: ' + err.message } }
+}
 
 const toRemote = f => ({ type: f.type, vrchatId: f.vrchat_id, displayName: f.display_name, imageUrl: f.image_url, note: f.note, collection: f.collection, updatedAt: f.updated_at, deletedAt: f.deleted_at || null })
 const toLocal = f => ({ type: f.type, vrchat_id: f.vrchatId, display_name: f.displayName, image_url: f.imageUrl, note: f.note, collection: f.collection, updated_at: f.updatedAt, deleted_at: f.deletedAt || null })
@@ -222,4 +264,4 @@ async function getLeaderboard (limit) {
   } catch (err) { return { ok: false, error: 'Could not reach server: ' + err.message } }
 }
 
-module.exports = { status, startPairing, pollPairing, disconnect, setEnabled, setHistoryEnabled, syncNow, syncWorldHistory, isPaired, refreshMe, isOwner, pushOverlay, getOverlayUrl, pushRank, getLeaderboard }
+module.exports = { status, startPairing, pollPairing, disconnect, pairingKey, setEnabled, setHistoryEnabled, syncNow, syncWorldHistory, isPaired, refreshMe, isOwner, pushOverlay, getOverlayUrl, pushRank, getLeaderboard, twitchCredentials, unlinkTwitch }
