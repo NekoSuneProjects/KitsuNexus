@@ -5,6 +5,10 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Fixed
+
+- **Server Docker ARM64 builds took excessive time under QEMU.** The manually dispatched Docker workflow now runs AMD64 and ARM64 builds in parallel on native runners. Source commits are pinned across both builds, and publishing combines the architecture images into the existing `latest` and commit SHA tags. Build-only runs continue without GHCR pushes or artifact uploads.
+
 ## [1.0.79] - 2026-10-19
 
 This release improves Spotify Now Playing detection, source selection, and artwork lookup safety, and corrects Linux ARM64 packaging.

@@ -19,6 +19,7 @@
 - [ ] Add a backend-coordinated state binding for the Discord desktop identity callback to prevent cross-login session injection.
 
 ## CI/CD
+- [x] Build server Docker AMD64 and ARM64 on matching native GitHub runners and combine their published images into a multi-platform manifest, avoiding slow QEMU SQLite compilation.
 - [x] Fix Linux ARM64 packaging rebuilding x64 native modules by letting each matrix job select one architecture.
 - [x] Automatically create missing release tags when a manual build specifies a version, and build installers with that version.
 - [ ] Correct release notes and Discord download labels to show the generated Linux `.tar.gz` archives rather than `.deb` packages.
