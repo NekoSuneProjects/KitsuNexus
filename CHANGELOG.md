@@ -5,6 +5,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.80] - 2026-10-20
+
 ### Community Booster
 
 - Moved Community Booster verification and reward configuration to
