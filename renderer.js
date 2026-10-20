@@ -253,8 +253,8 @@ function drawBoosterStatus (snapshot) {
   const descriptions = {
     unlinked: 'Pair your KitsuNexus server in Cloud Sync first. Standard features remain available.',
     verified: !snapshot.linkedDiscord ? 'Server paired. Link your Discord account in the server dashboard to verify boosts.'
-      : count ? `Active Discord booster verified · ${snapshot.tier} rewards (level ${snapshot.rewardLevel}).`
-        : 'Discord linked. No active boost detected in the server’s official guild.',
+      : count ? `Boosting verified in ${count} Discord ${count === 1 ? 'server' : 'servers'} · ${snapshot.tier} rewards (level ${snapshot.rewardLevel}).`
+        : 'Discord linked. No active boost detected in the configured booster servers.',
     expired: 'Checking KitsuNexus server rewards…',
     revoked: 'Server pairing was revoked. Pair again to verify supporter perks.',
     offline: 'Booster verification is offline. Only unexpired verified rewards remain active.',

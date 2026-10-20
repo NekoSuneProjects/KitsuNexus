@@ -1,7 +1,7 @@
 # Community Booster: KitsuNexus server integration
 
 Community Booster is an optional cosmetic reward system for members actively
-boosting the server's official Discord guild. All VRChat, OSC, chatbox, audio,
+boosting any of the configured Discord guilds. All VRChat, OSC, chatbox, audio,
 accessibility and account functions remain available without a boost.
 
 ## Connect and verify
@@ -12,15 +12,25 @@ accessibility and account functions remain available without a boost.
    connect your Discord account via **Manage Discord account** (or
    `/settings/discord`). The desktop's Community Booster panel also opens this
    server-side link page.
-3. Boost the configured official Discord guild, then use **Refresh** in the
+3. Boost either configured Discord guild, then use **Refresh** in the
    desktop panel. The app loads rewards from the server and refreshes them
    periodically. Enabled defaults are applied to verified unlocked cosmetics;
    individual appearance options can be saved or reset in Settings.
 
-The server must configure `DISCORD_BOT_TOKEN`, `DISCORD_OFFICIAL_GUILD_ID` and
-its Discord OAuth credentials (see `kitsunexus-server/.env.example`). The bot
-needs guild member access and the appropriate members intent. The server must
-be able to verify membership in the configured official guild.
+The server must configure `DISCORD_BOT_TOKEN`, `DISCORD_BOOST_GUILD_IDS` and
+its Discord OAuth credentials (see `kitsunexus-server/.env.example`). To check
+both KitsuNexus and LinkUp, use:
+
+```dotenv
+DISCORD_BOOST_GUILD_IDS=1539604439625764894,1274732053337870417
+```
+
+The bot needs Server Members Intent and membership in **both** guilds. Its
+token stays on the KitsuNexus backend. `DISCORD_OFFICIAL_GUILD_ID` independently
+controls the official KitsuNexus guild used for rank sync and bans. A separate
+LinkUp deployment can continue using `1274732053337870417` as its primary
+guild. Without `DISCORD_BOOST_GUILD_IDS`, booster verification defaults to the
+official KitsuNexus guild.
 
 ## Server API
 
@@ -41,8 +51,8 @@ on localhost for development.
 
 | Tier | Verified requirement | Newly unlocked cosmetics |
 | --- | --- | --- |
-| Spark | Active boost (reward level 1) | Supporter badge, ribbon, header sparkle |
-| Glow | Active boost + level 2 role | Accent, card border, ambient lighting |
+| Spark | Active boost in either configured server (reward level 1) | Supporter badge, ribbon, header sparkle |
+| Glow | Active boost in both servers, or an active boost + level 2 role | Accent, card border, ambient lighting |
 | Nova | Active boost + level 3 role | Nova decoration, gradient header, navigation highlight |
 | Constellation | Active boost + level 5 role | Constellation decoration, decorative frame, starlight |
 
@@ -55,17 +65,21 @@ off without losing their saved preferences.
 
 **Discord's guild-member API confirms active boosting but does not reliably
 report how many individual boosts someone contributes.** `activeBoostCount`
-reports a verified active-booster indicator (0 or 1), not a literal multi-boost
-count. `rewardLevel` is the reward tier threshold; it can be raised by roles
+reports the number of verified boosting **guilds** (0, 1 or 2 for the two
+configured servers), not a literal Discord boost-slot count. `rewardLevel`
+is the reward tier threshold; it can be raised by roles
 assigned by trusted server staff or automation. Configure optional role IDs:
 
 ```dotenv
 DISCORD_BOOST_TIER_ROLES={"2":"ROLE_ID","3":"ROLE_ID","5":"ROLE_ID"}
+# Optional guild-specific thresholds, overriding the legacy map for those guilds:
+DISCORD_BOOST_TIER_ROLES_BY_GUILD={"1539604439625764894":{"3":"ROLE_ID"},"1274732053337870417":{"5":"ROLE_ID"}}
 ```
 
-These roles only upgrade a **currently active booster**, preventing inactive
-role holders from receiving rewards. When no roles are configured, Spark is the
-highest attainable tier through the Discord API alone.
+These roles only upgrade a **currently active booster in the associated
+guild**, preventing inactive role holders from receiving rewards. The legacy
+role map applies to the official guild only. With two configured booster
+guilds and no tier roles, Glow is the highest attainable tier.
 
 ## Offline, revocation and safety
 
