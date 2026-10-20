@@ -166,6 +166,16 @@ function isReady () { return ready }
 // (authorizedGuilds.isAuthorized), which just means it's allowed to be; the bot could've been
 // kicked, or the guild deleted, without that whitelist entry ever being cleaned up.
 function isInGuild (guildId) { return !!(client && client.guilds.cache.has(guildId)) }
+async function fetchGuildMember (guildId, userId) {
+  if (!ready || !client) throw new Error('Discord gateway is unavailable')
+  const guild = client.guilds.cache.get(guildId)
+  if (!guild) throw new Error('Official guild is unavailable')
+  // Fetch fresh membership/roles for entitlement checks, not an old cache.
+  try { return await guild.members.fetch({ user: userId, force: true }) } catch (err) {
+    if (err.code === 10007) return null // Unknown Member: linked but not in guild.
+    throw err // Rate limits, transport failure, and permission issues fail closed.
+  }
+}
 function getLastError () { return lastError }
 
 // Used by /settings/discord's "Remove" action: revoking a guild in
@@ -290,4 +300,4 @@ async function banFromOfficialGuild (discordUserId, reason) {
   await guild.members.ban(discordUserId, { reason: reason || 'Banned from KitsuNexus' })
 }
 
-module.exports = { start, startWithRetry, isReady, isInGuild, getLastError, getUserVoiceState, getChannelRoster, setMute, setDeaf, leaveGuild, hasManagePermission, setMemberRankRole, banFromOfficialGuild }
+module.exports = { start, startWithRetry, isReady, isInGuild, fetchGuildMember, getLastError, getUserVoiceState, getChannelRoster, setMute, setDeaf, leaveGuild, hasManagePermission, setMemberRankRole, banFromOfficialGuild }

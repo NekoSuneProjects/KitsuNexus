@@ -77,6 +77,39 @@ Discord bot integration is optional — fill in `DISCORD_CLIENT_ID`/`DISCORD_CLI
 `DISCORD_BOT_TOKEN`/`DISCORD_REDIRECT_URI` in `.env` to enable it, then link your account at
 `/settings/discord`.
 
+### Community Booster rewards
+
+The server owns the **Community Booster** catalogue and entitlement checks.
+Once a user pairs the Electron desktop through Cloud Sync and links their
+Discord account at `/settings/discord`, the server checks whether that Discord
+account actively boosts the official guild. The personal dashboard has a
+**Community Booster** panel showing the current verified tier and available
+cosmetics. Core desktop features remain free without boosting.
+
+- `GET /api/community-booster/catalog` is public and returns the tier catalogue
+  and recommended default appearance settings.
+- `GET /api/community-booster/me` requires the existing paired-device bearer
+  token and returns the user's **server-verified** booster tier, unlocked
+  cosmetics, verified active-boost indicator and reward level. Missing/revoked
+  credentials are rejected; Discord outages return HTTP 503.
+- Configure `DISCORD_OFFICIAL_GUILD_ID`, bot credentials and Discord OAuth to
+  verify boosters. The bot must have the Guild Members intent enabled. It must
+  be online and present in the official guild to verify rewards.
+- Optional `DISCORD_BOOST_TIER_ROLES` maps reward levels to role IDs, e.g.
+  `{"2":"ROLE_ID","3":"ROLE_ID","5":"ROLE_ID"}`. The Discord member API
+  confirms active boosting but does **not** reliably expose the number of
+  boosts each user contributes; one active boost grants Spark, while trusted
+  guild roles upgrade *active* boosters to Glow, Nova and Constellation.
+- Desktop appearance preferences default to enabled for unlocked cosmetic
+  effects, including ribbons, sparkles, accents, borders, ambient lighting,
+  gradients, navigation highlights, frames and starlight. Highest unlocked
+  decoration is selected automatically. The desktop checks every minute and
+  caches verified rewards for no more than five minutes; revoked pairings,
+  expired cache and confirmed ended boosts remove unlocked effects.
+
+See [`NODEJS/docs/community-booster.md`](../NODEJS/docs/community-booster.md)
+for the full desktop and API integration guide.
+
 Twitch OAuth2 is optional. Register a Twitch **Confidential** application with
 `<SITE_URL>/oauth2/twitch/callback` as its redirect, then configure
 `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`, and a stable, randomly generated

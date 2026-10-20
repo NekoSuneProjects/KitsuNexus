@@ -1,6 +1,7 @@
 <div class="shell">
   <nav class="shell-sidebar" id="shellNav">
     <button class="shell-nav-btn" data-panel="overview"><span class="ico">📊</span> Overview</button>
+    <button class="shell-nav-btn" data-panel="booster"><span class="ico">✦</span> Community Booster</button>
     <button class="shell-nav-btn" data-panel="favorites"><span class="ico">⭐</span> Favorites</button>
     <button class="shell-nav-btn" data-panel="devices"><span class="ico">🔗</span> Devices</button>
     <button class="shell-nav-btn" data-panel="discord"><span class="ico">💜</span> Discord</button>
@@ -123,6 +124,45 @@
         <% } %>
         <a class="btn ghost" href="/settings/discord" style="align-self:flex-start;margin-top:8px">Manage</a>
       </div>
+    </section>
+
+    <section class="shell-panel" data-panel="booster">
+      <h1 style="font-size:1.4rem;margin:0 0 12px">Community Booster</h1>
+      <p class="muted" style="font-size:.85rem;margin:0 0 18px">Cosmetic rewards are verified by the KitsuNexus server and appear in your paired desktop app. Core app features are available to everyone.</p>
+      <div class="feature-card" style="max-width:720px;margin-bottom:18px">
+        <h3>Your booster rewards</h3>
+        <div class="stat-row"><span>Discord account</span><b><%= discordLink ? (discordLink.discordUsername || 'Linked') : 'Not linked' %></b></div>
+        <% if (boosterUnavailable) { %>
+          <p class="muted">Discord verification is currently unavailable or has not been configured on this server. Your rewards cannot be confirmed right now. Check back when the bot is online.</p>
+        <% } else if (!boosterGrant.linkedDiscord) { %>
+          <p class="muted">Link your Discord account to verify whether you are boosting the official server.</p>
+        <% } else { %>
+          <div class="stat-row"><span>Active Discord boost</span><b><%= boosterGrant.activeBoostCount ? 'Verified' : 'Not detected' %></b></div>
+          <div class="stat-row"><span>Reward tier</span><b><%= boosterGrant.tier === 'none' ? 'None' : boosterCatalogue.tiers.find(t => t.id === boosterGrant.tier).label %></b></div>
+          <div class="stat-row"><span>Reward level</span><b><%= boosterGrant.rewardLevel %></b></div>
+          <% if (boosterGrant.source === 'discord_tier_role') { %>
+            <p class="muted" style="font-size:.8rem">Your higher reward level is verified through a server-managed Discord role.</p>
+          <% } %>
+          <% if (boosterGrant.unlocked.length) { %>
+            <p class="muted" style="font-size:.85rem">Unlocked cosmetics: <%= boosterGrant.unlocked.join(', ') %>.</p>
+          <% } %>
+        <% } %>
+        <a class="btn ghost" href="/settings/discord" style="align-self:flex-start">Manage Discord account</a>
+      </div>
+      <h2 style="font-size:1.1rem;margin:0 0 12px">Available reward tiers</h2>
+      <div class="dash-grid">
+        <% boosterCatalogue.tiers.forEach(tier => { %>
+          <div class="feature-card">
+            <h3><%= tier.label %></h3>
+            <p class="muted" style="font-size:.8rem;margin:4px 0 12px">Reward level <%= tier.minBoosts %>+</p>
+            <p style="font-size:.85rem;margin:0"><%= tier.unlocks.join(', ') %></p>
+            <% if (boosterGrant && boosterGrant.rewardLevel >= tier.minBoosts) { %>
+              <p style="font-size:.8rem;margin:10px 0 0">Unlocked</p>
+            <% } %>
+          </div>
+        <% }) %>
+      </div>
+      <p class="muted" style="font-size:.8rem;margin-top:18px">One active boost establishes Spark eligibility. Discord does not expose each person's exact boost count to the bot; higher tiers require staff-managed roles and an active boost. Rewards accumulate across tiers. Cosmetic defaults are enabled in the app, and you can customise them in Settings.</p>
     </section>
 
     <section class="shell-panel" data-panel="twitch">

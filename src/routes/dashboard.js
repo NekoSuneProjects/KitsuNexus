@@ -7,6 +7,7 @@ const { createUnlinkToken } = require('../auth/twitchCsrf')
 const config = require('../config')
 const { eraseUserData } = require('../services/accountErasure')
 const { generateShareCode, generateOverlayId } = require('../auth/deviceToken')
+const { catalogue: boosterCatalogue, entitlementForLink } = require('../services/communityBooster')
 
 const router = express.Router()
 
@@ -24,6 +25,12 @@ router.get('/dashboard', requireAuth, asyncHandler(async (req, res) => {
 
   const devices = await Device.findAll({ where: { userId: req.user.id }, order: [['createdAt', 'DESC']] })
   const discordLink = await DiscordLink.findOne({ where: { userId: req.user.id } })
+  let boosterGrant = null
+  let boosterUnavailable = false
+  try { boosterGrant = await entitlementForLink(discordLink) } catch (err) {
+    boosterUnavailable = true
+    console.warn('[dashboard] Community Booster verification unavailable:', err.message)
+  }
   const twitchLink = await TwitchLink.findOne({ where: { userId: req.user.id } })
   const rankScore = await RankScore.findOne({ where: { userId: req.user.id } })
   const worldVisitCount = await WorldVisit.count({ where: { userId: req.user.id } })
@@ -61,6 +68,9 @@ router.get('/dashboard', requireAuth, asyncHandler(async (req, res) => {
     user: req.user,
     devices,
     discordLink,
+    boosterCatalogue,
+    boosterGrant,
+    boosterUnavailable,
     twitchLink,
     twitchUnlinkCsrf: createUnlinkToken(req),
     twitchConfigured: require('../services/twitchOAuth').hasConfig(),
