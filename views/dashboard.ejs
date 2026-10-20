@@ -8,6 +8,7 @@
     <button class="shell-nav-btn" data-panel="share"><span class="ico">🔀</span> Share</button>
     <button class="shell-nav-btn" data-panel="rank"><span class="ico">🏅</span> Community Rank</button>
     <button class="shell-nav-btn" data-panel="danger"><span class="ico">⚠</span> Danger zone</button>
+    <button class="shell-nav-btn" data-panel="twitch"><span class="ico">T</span> Twitch</button>
   </nav>
 
   <div class="shell-content">
@@ -121,6 +122,28 @@
           <p class="muted" style="font-size:.85rem;margin:0">Link Discord for Community Rank role sync and voice controls.</p>
         <% } %>
         <a class="btn ghost" href="/settings/discord" style="align-self:flex-start;margin-top:8px">Manage</a>
+      </div>
+    </section>
+
+    <section class="shell-panel" data-panel="twitch">
+      <h1 style="font-size:1.4rem;margin:0 0 16px">Twitch OAuth2</h1>
+      <p class="muted" style="font-size:.85rem;margin-bottom:18px">Authorize Twitch here once to use the same account in every paired KitsuNexus desktop app. The server renews tokens automatically.</p>
+      <div class="feature-card" style="max-width:480px">
+        <% if (!twitchConfigured) { %>
+          <h3>Not configured on this server</h3>
+          <p class="muted">Set TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET and TWITCH_TOKEN_KEY on the server, then restart it.</p>
+        <% } else if (twitchLink) { %>
+          <h3>Linked as <%= twitchLink.displayName || twitchLink.login %></h3>
+          <p class="muted">Channel: <%= twitchLink.login %>. Your paired desktop app can sync this account under OAuth Accounts.</p>
+          <form method="post" action="/settings/twitch/unlink" onsubmit="return confirm('Unlink Twitch from this KitsuNexus account and all paired devices?')">
+            <input type="hidden" name="_twitchCsrf" value="<%= twitchUnlinkCsrf %>">
+            <button class="btn danger" type="submit">Unlink Twitch</button>
+          </form>
+          <a class="btn ghost" href="/oauth2/twitch/authorize-link">Reauthorize Twitch</a>
+        <% } else { %>
+          <h3>Not linked</h3>
+          <a class="btn primary" href="/oauth2/twitch/authorize-link">Link Twitch account</a>
+        <% } %>
       </div>
     </section>
 

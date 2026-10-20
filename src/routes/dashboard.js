@@ -1,8 +1,9 @@
 const express = require('express')
-const { Device, Favorite, WorldVisit, DiscordLink, RankScore, ShareLink, Entity } = require('../db')
+const { Device, Favorite, WorldVisit, DiscordLink, TwitchLink, RankScore, ShareLink, Entity } = require('../db')
 const requireAuth = require('../middleware/requireAuth')
 const asyncHandler = require('../utils/asyncHandler')
 const session = require('../auth/session')
+const { createUnlinkToken } = require('../auth/twitchCsrf')
 const config = require('../config')
 const { eraseUserData } = require('../services/accountErasure')
 const { generateShareCode, generateOverlayId } = require('../auth/deviceToken')
@@ -23,6 +24,7 @@ router.get('/dashboard', requireAuth, asyncHandler(async (req, res) => {
 
   const devices = await Device.findAll({ where: { userId: req.user.id }, order: [['createdAt', 'DESC']] })
   const discordLink = await DiscordLink.findOne({ where: { userId: req.user.id } })
+  const twitchLink = await TwitchLink.findOne({ where: { userId: req.user.id } })
   const rankScore = await RankScore.findOne({ where: { userId: req.user.id } })
   const worldVisitCount = await WorldVisit.count({ where: { userId: req.user.id } })
   const shareLinks = await ShareLink.findAll({ where: { createdByUserId: req.user.id }, order: [['createdAt', 'DESC']] })
@@ -59,6 +61,9 @@ router.get('/dashboard', requireAuth, asyncHandler(async (req, res) => {
     user: req.user,
     devices,
     discordLink,
+    twitchLink,
+    twitchUnlinkCsrf: createUnlinkToken(req),
+    twitchConfigured: require('../services/twitchOAuth').hasConfig(),
     rankScore,
     overlayUrl: req.user.overlayId ? `${config.siteUrl}/overlay/${req.user.overlayId}` : '',
     overlayStyle: req.user.overlayStyle || 'default',

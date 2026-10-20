@@ -76,3 +76,23 @@ Sync in the app: enter your server URL, then enter the code shown at `/pair` whi
 Discord bot integration is optional — fill in `DISCORD_CLIENT_ID`/`DISCORD_CLIENT_SECRET`/
 `DISCORD_BOT_TOKEN`/`DISCORD_REDIRECT_URI` in `.env` to enable it, then link your account at
 `/settings/discord`.
+
+Twitch OAuth2 is optional. Register a Twitch **Confidential** application with
+`<SITE_URL>/oauth2/twitch/callback` as its redirect, then configure
+`TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`, and a stable, randomly generated
+`TWITCH_TOKEN_KEY` in `.env`. Sign in to the KitsuNexus dashboard and link Twitch
+in its Twitch panel. Paired desktop apps fetch renewable Twitch access through
+`GET /api/twitch/credentials` using their device bearer token. The server keeps
+refresh tokens encrypted at rest and never sends them to a desktop device. The
+desktop keeps issued access tokens in the Electron main process memory, syncs
+the account at startup and every minute, and stops active connections when
+the link disappears. Unlinking removes stored credentials before attempting
+token revocation, so a new authorization created during revocation is preserved.
+The dashboard's Twitch unlink form uses a session-bound CSRF token, and a pending
+token refresh cannot overwrite credentials from a newer authorization.
+Keep both `TWITCH_TOKEN_KEY` and `JWT_SECRET` stable across restarts and backend
+instances (changing either breaks stored tokens or authorization sessions).
+The Twitch Client ID, secret and redirect URI must belong to the same Twitch
+application. Authorize through the server dashboard while signed in to the
+website; the desktop's Twitch OAuth Accounts panel opens this authorization
+page when paired. The OAuth flow still needs live verification after deployment.

@@ -2,7 +2,8 @@
 // self-service "right to erasure" and the staff-initiated permanent ban (routes/dashboard.js,
 // routes/admin.js). Entity (the public VRChat metadata cache) is deliberately excluded: it
 // holds no personal data about the account, just public info about worlds/avatars.
-const { User, Device, Favorite, WorldVisit, DiscordLink, ApiKey, ShareLink, OverlayStatus, RankScore } = require('../db')
+const { User, Device, Favorite, WorldVisit, DiscordLink, TwitchLink, ApiKey, ShareLink, OverlayStatus, RankScore } = require('../db')
+const twitchOAuth = require('./twitchOAuth')
 
 async function eraseUserData (userId) {
   const user = await User.findByPk(userId)
@@ -16,6 +17,8 @@ async function eraseUserData (userId) {
   await Favorite.destroy({ where: { userId }, force: true }) // force: real erasure, not the usual soft-delete tombstone
   await WorldVisit.destroy({ where: { userId } })
   await DiscordLink.destroy({ where: { userId } })
+  // Account deletion should revoke Twitch access where possible too.
+  await twitchOAuth.unlink(userId)
   await ApiKey.destroy({ where: { userId } })
   await ShareLink.destroy({ where: { createdByUserId: userId } })
   await OverlayStatus.destroy({ where: { userId } })

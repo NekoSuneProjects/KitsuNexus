@@ -35,6 +35,13 @@ module.exports = {
   discordBotToken: process.env.DISCORD_BOT_TOKEN || '',
   discordRedirectUri: process.env.DISCORD_REDIRECT_URI || '',
   discordInviteUrl: process.env.DISCORD_INVITE_URL || '',
+  // Twitch OAuth remains entirely on the server. Desktop clients only need the
+  // public Client ID and a short-lived access token from their paired account.
+  twitchClientId: process.env.TWITCH_CLIENT_ID || '',
+  twitchClientSecret: process.env.TWITCH_CLIENT_SECRET || '',
+  twitchRedirectUri: process.env.TWITCH_REDIRECT_URI || `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/+$/, '')}/oauth2/twitch/callback`,
+  twitchScopes: 'moderator:read:followers chat:read channel:read:redemptions',
+  twitchTokenKey: process.env.TWITCH_TOKEN_KEY || '',
   // The official KitsuNexus Discord server — exempted from authorizedGuilds.js's whitelist
   // enforcement (discordBotGateway.js normally leaves any guild that was never added through
   // /oauth2/discord/authorize-bot) and the only guild services/banUser.js's Discord-side ban

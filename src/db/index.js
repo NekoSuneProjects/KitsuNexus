@@ -3,6 +3,7 @@ const User = require('./models/User')
 const Device = require('./models/Device')
 const Favorite = require('./models/Favorite')
 const DiscordLink = require('./models/DiscordLink')
+const TwitchLink = require('./models/TwitchLink')
 const WorldVisit = require('./models/WorldVisit')
 const ApiKey = require('./models/ApiKey')
 const Entity = require('./models/Entity')
@@ -117,4 +118,4 @@ async function ensureStubUser () {
   return user
 }
 
-module.exports = { sequelize, User, Device, Favorite, DiscordLink, WorldVisit, ApiKey, Entity, ShareLink, OverlayStatus, RankScore, GuildRankRole, BannedIdentity, ensureStubUser, STUB_USER_ID, init }
+module.exports = { sequelize, User, Device, Favorite, DiscordLink, TwitchLink, WorldVisit, ApiKey, Entity, ShareLink, OverlayStatus, RankScore, GuildRankRole, BannedIdentity, ensureStubUser, STUB_USER_ID, init }
