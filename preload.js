@@ -1,6 +1,20 @@
 // preload.js
 const { ipcRenderer } = require('electron')
 
+// Errors from timers and asynchronous UI handlers do not reach the Electron
+// main process exception listeners. Persist them without opening OS dialogs.
+window.addEventListener('error', event => {
+  if (!event.error && !event.message) return // Ignore ordinary resource errors.
+  ipcRenderer.send('diagnostic:rendererError', {
+    kind: 'error', message: String(event.error?.stack || event.message || '').slice(0, 2000)
+  })
+})
+window.addEventListener('unhandledrejection', event => {
+  ipcRenderer.send('diagnostic:rendererError', {
+    kind: 'unhandledRejection', message: String(event.reason?.stack || event.reason || '').slice(0, 2000)
+  })
+})
+
 // contextIsolation is off (matches OSCAudiolink), so expose directly on window.
 window.electronAPI = {
   // generic

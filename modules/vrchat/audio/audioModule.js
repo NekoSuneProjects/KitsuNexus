@@ -120,12 +120,15 @@ async function setupAudioAnalysis (deviceId, callbacks = {}) {
         onLevels(smoothedLevels)
       }
     }, oscSendIntervalMs)
+    return true
   } catch (err) {
+    stopAudioAnalysis()
     if (typeof onError === 'function') {
       onError(err)
     } else {
       console.error('AUDIO START FAILED:', err)
     }
+    return false
   }
 }
 
@@ -137,7 +140,11 @@ function stopAudioAnalysis () {
 
   if (source) source.disconnect()
   if (stream) stream.getTracks().forEach(track => track.stop())
-  if (audioContext) audioContext.close()
+  if (audioContext && audioContext.state !== 'closed') audioContext.close().catch(() => {})
+  source = null
+  stream = null
+  analyser = null
+  audioContext = null
   isAnalyzing = false
 }
 

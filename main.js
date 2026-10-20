@@ -4,6 +4,15 @@ const fs = require('fs')
 const { spawn, execFile } = require('child_process')
 const axios = require('axios')
 app.setName('KitsuNexus')
+const { writeRuntimeError } = require('./modules/diagnostics/runtimeErrors')
+function recordRuntimeError (kind, err) {
+  console.error(`[${kind}]`, err)
+  writeRuntimeError(app.getPath('userData'), kind, err)
+}
+// Catch unexpected asynchronous errors early, including those thrown while
+// other modules initialize. Preserve details on disk for intermittent faults.
+process.on('uncaughtException', err => recordRuntimeError('uncaughtException', err))
+process.on('unhandledRejection', err => recordRuntimeError('unhandledRejection', err))
 const settings = require('./settings')
 // Discard server-issued access tokens written to disk by older builds.
 if (settings.get('oauth.twitch', {})?.serverManaged) settings.set('oauth.twitch', {})
@@ -98,10 +107,6 @@ const avatarLocker = require('./modules/avatarlocker/avatarLockerModule')
 const ruskLaserdome = require('./modules/integrations/osc/laserdome/ruskLaserdome')
 const { recognizeAudio, getProviderStatus } = require('./modules/integrations/osc/recognition/songRecognition')
 
-// Keep a stray error in any poller/network module from hard-crashing the app.
-process.on('uncaughtException', err => console.error('[uncaughtException]', err))
-process.on('unhandledRejection', err => console.error('[unhandledRejection]', err))
-
 // The UI is lightweight; GPU compositing just wastes power. This drops the
 // "GPU Very high" usage to near zero. Must be called before app is ready.
 app.disableHardwareAcceleration()
@@ -130,6 +135,27 @@ if (process.platform === 'linux') {
 }
 
 let mainWindow
+let lastRendererCrash = 0
+let rendererCrashRetries = 0
+let lastRendererError = ''
+let lastRendererErrorAt = 0
+ipcMain.on('diagnostic:rendererError', (event, details) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents ||
+      event.senderFrame !== mainWindow.webContents.mainFrame) return
+  if (!details || !['error', 'unhandledRejection'].includes(details.kind)) return
+  const message = String(details.message || '').slice(0, 2000)
+  const signature = `${details.kind}:${message}`
+  if (signature === lastRendererError && Date.now() - lastRendererErrorAt < 30000) return
+  lastRendererError = signature
+  lastRendererErrorAt = Date.now()
+  writeRuntimeError(app.getPath('userData'), `renderer:${details.kind}`, message)
+})
+app.on('child-process-gone', (_event, details) => {
+  if (details.reason !== 'clean-exit') {
+    writeRuntimeError(app.getPath('userData'), 'child-process-gone',
+      `${details.type || 'unknown'}: ${details.reason}, exitCode=${details.exitCode}`)
+  }
+})
 let communityBooster
 function getCommunityBooster () {
   if (!communityBooster) {
@@ -234,6 +260,20 @@ function createWindow () {
   })
 
   mainWindow.loadFile('index.html')
+
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    writeRuntimeError(app.getPath('userData'), 'render-process-gone',
+      `${details.reason}, exitCode=${details.exitCode}`)
+    if (!['crashed', 'oom', 'abnormal-exit'].includes(details.reason)) return
+    if (Date.now() - lastRendererCrash > 60000) rendererCrashRetries = 0
+    lastRendererCrash = Date.now()
+    if (++rendererCrashRetries > 1) return // Avoid an endless crash/reload loop.
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+        mainWindow.reload()
+      }
+    }, 1000)
+  })
 
   // Keep the Node-enabled legacy renderer on the packaged local document.
   // Server Discord linking always uses the user's external browser.

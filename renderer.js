@@ -452,9 +452,13 @@ let essAudioReactive = false
 async function initAudio () {
   const sel = $('audioDeviceSelect')
   const deviceId = sel.value
-  if (!deviceId) { alert('Pick an audio input device.'); return }
+  if (!deviceId) { notifyIssue('Pick an audio input device.'); return }
   await api.saveSetting('selectedAudioDevice', deviceId)
-  await setupAudioAnalysis(deviceId, { onLevels: handleAudioLevels, onError: err => alert('Audio failed: ' + err.message) })
+  const started = await setupAudioAnalysis(deviceId, {
+    onLevels: handleAudioLevels,
+    onError: err => notifyIssue('Audio failed: ' + err.message)
+  })
+  if (!started) return
   isAnalyzing = true
   $('toggleAudio').textContent = 'Stop Audio'
 }
@@ -1259,7 +1263,7 @@ $('twitchLogin2').addEventListener('click', async () => {
     // on the server; the desktop watches only its paired device credentials.
     clearInterval(twitchLinkPollTimer)
     if (!await api.openExternal(sync.baseUrl + '/oauth2/twitch/authorize-link')) {
-      alert('Could not open the KitsuNexus Twitch authorization page.')
+      notifyIssue('Could not open the KitsuNexus Twitch authorization page.')
       return
     }
     setText('oauthTwitchAccount', 'Complete Twitch authorization in your browser...')
@@ -1279,7 +1283,7 @@ $('twitchLogin2').addEventListener('click', async () => {
   }
   const clientId = $('twitchClientId').value.trim()
   const clientSecret = $('twitchClientSecret').value.trim() // optional: blank = implicit (no refresh)
-  if (!clientId) { alert('Enter your Twitch Client ID first.'); return }
+  if (!clientId) { notifyIssue('Enter your Twitch Client ID first.'); return }
   await api.saveSetting('oauth.twitch', currentTwitchCfg())
   setText('twitchTokenState', 'logging in...')
   const r = await api.oauthTwitchLogin(clientId, clientSecret, 'moderator:read:followers chat:read channel:read:redemptions')
@@ -1290,7 +1294,7 @@ $('twitchLogin2').addEventListener('click', async () => {
     setTwitchTokenState()
   } else {
     setText('twitchTokenState', 'login failed')
-    alert('Twitch login failed: ' + r.error)
+    notifyIssue('Twitch login failed: ' + r.error)
   }
 })
 function currentTwitchCfg () {
@@ -1307,13 +1311,13 @@ $('twitchConnect').addEventListener('click', async () => {
   const paired = (await api.cloudSyncStatus()).paired
   if (paired) {
     const result = await refreshTwitchCloudUi()
-    if (!result.ok || !result.connected) { alert(result.error || 'Link Twitch on the server dashboard first.'); return }
+    if (!result.ok || !result.connected) { notifyIssue(result.error || 'Link Twitch on the server dashboard first.'); return }
     const started = await api.twitchStart({})
-    if (started?.error) alert(started.error)
+    if (started?.error) notifyIssue(started.error)
     return
   }
   const cfg = currentTwitchCfg()
-  if (!cfg.token) { alert('Authorize Twitch in OAuth Accounts first.'); return }
+  if (!cfg.token) { notifyIssue('Authorize Twitch in OAuth Accounts first.'); return }
   await api.saveSetting('oauth.twitch', cfg); api.twitchStart(cfg)
 })
 $('twitchDisconnect').addEventListener('click', () => api.twitchStop())
@@ -1326,7 +1330,7 @@ $('twitchOAuthForget').addEventListener('click', async () => {
   if ((await api.cloudSyncStatus()).paired) {
     if (!await confirmDialog('Unlink Twitch from your KitsuNexus account and all paired devices?')) return
     const result = await api.cloudSyncTwitchUnlink()
-    if (!result.ok) { alert('Could not unlink Twitch: ' + result.error); return }
+    if (!result.ok) { notifyIssue('Could not unlink Twitch: ' + result.error); return }
     await refreshTwitchCloudUi()
     return
   }
@@ -3865,7 +3869,7 @@ $('myContentBody').addEventListener('click', async e => {
     const ok = await confirmDialog(`Delete avatar “${del.dataset.name}”? This cannot be undone.`)
     if (!ok) return
     del.textContent = '…'; const r = await api.vrchatDeleteAvatar(del.dataset.id)
-    if (r.ok) loadMyContent('avatars'); else { del.textContent = 'Delete'; alert('Delete failed: ' + (r.error || '')) }
+    if (r.ok) loadMyContent('avatars'); else { del.textContent = 'Delete'; notifyIssue('Delete failed: ' + (r.error || '')) }
   }
 })
 
@@ -5496,6 +5500,11 @@ function toast (html, ms = 6000) {
   const t = document.createElement('div'); t.className = 'toast'; t.innerHTML = html
   $('toastWrap').appendChild(t)
   setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300) }, ms)
+}
+// Recoverable errors should not block the renderer with a native OK dialog.
+// Keep the message visible long enough to read, and escape server error text.
+function notifyIssue (message) {
+  toast(esc(String(message || 'Something went wrong.')), 12000)
 }
 api.on('alert:group', s => { toast(`<b>📣 Group post</b><br>${esc(s.title || '')}${s.text ? '<br>' + esc(String(s.text).slice(0, 120)) : ''}`); refreshNotifBadge() })
 

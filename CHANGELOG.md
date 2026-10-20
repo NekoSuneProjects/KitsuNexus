@@ -57,6 +57,15 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Intermittent error popups and audio startup left in a broken state.**
+  Recoverable Twitch, avatar and microphone failures now appear as non-blocking
+  in-app notices instead of native OK dialogs. A failed audio capture cleans up
+  its context and leaves the Start Audio control ready to retry. Main-process
+  exceptions, renderer errors and unexpected child/renderer exits are recorded
+  in a rotating `runtime-errors.log` in the app data directory, with URL and
+  credential redaction. An unexpectedly crashed renderer gets one automatic
+  reload; repeated crashes are left for inspection rather than looped.
+
 - **Twitch tokens leaking into paired desktop settings and stale session reuse.**
   Paired access tokens now remain in the Electron main process; the settings UI receives
   connection status and identity only. Changing a pairing invalidates old responses, and
