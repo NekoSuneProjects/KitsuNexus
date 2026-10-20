@@ -5,6 +5,15 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Community Booster
+
+- Moved Community Booster verification and reward configuration to
+  `kitsunexus-server`. Paired desktop apps retrieve verified entitlements and
+  the catalogue from their server using existing device credentials. Added
+  Spark/Glow/Nova/Constellation cosmetics with enabled defaults, role-based
+  levels for active Discord boosters, expiry handling and a website dashboard
+  panel. The previous LinkUp device-grant flow is superseded for this feature.
+
 ### Removed
 
 - **Discontinued VRCVideoCacher integration.** Removed its VRChat Tools card,

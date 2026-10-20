@@ -51,8 +51,10 @@
 
 ## Community Booster integration
 - [x] Add optional local-only Spark / Glow / Nova / Constellation visuals and saved cosmetic choices, without gating standard features.
-- [x] Add LinkUp device grant client with state/PKCE checks, encrypted local credentials when available, and verified reward snapshots.
-- [~] Implement the scoped LinkUp device grant, consent and reward endpoints in the LinkUp Dashboard repository; deploy to production and verify live browser linking and boost changes end-to-end.
+- [x] Use the paired KitsuNexus server's authenticated reward API instead of the former LinkUp device grant flow.
+- [x] Verify active Discord boosts and optional higher-tier roles on kitsunexus-server; supply the cosmetic catalogue and defaults to the desktop.
+- [x] Add Community Booster status and tiers to the server dashboard; cache verified desktop rewards for five minutes.
+- [ ] Deploy the server and verify a live Discord link, active boost, role changes and unboost events end-to-end.
 - [ ] Migrate the legacy Node-enabled Electron renderer to context isolation and narrowed IPC while preserving OSC/audio/BLE.
 
 Feature-parity checklist toward **VRCX** + **VRCNext**, our own version. Sources:

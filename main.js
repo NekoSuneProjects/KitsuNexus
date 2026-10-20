@@ -132,10 +132,19 @@ if (process.platform === 'linux') {
 let mainWindow
 let communityBooster
 function getCommunityBooster () {
-  if (!communityBooster) communityBooster = createCommunityBooster({
-    userData: app.getPath('userData'), safeStorage,
-    openExternal: url => shell.openExternal(url)
-  })
+  if (!communityBooster) {
+    // The old LinkUp device flow saved a dedicated bearer token here. It is
+    // obsolete after migrating to paired KitsuNexus server credentials.
+    try { fs.unlinkSync(path.join(app.getPath('userData'), 'community-booster-session.json')) } catch (err) {
+      if (err.code !== 'ENOENT') console.warn('[community-booster] obsolete credential cleanup failed:', err.message)
+    }
+    communityBooster = createCommunityBooster({
+      getPairing: () => ({
+        baseUrl: settings.get('cloudSync.baseUrl', ''),
+        token: settings.get('cloudSync.token', '')
+      })
+    })
+  }
   return communityBooster
 }
 let tray
@@ -227,7 +236,7 @@ function createWindow () {
   mainWindow.loadFile('index.html')
 
   // Keep the Node-enabled legacy renderer on the packaged local document.
-  // LinkUp authorization always uses the user's external browser.
+  // Server Discord linking always uses the user's external browser.
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   mainWindow.webContents.on('will-navigate', event => { event.preventDefault() })
   mainWindow.webContents.on('will-attach-webview', event => { event.preventDefault() })
@@ -432,9 +441,14 @@ function requireBoosterFrame (event) {
   }
 }
 ipcMain.handle('booster:status', async (e, force) => { requireBoosterFrame(e); return getCommunityBooster().refresh(force === true) })
-ipcMain.handle('booster:start', async e => { requireBoosterFrame(e); return getCommunityBooster().start() })
-ipcMain.handle('booster:poll', async e => { requireBoosterFrame(e); return getCommunityBooster().poll() })
-ipcMain.handle('booster:disconnect', async e => { requireBoosterFrame(e); return getCommunityBooster().disconnect() })
+ipcMain.handle('booster:openAccount', async e => {
+  requireBoosterFrame(e)
+  const baseUrl = settings.get('cloudSync.baseUrl', '')
+  if (!cloudSync.isPaired()) return false
+  const { serverOrigin } = require('./modules/integrations/discord/communityBooster')
+  await shell.openExternal(new URL('/settings/discord', serverOrigin(baseUrl)).toString())
+  return true
+})
 ipcMain.handle('getOscPort', () => settings.get('oscPort', 9000))
 ipcMain.on('updateOscPort', (e, port) => settings.set('oscPort', port))
 ipcMain.on('updateOscTargets', (e, targets) => {

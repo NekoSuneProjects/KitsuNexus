@@ -212,104 +212,116 @@ if ($('themeSelect')) {
 // (or starting while it's open) recolors without needing a restart.
 setInterval(() => { api.getSetting('uiTheme', 'auto').then(applyTheme) }, 30 * 60 * 1000)
 
-/* ---------------- optional Community Booster cosmetics ---------------- */
-const boosterChoicesDefault = { accent: false, border: false, frame: false, decoration: 'none' }
+/* ---------------- optional server-managed Community Booster cosmetics ---------------- */
+const boosterChoicesDefault = {
+  ribbon: true, sparkle: true, accent: true, border: true, ambient: true,
+  gradient: true, navigation: true, frame: true, starlight: true, decoration: 'auto'
+}
+const boosterToggles = {
+  ribbon: 'boosterRibbon', sparkle: 'boosterSparkle', accent: 'boosterAccent',
+  border: 'boosterBorder', ambient: 'boosterAmbient', gradient: 'boosterGradient',
+  navigation: 'boosterNavigation', frame: 'boosterFrame', starlight: 'boosterStarlight'
+}
 let boosterChoices = { ...boosterChoicesDefault }
-let boosterSnapshot = { state: 'unlinked', boostCount: 0, tier: 'none', linked: false }
+let boosterHasSavedChoices = false
+let boosterSnapshot = { state: 'unlinked', boostCount: 0, tier: 'none', linked: false, unlocked: [] }
 let boosterTimer = null
 
 function applyBoosterVisuals () {
   const root = document.documentElement
-  const active = ['verified', 'offline'].includes(boosterSnapshot.state)
-  const count = active ? boosterSnapshot.boostCount : 0
-  const accent = count >= 2 && boosterChoices.accent
-  const border = count >= 2 && boosterChoices.border
-  const frame = count >= 5 && boosterChoices.frame
-  const decoration = boosterChoices.decoration === 'constellation' && count >= 5
-    ? 'constellation' : boosterChoices.decoration === 'nova' && count >= 3 ? 'nova' : 'none'
-  root.dataset.boosterAccent = accent ? 'on' : 'off'
-  root.dataset.boosterBorder = border ? 'on' : 'off'
-  root.dataset.boosterFrame = frame ? 'on' : 'off'
+  const unlocked = new Set(boosterSnapshot.unlocked || [])
+  for (const name of Object.keys(boosterToggles)) {
+    root.dataset['booster' + name[0].toUpperCase() + name.slice(1)] =
+      unlocked.has(name) && boosterChoices[name] ? 'on' : 'off'
+  }
+  const choice = boosterChoices.decoration
+  const decoration = choice === 'auto'
+    ? (unlocked.has('constellation') ? 'constellation' : unlocked.has('nova') ? 'nova' : 'none')
+    : unlocked.has(choice) ? choice : 'none'
   root.dataset.boosterDecoration = decoration
   $('boosterPreview').dataset.decoration = decoration
   const badge = $('boosterBadge')
-  badge.hidden = count < 1
-  badge.textContent = `${count >= 5 ? 'Constellation' : count >= 3 ? 'Nova' : count >= 2 ? 'Glow' : 'Spark'} supporter`
-  $('boosterPreviewLevel').textContent = count ? `· ${badge.textContent}` : '· Base theme'
+  badge.hidden = !unlocked.has('badge')
+  const tier = (boosterSnapshot.catalogue?.tiers || []).find(t => t.id === boosterSnapshot.tier)
+  badge.textContent = `${tier?.label || boosterSnapshot.tier} supporter`
+  $('boosterPreviewLevel').textContent = unlocked.has('badge') ? `· ${badge.textContent}` : '· Base theme'
 }
 
 function drawBoosterStatus (snapshot) {
   boosterSnapshot = snapshot || boosterSnapshot
+  const count = snapshot.boostCount || 0
   const descriptions = {
-    unlinked: 'Not linked. All normal features and themes are available.',
-    authorizing: 'Waiting for LinkUp browser authorization…',
-    verified: `Verified ${snapshot.boostCount} active boost${snapshot.boostCount === 1 ? '' : 's'} · ${snapshot.tier} theme available.`,
-    expired: 'Verification expired. Your base theme is active; your choices are saved.',
-    revoked: 'LinkUp revoked access. Your base theme is active.',
-    offline: 'LinkUp temporarily offline. Only unexpired verified cosmetics remain active.',
-    unavailable: 'LinkUp does not have the KitsuNexus desktop authorization API available (HTTP 404/405/501). The LinkUp server needs updating.',
+    unlinked: 'Pair your KitsuNexus server in Cloud Sync first. Standard features remain available.',
+    verified: !snapshot.linkedDiscord ? 'Server paired. Link your Discord account in the server dashboard to verify boosts.'
+      : count ? `Active Discord booster verified · ${snapshot.tier} rewards (level ${snapshot.rewardLevel}).`
+        : 'Discord linked. No active boost detected in the server’s official guild.',
+    expired: 'Checking KitsuNexus server rewards…',
+    revoked: 'Server pairing was revoked. Pair again to verify supporter perks.',
+    offline: 'Booster verification is offline. Only unexpired verified rewards remain active.',
+    unavailable: 'This KitsuNexus server does not expose the Community Booster API yet. Update the server.'
   }
-  $('boosterStatus').textContent = descriptions[snapshot.state] || 'LinkUp status unavailable.'
-  const auth = snapshot.state === 'authorizing' && !!snapshot.userCode
-  $('boosterAuth').hidden = !auth
-  $('boosterCode').textContent = auth ? snapshot.userCode : ''
-  $('boosterDisconnect').disabled = !snapshot.linked && !auth
-  $('boosterConnect').disabled = auth
+  $('boosterStatus').textContent = descriptions[snapshot.state] || 'Booster status unavailable. Verify Discord is configured and its bot is online.'
+  $('boosterConnect').textContent = snapshot.linked ? 'Manage Discord link' : 'Pair KitsuNexus server'
+  if (snapshot.catalogue?.tiers) {
+    if (!boosterHasSavedChoices && snapshot.catalogue.defaults) {
+      boosterChoices = { ...boosterChoicesDefault, ...snapshot.catalogue.defaults }
+      showBoosterChoices()
+    }
+    $('boosterPerks').textContent = snapshot.catalogue.tiers.map(t =>
+      `${t.label} (${t.minBoosts}+): ${t.unlocks.join(', ')}`).join(' · ') +
+      '. Only verified live boosts and configured booster tier roles unlock cosmetics.'
+  }
   applyBoosterVisuals()
   if (boosterTimer) clearTimeout(boosterTimer)
-  const delay = auth ? Math.max(5, snapshot.intervalSeconds || 5) * 1000 : 60 * 1000
-  boosterTimer = setTimeout(() => updateBoosterStatus(auth ? 'poll' : 'status'), delay)
+  boosterTimer = setTimeout(() => updateBoosterStatus('force'), 60 * 1000)
 }
 
 async function updateBoosterStatus (action = 'status') {
-  try {
-    const result = action === 'poll' ? await api.boosterPoll()
-      : action === 'start' ? await api.boosterStart()
-        : action === 'disconnect' ? await api.boosterDisconnect()
-          : await api.boosterStatus(action === 'force')
-    drawBoosterStatus(result)
-  } catch (err) {
-    $('boosterStatus').textContent = action === 'start'
-      ? 'Unable to start LinkUp authorization. Check your connection and retry.'
-      : 'Unable to check LinkUp right now. Saved cosmetic choices are unchanged.'
-    if (action !== 'start') {
-      // Keep the last verified display only until the main-process expiry.
-      try { drawBoosterStatus(await api.boosterStatus()) } catch (_) { drawBoosterStatus({ state: 'offline', boostCount: 0, tier: 'none', linked: false }) }
-    }
+  try { drawBoosterStatus(await api.boosterStatus(action === 'force')) } catch (_) {
+    $('boosterStatus').textContent = 'Could not retrieve KitsuNexus booster status.'
   }
 }
 
-api.getSetting('communityBoosterCosmetics', boosterChoicesDefault).then(choices => {
-  if (choices && typeof choices === 'object') {
-    boosterChoices = {
-      accent: choices.accent === true,
-      border: choices.border === true,
-      frame: choices.frame === true,
-      decoration: ['nova', 'constellation'].includes(choices.decoration) ? choices.decoration : 'none'
-    }
-  }
-  $('boosterAccent').checked = boosterChoices.accent
-  $('boosterBorder').checked = boosterChoices.border
-  $('boosterFrame').checked = boosterChoices.frame
+function showBoosterChoices () {
+  for (const [name, id] of Object.entries(boosterToggles)) $(id).checked = boosterChoices[name]
   $('boosterDecoration').value = boosterChoices.decoration
   applyBoosterVisuals()
-}).catch(() => {})
+}
 
 function saveBoosterChoices () {
-  boosterChoices = {
-    accent: $('boosterAccent').checked,
-    border: $('boosterBorder').checked,
-    frame: $('boosterFrame').checked,
-    decoration: $('boosterDecoration').value
-  }
+  boosterHasSavedChoices = true
+  for (const [name, id] of Object.entries(boosterToggles)) boosterChoices[name] = $(id).checked
+  boosterChoices.decoration = $('boosterDecoration').value
   api.saveSetting('communityBoosterCosmetics', boosterChoices)
   applyBoosterVisuals()
 }
-;['boosterAccent', 'boosterBorder', 'boosterFrame', 'boosterDecoration'].forEach(id => {
+
+api.getSetting('communityBoosterCosmetics', null).then(saved => {
+  if (saved && typeof saved === 'object') {
+    boosterHasSavedChoices = true
+    for (const name of Object.keys(boosterToggles)) {
+      if (typeof saved[name] === 'boolean') boosterChoices[name] = saved[name]
+    }
+    if (['auto', 'none', 'nova', 'constellation'].includes(saved.decoration)) boosterChoices.decoration = saved.decoration
+  } else if (boosterSnapshot.catalogue?.defaults) {
+    boosterChoices = { ...boosterChoicesDefault, ...boosterSnapshot.catalogue.defaults }
+  }
+  showBoosterChoices()
+}).catch(() => {})
+
+for (const id of [...Object.values(boosterToggles), 'boosterDecoration']) {
   $(id).addEventListener('change', saveBoosterChoices)
+}
+$('boosterDefaults').addEventListener('click', () => {
+  boosterChoices = { ...boosterChoicesDefault, ...(boosterSnapshot.catalogue?.defaults || {}) }
+  showBoosterChoices()
+  saveBoosterChoices()
 })
-$('boosterConnect').addEventListener('click', () => updateBoosterStatus('start'))
-$('boosterDisconnect').addEventListener('click', () => updateBoosterStatus('disconnect'))
+$('boosterConnect').addEventListener('click', async () => {
+  if (boosterSnapshot.linked) {
+    try { await api.boosterOpenAccount() } catch (_) { $('boosterStatus').textContent = 'Could not open server account settings.' }
+  } else $('cloudSyncPanel').scrollIntoView({ behavior: 'smooth', block: 'center' })
+})
 $('boosterRefresh').addEventListener('click', () => updateBoosterStatus('force'))
 updateBoosterStatus()
 
@@ -5451,6 +5463,7 @@ $('cloudSyncConnect').addEventListener('click', async () => {
       clearInterval(cloudSyncPollTimer)
       await refreshCloudSyncUi()
       await refreshTwitchCloudUi()
+      updateBoosterStatus('force')
     }
   }, 3000)
 })
@@ -5468,6 +5481,7 @@ $('cloudSyncDisconnectBtn').addEventListener('click', async () => {
   twitchLinkPollTimer = null
   await refreshCloudSyncUi()
   await refreshTwitchCloudUi()
+  updateBoosterStatus('force')
 })
 $('cloudSyncHistoryEnabled').addEventListener('change', async e => { await api.cloudSyncSetHistoryEnabled(e.target.checked) })
 $('cloudSyncHistoryNowBtn').addEventListener('click', async () => {

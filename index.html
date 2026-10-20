@@ -38,7 +38,7 @@
     [data-theme="halloween"] { --bg:#090609; --bg2:#120b14; --panel:#1c101c; --panel2:#291724; --border:#583044; --text:#fff0df; --muted:#c9a5a1; --accent:#ff822d; --accent2:#b14aff; --bad:#f34b5d; }
     [data-theme="easter"]    { --bg:#120f18; --bg2:#181522; --panel:#201a2e; --panel2:#28213a; --border:#3a3052; --text:#fdeafd; --muted:#c9b8e0; --accent:#f9a8d4; --accent2:#6ee7b7; }
 
-    /* Community Booster cosmetics apply only after a main-process verified grant. */
+    /* Optional server-verified Community Booster cosmetics. */
     html[data-booster-accent="on"] .topbar h2 { text-decoration:underline; text-decoration-color:#c4a1ff; text-underline-offset:8px; }
     html[data-booster-accent="on"] .navbtn.active { box-shadow:inset 4px 0 #c4a1ff; }
     html[data-theme="light"][data-booster-accent="on"] .topbar h2 { text-decoration-color:#7137a2; }
@@ -50,7 +50,13 @@
     html[data-theme="light"][data-booster-border="on"] .rb-card,
     html[data-theme="light"][data-booster-border="on"] .modal-card { border-color:#7137a2; }
     .booster-badge { display:inline-block; border:1px solid var(--accent); border-radius:999px; padding:3px 10px; font-weight:700; font-size:.78rem; }
-    .booster-badge[hidden], #boosterAuth[hidden] { display:none !important; }
+    .booster-badge[hidden] { display:none !important; }
+    html[data-booster-ribbon="on"] .booster-badge { background:linear-gradient(110deg,#4c2f76,#9654bb);color:#fff;border-color:#cdb2ff; }
+    html[data-booster-sparkle="on"] .topbar h2::before { content:'✦ ';color:#b9a3ff; }
+    html[data-booster-ambient="on"] .topbar { box-shadow:inset 0 -3px 15px rgba(161,108,239,.22); }
+    html[data-booster-gradient="on"] .topbar { background-image:linear-gradient(95deg,rgba(128,69,198,.2),transparent 75%); }
+    html[data-booster-navigation="on"] .navbtn.active { border-radius:10px;filter:drop-shadow(0 0 5px rgba(186,131,255,.6)); }
+    html[data-booster-starlight="on"] .app { background-image:radial-gradient(circle at 18% 12%,rgba(179,153,255,.14) 1px,transparent 2px),radial-gradient(circle at 78% 69%,rgba(163,205,255,.16) 1px,transparent 2px);background-size:140px 160px,190px 130px; }
     .booster-preview { position:relative; isolation:isolate; overflow:hidden; margin-top:10px; padding:16px;
       border-radius:12px; border:1px solid var(--border); background:var(--panel2); }
     .booster-preview[data-decoration="nova"]::before { content:'✦    ✧    ✦'; color:#c4a1ff; display:block; letter-spacing:8px; }
@@ -2039,32 +2045,36 @@
         </div>
         <div class="card" id="boosterPanel">
           <h3>Community Booster <span id="boosterBadge" class="booster-badge" hidden>Supporter</span></h3>
-          <p class="muted" style="font-size:.8rem">Optional LinkUp rewards change this app's appearance only. Every normal theme and VRChat/OSC feature stays available without boosting. No Discord bot token is needed.</p>
+          <p class="muted" style="font-size:.8rem">Perks come from your paired KitsuNexus server and your linked Discord account. All standard themes and VRChat/OSC features remain free. The server verifies boosts; the app never needs a bot token.</p>
           <div class="row" style="gap:8px;flex-wrap:wrap;margin:10px 0">
-            <button class="btn" id="boosterConnect">Connect LinkUp</button>
-            <button class="btn ghost" id="boosterDisconnect">Disconnect</button>
+            <button class="btn" id="boosterConnect">Pair server / Link Discord</button>
             <button class="btn ghost" id="boosterRefresh">Refresh rewards</button>
+            <button class="btn ghost" id="boosterDefaults">Recommended defaults</button>
           </div>
-          <div class="muted" role="status" aria-live="polite" id="boosterStatus">Checking local LinkUp state…</div>
-          <div class="muted" id="boosterAuth" style="font-size:.8rem;margin-top:8px" hidden>
-            In your browser, enter code <b id="boosterCode"></b> on the LinkUp authorization page.
-          </div>
+          <div class="muted" role="status" aria-live="polite" id="boosterStatus">Checking server rewards…</div>
           <div class="grid cols-2" style="margin-top:12px">
-            <label class="switch"><input type="checkbox" id="boosterAccent"> Glow · UI accent (2+ boosts)</label>
-            <label class="switch"><input type="checkbox" id="boosterBorder"> Glow · card borders (2+ boosts)</label>
-            <label class="switch"><input type="checkbox" id="boosterFrame"> Constellation · frame (5+ boosts)</label>
+            <label class="switch"><input type="checkbox" id="boosterRibbon"> Spark · supporter ribbon</label>
+            <label class="switch"><input type="checkbox" id="boosterSparkle"> Spark · header sparkle</label>
+            <label class="switch"><input type="checkbox" id="boosterAccent"> Glow · UI accent</label>
+            <label class="switch"><input type="checkbox" id="boosterBorder"> Glow · card borders</label>
+            <label class="switch"><input type="checkbox" id="boosterAmbient"> Glow · ambient light</label>
+            <label class="switch"><input type="checkbox" id="boosterGradient"> Nova · gradient header</label>
+            <label class="switch"><input type="checkbox" id="boosterNavigation"> Nova · navigation highlight</label>
+            <label class="switch"><input type="checkbox" id="boosterFrame"> Constellation · frame</label>
+            <label class="switch"><input type="checkbox" id="boosterStarlight"> Constellation · starlight</label>
           </div>
           <label for="boosterDecoration" style="margin-top:10px">Nameplate and panel decoration</label>
           <select id="boosterDecoration">
+            <option value="auto">Auto · best unlocked</option>
             <option value="none">None</option>
-            <option value="nova">Nova · star details (3+ boosts)</option>
-            <option value="constellation">Constellation · star map (5+ boosts)</option>
+            <option value="nova">Nova · star details</option>
+            <option value="constellation">Constellation · star map</option>
           </select>
           <div class="booster-preview" id="boosterPreview" data-decoration="none">
             <strong>KitsuNexus</strong> <span class="muted" id="boosterPreviewLevel">Base theme</span>
             <div class="muted" style="font-size:.75rem">Cosmetics are local to this app. Your saved choices are kept if a boost ends.</div>
           </div>
-          <p class="muted" style="font-size:.74rem">Spark (1 boost) adds a small badge, Glow (2) adds accents and borders, Nova (3–4) adds decorations, Constellation (5+) adds star styling and a frame. LinkUp must support verified desktop linking before any tier can be awarded.</p>
+          <p class="muted" id="boosterPerks" style="font-size:.74rem">Reward tiers and unlocks are downloaded from your KitsuNexus server after pairing. Spark starts at one verified active boost; higher tiers can be granted through server-managed Discord booster roles.</p>
         </div>
         <div class="card">
           <h3>🖼️ Background</h3>
@@ -2152,7 +2162,7 @@
           <div class="row" style="margin-top:8px"><button class="btn ghost" id="localFavExport">Export Local Favorites</button><button class="btn ghost" id="localFavImport">Import Local Favorites</button></div>
           <div class="muted" id="localFavOut" style="margin-top:4px;font-size:.75rem"></div>
         </div>
-        <div class="card">
+        <div class="card" id="cloudSyncPanel">
           <h3>☁ Cloud Sync <span class="muted" style="font-size:.72rem">(optional — self-hosted)</span></h3>
           <div class="muted" style="font-size:.75rem;margin-bottom:8px">Sync your Local Favorites to a self-hosted <code>kitsunexus-server</code> so they follow you to other devices. Nothing is sent anywhere unless you connect below.</div>
           <div id="cloudSyncDisconnected">
