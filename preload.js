@@ -342,10 +342,6 @@ window.electronAPI = {
   vrcToolsCacheSize: () => ipcRenderer.invoke('vrctools:cacheSize'),
   vrcToolsClearCache: () => ipcRenderer.invoke('vrctools:clearCache'),
   vrcToolsOpenFolder: which => ipcRenderer.invoke('vrctools:openFolder', which),
-  vvcInstall: () => ipcRenderer.invoke('vrctools:vvcInstall'),
-  vvcStart: () => ipcRenderer.invoke('vrctools:vvcStart'),
-  vvcStop: () => ipcRenderer.invoke('vrctools:vvcStop'),
-  vvcStatus: () => ipcRenderer.invoke('vrctools:vvcStatus'),
 
   // startup / auto-launch
   setLaunchOnLogin: enabled => ipcRenderer.invoke('app:setLaunchOnLogin', enabled),

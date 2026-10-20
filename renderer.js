@@ -3544,26 +3544,6 @@ $('cacheClear').addEventListener('click', async () => {
 })
 document.querySelectorAll('[data-folder]').forEach(b => b.addEventListener('click', () => api.vrcToolsOpenFolder(b.dataset.folder)))
 
-async function refreshVvcStatus () {
-  const s = await api.vvcStatus()
-  if (s && s.ok) setText('vvcOut', `${s.installed ? 'Installed' : 'Not installed'} · ${s.running ? '🟢 running' : '⚪ stopped'}`)
-}
-$('vvcInstall').addEventListener('click', async () => {
-  setText('vvcOut', 'Downloading VRCVideoCacher…'); $('vvcInstall').disabled = true
-  const r = await api.vvcInstall()
-  $('vvcInstall').disabled = false
-  setText('vvcOut', r.ok ? `✅ Installed (${fmtBytes(r.bytes)}).` : ('Error: ' + (r.error || 'failed') + ' — set a custom URL with the vvcUrl setting if the release asset changed.'))
-})
-$('vvcStart').addEventListener('click', async () => {
-  const r = await api.vvcStart()
-  setText('vvcOut', r.ok ? (r.already ? 'Already running.' : '🟢 Started.') : ('Error: ' + (r.error || 'failed')))
-})
-$('vvcStop').addEventListener('click', async () => {
-  const r = await api.vvcStop()
-  setText('vvcOut', r.ok ? '⏹️ Stopped.' : ('Error: ' + (r.error || 'failed')))
-})
-document.querySelector('[data-tab="vrctools"]').addEventListener('click', refreshVvcStatus)
-
 /* ---------------- reusable client-side pager (less lag on big lists) ---------------- */
 const _pageState = {}
 function renderPaged (el, items, pageSize, itemHtml, key, wrapClass, afterRender) {

@@ -56,7 +56,7 @@ booster authorization and OSC/chatbox smoke tests.
 | 🤖 **Discord Voice Bot** | Read voice state + server mute/deafen via OSC (no allowlist) | your own bot token |
 | 🦊 **VRChat auto-status** | Detect 🟢/🔵/🟠/🔴 from your account | VRChat login (2FA ok) |
 | 🫂 **Social suite** | Friends, groups, search, profiles, favourites, notifications, **create group instances**, **bio prefabs** | VRChat login |
-| 🧰 **VRChat tools** | YouTube fix (yt-dlp), **VRCVideoCacher** install/run, cache tools | Windows |
+| 🧰 **VRChat tools** | YouTube fix (yt-dlp), cache tools, folder shortcuts | Windows |
 | 📡 **Radar** | Live list of players in your instance | reads VRChat log |
 | 🌦 **Weather** | Current conditions as `{weather}` | a city (Open-Meteo, no key) |
 | 🔊 **Soundpad** | Trigger Leppsoft Soundpad sounds | Soundpad running |

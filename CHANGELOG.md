@@ -5,6 +5,12 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Removed
+
+- **Discontinued VRCVideoCacher integration.** Removed its VRChat Tools card,
+  install/run/status controls and process management, including the associated
+  IPC handlers and preload APIs. Other VRChat maintenance tools remain available.
+
 ### Added
 
 - **Website-linked Twitch OAuth2 shared with paired desktop devices.** KitsuNexus accounts

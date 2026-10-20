@@ -406,7 +406,7 @@ app.on('before-quit', () => {
   if (blePairingCallback) { const callback = blePairingCallback; blePairingCallback = null; callback({ confirmed: false }) }
   stopComponentStats(); stopNetworkStats(); stopPulsoid(); stopHyperate(); stopDeviceBridge(); stopWindowActivity(); stopTon()
   disconnectTikTok(); stopTwitch(); twitchInteractive.stop(false); stopKick(); stopDiscord(); stopVrBattery(); stopVrcWorld(); stopAfk()
-  stopWeather(); stopVrcStatusPoll(); stopBot(); stopOfficialBot(); stopStatusPush(); pawprints.tickCommit(); stopFriendDiff(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); vrcTools.stopVideoCacher(); stopTonLog(); ranks.close(); screenshotMetadata.stop(); localFavoritesDb.close()
+  stopWeather(); stopVrcStatusPoll(); stopBot(); stopOfficialBot(); stopStatusPush(); pawprints.tickCommit(); stopFriendDiff(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); stopTonLog(); ranks.close(); screenshotMetadata.stop(); localFavoritesDb.close()
   ruskLaserdome.stop(false)
   if (unsubHotkeyHold) { unsubHotkeyHold(); unsubHotkeyHold = null }
   stopHotkeyTick()
@@ -2094,10 +2094,6 @@ ipcMain.handle('vrctools:openFolder', (e, which) => {
   if (p) shell.openPath(p)
   return p
 })
-ipcMain.handle('vrctools:vvcInstall', () => vrcTools.installVideoCacher(settings.get('vvcUrl', '')))
-ipcMain.handle('vrctools:vvcStart', () => vrcTools.startVideoCacher())
-ipcMain.handle('vrctools:vvcStop', () => vrcTools.stopVideoCacher())
-ipcMain.handle('vrctools:vvcStatus', () => vrcTools.videoCacherStatus())
 
 /* ------------------------------------------------------------------ */
 /* Startup / auto-launch                                               */

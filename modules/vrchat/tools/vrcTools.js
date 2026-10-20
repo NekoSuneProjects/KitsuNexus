@@ -11,7 +11,6 @@ const axios = require('axios')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
-const { spawn } = require('child_process')
 
 const VRCHAT_DIR = path.join(os.homedir(), 'AppData', 'LocalLow', 'VRChat', 'VRChat')
 const TOOLS_DIR = path.join(VRCHAT_DIR, 'Tools')
@@ -105,56 +104,7 @@ function listPhotos (limit = 200) {
   return out.slice(0, limit)
 }
 
-/* ---------------- VRCVideoCacher ----------------
- * VRCVideoCacher (github.com/clienthax/VRCVideoCacher) is a standalone local
- * proxy that caches VRChat video-player URLs. It is an EXTERNAL helper process —
- * we only download its official release and run/stop it. We never touch VRChat.
- */
-const VVC_DIR = path.join(TOOLS_DIR, 'VRCVideoCacher')
-const VVC_EXE = path.join(VVC_DIR, 'VRCVideoCacher.exe')
-const VVC_DEFAULT_URL = 'https://github.com/clienthax/VRCVideoCacher/releases/latest/download/VRCVideoCacher.exe'
-let vvcChild = null
-
-// Download (install or update) the VRCVideoCacher executable. URL is overridable
-// from Settings in case the release asset name changes.
-async function installVideoCacher (url) {
-  try {
-    fs.mkdirSync(VVC_DIR, { recursive: true })
-    const res = await axios.get(url || VVC_DEFAULT_URL, { responseType: 'arraybuffer', timeout: 300000, maxRedirects: 5 })
-    fs.writeFileSync(VVC_EXE, Buffer.from(res.data))
-    return { ok: true, path: VVC_EXE, bytes: res.data.byteLength }
-  } catch (err) {
-    return { ok: false, error: err.message }
-  }
-}
-
-function startVideoCacher () {
-  if (vvcChild && !vvcChild.killed) return { ok: true, already: true }
-  if (!fs.existsSync(VVC_EXE)) return { ok: false, error: 'Not installed — run Install first.' }
-  try {
-    vvcChild = spawn(VVC_EXE, [], { cwd: VVC_DIR, detached: false, windowsHide: true, stdio: 'ignore' })
-    vvcChild.on('exit', () => { vvcChild = null })
-    vvcChild.on('error', () => { vvcChild = null })
-    return { ok: true, pid: vvcChild.pid }
-  } catch (err) {
-    vvcChild = null
-    return { ok: false, error: err.message }
-  }
-}
-
-function stopVideoCacher () {
-  if (!vvcChild) return { ok: true, already: true }
-  try { vvcChild.kill() } catch (_) {}
-  vvcChild = null
-  return { ok: true }
-}
-
-function videoCacherStatus () {
-  return { ok: true, installed: fs.existsSync(VVC_EXE), running: !!(vvcChild && !vvcChild.killed), path: VVC_EXE }
-}
-
 module.exports = {
   updateYtDlp, cacheSize, clearCache, folderPath, listPhotos, resolvePhotosDir,
-  installVideoCacher, startVideoCacher, stopVideoCacher, videoCacherStatus,
   VRCHAT_DIR, TOOLS_DIR, CACHE_DIR
 }

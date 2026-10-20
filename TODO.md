@@ -656,7 +656,7 @@ opt-in cloud sync on top, not a replacement for local-first Favorites.
 - [x] **Custom themes** — `themeSelect` dropdown + `uiTheme` setting; 30-min recheck; `blackgreen` default; seasonal events always win
 - [ ] **Registry tools** — VRChat registry backup/restore (Windows registry under VRChat)
 - [ ] **Multiple dashboards / customizable widgets** (VRCX-style configurable panels)
-- [x] **VRCVideoCacher** — install/update (official release download) + start/stop the local proxy from the VRChat Tools tab (custom URL via `vvcUrl` setting)
+- [x] **Removed discontinued VRCVideoCacher** — removed its VRChat Tools UI and install/run integration.
 - [x] **Notifications** — rich (invite world+link, boop, requestInvite, group), **cached in SQLite**
   until accepted/dismissed; top-right flyout + **Notify sidebar tab**; toast on new
 - [x] **Fixed: Home tab's VRChat News card could show "Could not load news." with no way to tell
