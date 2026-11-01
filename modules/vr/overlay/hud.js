@@ -14,7 +14,7 @@ let previousPlayers = null
 const notices = []
 const alerts = document.getElementById('alerts')
 const PREF_KEY = 'kitsunexus-hud-prefs-v1'
-const defaults = { limit: 12, fade: 15, players: true, tiles: true, music: true, heart: true, language: 'en' }
+const defaults = { limit: 12, fade: 15, players: true, tiles: true, music: true, heart: true, language: 'en', preset: 'full' }
 let prefs = { ...defaults }
 try {
   const stored = JSON.parse(localStorage.getItem(PREF_KEY) || '{}')
@@ -25,10 +25,12 @@ try {
     prefs.tiles = stored.tiles !== false
     prefs.music = stored.music !== false
     prefs.heart = stored.heart !== false
+    prefs.preset = ['full', 'compact', 'social', 'music', 'custom'].includes(stored.preset) ? stored.preset : 'full'
     prefs.language = typeof stored.language === 'string' && /^[a-z]{2,3}(-[A-Z]{2})?$/.test(stored.language) ? stored.language : 'en'
   }
 } catch (_) {}
 function renderPrefs () {
+  document.getElementById('hudPreset').value = prefs.preset
   document.getElementById('noticeLimit').value = String(prefs.limit)
   document.getElementById('noticeFade').value = String(prefs.fade)
   document.getElementById('showPlayers').checked = prefs.players
@@ -42,6 +44,7 @@ function renderPrefs () {
   document.getElementById('heart').closest('.tile').hidden = !prefs.heart
 }
 function savePrefs () {
+  prefs.preset = document.getElementById('hudPreset').value
   prefs.limit = Number(document.getElementById('noticeLimit').value)
   prefs.fade = Math.max(0, Math.min(120, Number(document.getElementById('noticeFade').value) || 0))
   prefs.players = document.getElementById('showPlayers').checked
@@ -56,6 +59,19 @@ function savePrefs () {
 for (const id of ['noticeLimit', 'noticeFade', 'showPlayers', 'showTiles', 'showMusic', 'showHeart', 'quickLanguage']) {
   document.getElementById(id).addEventListener('change', savePrefs)
 }
+document.getElementById('hudPreset').addEventListener('change', () => {
+  const selected = document.getElementById('hudPreset').value
+  const layouts = {
+    full: { players: true, tiles: true, music: true, heart: true },
+    compact: { players: false, tiles: true, music: false, heart: false },
+    social: { players: true, tiles: false, music: false, heart: false },
+    music: { players: false, tiles: true, music: true, heart: false }
+  }
+  if (layouts[selected]) Object.assign(prefs, layouts[selected])
+  prefs.preset = selected
+  renderPrefs()
+  savePrefs()
+})
 document.getElementById('resetHudPrefs').addEventListener('click', () => {
   prefs = { ...defaults }
   renderPrefs()
@@ -113,4 +129,45 @@ quickMessage.addEventListener('keydown', event => {
     event.preventDefault()
     performAction('send')
   }
+})
+
+const MESSAGE_KEY = 'kitsunexus-hud-message-presets-v1'
+let messagePresets = []
+try {
+  const saved = JSON.parse(localStorage.getItem(MESSAGE_KEY) || '[]')
+  if (Array.isArray(saved)) messagePresets = saved.filter(x => typeof x === 'string' && x.length <= 2000).slice(0, 20)
+} catch (_) {}
+function refreshMessagePresets () {
+  const picker = document.getElementById('quickPreset')
+  picker.replaceChildren(new Option('Message preset…', ''))
+  messagePresets.forEach((message, i) => picker.add(new Option(message.slice(0, 50), String(i))))
+}
+function persistMessagePresets () {
+  try { localStorage.setItem(MESSAGE_KEY, JSON.stringify(messagePresets)) } catch (_) {}
+  refreshMessagePresets()
+}
+refreshMessagePresets()
+document.getElementById('quickPreset').addEventListener('change', event => {
+  if (event.target.value !== '') quickMessage.value = messagePresets[Number(event.target.value)] || ''
+})
+document.getElementById('saveQuickPreset').addEventListener('click', () => {
+  const value = quickMessage.value.trim().slice(0, 2000)
+  if (!value || messagePresets.includes(value)) return
+  messagePresets.unshift(value)
+  messagePresets = messagePresets.slice(0, 20)
+  persistMessagePresets()
+  actionStatus.textContent = 'Message preset saved locally'
+})
+document.getElementById('deleteQuickPreset').addEventListener('click', () => {
+  const index = document.getElementById('quickPreset').value
+  if (index === '') return
+  messagePresets.splice(Number(index), 1)
+  persistMessagePresets()
+  actionStatus.textContent = 'Message preset removed'
+})
+document.getElementById('copyQuickMessage').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(quickMessage.value)
+    actionStatus.textContent = 'Message copied'
+  } catch (_) { actionStatus.textContent = 'Clipboard permission unavailable' }
 })
