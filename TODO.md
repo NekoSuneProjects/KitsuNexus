@@ -1,3 +1,23 @@
+## Independent KitsuNexus HUD work
+
+- [x] Persist HUD overlay interaction settings.
+- [x] Save current world snapshot as JSON or CSV.
+- [ ] Verify with Windows Electron and physical SteamVR headset.
+
+
+- [x] Quick Actions: media play/pause/previous/next, OSC chat, translation preview and target language choice.
+- [x] Current-instance player names and join/leave notices from local VRChat logs.
+- [x] Saved desktop overlay position/size, dedicated drag header, state replay and async now-playing updates.
+- [ ] Follow through on `docs/VRCHAT_FEATURE_ROADMAP.md` for advanced features, grouped moderation and account tools.
+
+- [x] Add independent desktop HUD Electron window and controls.
+- [x] Capture a separate VR HUD surface instead of the full main app.
+- [ ] Validate the VR HUD against a physical headset and SteamVR installation.
+- [ ] Add more local VRChat session and currently playing music data to HUD tiles.
+- [ ] Add persistent widget configuration and hotkeys.
+
+---
+
 # KitsuNexus — TODO / Roadmap
 
 - [x] Replace recoverable-error OK popups with non-blocking notices, correct failed microphone startup state, and capture unexpected desktop/renderer failures in a rotating diagnostic log.
