@@ -425,7 +425,10 @@ app.whenReady().then(async () => {
   if (settings.get('screenshotMetadata', false)) screenshotMetadata.start()
   startVrcWorld(w => {
     push('vrc:world', w)
-    hudWindow.broadcast({ session: w.inWorld ? String(w.worldName || 'In VRChat') : 'Not in world' })
+    hudWindow.broadcast({
+      session: w.inWorld ? String(w.worldName || 'In VRChat') : 'Not in world',
+      players: Array.isArray(w.players) ? w.players.slice(0, 80).map(name => String(name).slice(0, 64)) : []
+    })
     setVrcContext({ worldName: w.inWorld ? w.worldName : '', joinUrl: w.joinUrl, worldUrl: w.worldUrl, profileUrl: w.profileUrl })
     pawprints.setWorld(w.inWorld ? w.worldName : '')
     logWorldDiff(w)
