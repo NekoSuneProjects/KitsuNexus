@@ -91,7 +91,7 @@ jobs:
           except Exception:
               lines.append('Secret report unavailable; scan status: **' + os.environ['SECRET_OUTCOME'] + '**.')
           lines += ['', '[View workflow logs](https://github.com/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + os.environ['GITHUB_RUN_ID'] + ')']
-          pathlib.Path('security-comment.md').write_text('\\n'.join(lines) + '\\n')
+          pathlib.Path('security-comment.md').write_text('\n'.join(lines) + '\n')
           PY
       - name: Upload detailed audit reports
         if: always()
