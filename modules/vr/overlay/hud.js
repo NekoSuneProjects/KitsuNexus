@@ -14,13 +14,17 @@ let previousPlayers = null
 const notices = []
 const alerts = document.getElementById('alerts')
 const PREF_KEY = 'kitsunexus-hud-prefs-v1'
-const defaults = { limit: 12, fade: 15, players: true, tiles: true, music: true, heart: true, language: 'en', preset: 'full', joins: true, leaves: true, notices: true, clock: true, sessionVisible: true, corner: 'inline', textSize: 'normal' }
+const defaults = { limit: 12, fade: 15, players: true, tiles: true, music: true, heart: true, language: 'en', preset: 'full', joins: true, leaves: true, notices: true, clock: true, sessionVisible: true, corner: 'inline', textSize: 'normal', live: true, monitorPlayers: true, musicFeed: true, heartFeed: true }
 let prefs = { ...defaults }
 try {
   const stored = JSON.parse(localStorage.getItem(PREF_KEY) || '{}')
   if (stored && typeof stored === 'object') {
     prefs.limit = [3, 6, 12, 20].includes(Number(stored.limit)) ? Number(stored.limit) : 12
     prefs.fade = Number.isFinite(Number(stored.fade)) ? Math.max(0, Math.min(120, Number(stored.fade))) : 15
+    prefs.live = stored.live !== false
+    prefs.monitorPlayers = stored.monitorPlayers !== false
+    prefs.musicFeed = stored.musicFeed !== false
+    prefs.heartFeed = stored.heartFeed !== false
     prefs.textSize = ['small', 'normal', 'large'].includes(stored.textSize) ? stored.textSize : 'normal'
     prefs.notices = stored.notices !== false
     prefs.clock = stored.clock !== false
@@ -40,6 +44,10 @@ function renderPrefs () {
   document.getElementById('hudPreset').value = prefs.preset
   document.getElementById('noticeLimit').value = String(prefs.limit)
   document.getElementById('noticeFade').value = String(prefs.fade)
+  document.getElementById('enableHudUpdates').checked = prefs.live
+  document.getElementById('enablePlayerMonitoring').checked = prefs.monitorPlayers
+  document.getElementById('enableMusicFeed').checked = prefs.musicFeed
+  document.getElementById('enableHeartFeed').checked = prefs.heartFeed
   document.getElementById('hudTextSize').value = prefs.textSize
   document.body.dataset.textSize = prefs.textSize
   document.getElementById('showNotices').checked = prefs.notices
@@ -66,6 +74,10 @@ function savePrefs () {
   prefs.preset = document.getElementById('hudPreset').value
   prefs.limit = Number(document.getElementById('noticeLimit').value)
   prefs.fade = Math.max(0, Math.min(120, Number(document.getElementById('noticeFade').value) || 0))
+  prefs.live = document.getElementById('enableHudUpdates').checked
+  prefs.monitorPlayers = document.getElementById('enablePlayerMonitoring').checked
+  prefs.musicFeed = document.getElementById('enableMusicFeed').checked
+  prefs.heartFeed = document.getElementById('enableHeartFeed').checked
   prefs.textSize = document.getElementById('hudTextSize').value
   prefs.notices = document.getElementById('showNotices').checked
   prefs.clock = document.getElementById('showClock').checked
@@ -82,7 +94,7 @@ function savePrefs () {
   renderPrefs()
   renderNotices()
 }
-for (const id of ['hudTextSize', 'noticeLimit', 'noticeFade', 'showNotices', 'showClock', 'showSession', 'noticeCorner', 'showJoins', 'showLeaves', 'showPlayers', 'showTiles', 'showMusic', 'showHeart', 'quickLanguage']) {
+for (const id of ['enableHudUpdates', 'enablePlayerMonitoring', 'enableMusicFeed', 'enableHeartFeed', 'hudTextSize', 'noticeLimit', 'noticeFade', 'showNotices', 'showClock', 'showSession', 'noticeCorner', 'showJoins', 'showLeaves', 'showPlayers', 'showTiles', 'showMusic', 'showHeart', 'quickLanguage']) {
   document.getElementById(id).addEventListener('change', () => {
     if (['showPlayers', 'showTiles', 'showMusic', 'showHeart', 'showNotices', 'showClock', 'showSession'].includes(id)) document.getElementById('hudPreset').value = 'custom'
     savePrefs()
@@ -121,7 +133,8 @@ function addNotice (message) {
 }
 document.getElementById('clearAlerts').addEventListener('click', () => { notices.length = 0; alerts.textContent = '' })
 window.kitsunexusHud.onData(state => {
-  if (Array.isArray(state?.players)) {
+  if (!prefs.live) return
+  if (prefs.monitorPlayers && Array.isArray(state?.players)) {
     const incoming = state.players.filter(p => typeof p === 'string').slice(0, 80)
     const names = new Set(incoming)
     if (previousPlayers !== null) {
@@ -136,8 +149,8 @@ window.kitsunexusHud.onData(state => {
   }
   if (!state || typeof state !== 'object') return
   if (Object.prototype.hasOwnProperty.call(state, 'session')) document.getElementById('session').textContent = short(state.session, 'Not connected')
-  if (Object.prototype.hasOwnProperty.call(state, 'music')) document.getElementById('music').textContent = short(state.music, 'No track')
-  if (Object.prototype.hasOwnProperty.call(state, 'heart')) document.getElementById('heart').textContent = short(state.heart, 'Not connected')
+  if (prefs.musicFeed && Object.prototype.hasOwnProperty.call(state, 'music')) document.getElementById('music').textContent = short(state.music, 'No track')
+  if (prefs.heartFeed && Object.prototype.hasOwnProperty.call(state, 'heart')) document.getElementById('heart').textContent = short(state.heart, 'Not connected')
 })
 
 const actionStatus = document.getElementById('actionStatus')
