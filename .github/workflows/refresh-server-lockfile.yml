@@ -1,7 +1,18 @@
-name: Refresh server dependency lockfile
+name: Refresh dependency lockfile
 
 on:
   workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'Branch to refresh (server, main, release, or beta)'
+        required: true
+        type: choice
+        default: server
+        options:
+          - server
+          - main
+          - release
+          - beta
 
 permissions:
   contents: write
@@ -13,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: server
+          ref: ${{ inputs.target_branch }}
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -43,11 +54,11 @@ jobs:
             echo "Lockfile already synchronized."
             exit 0
           fi
-          branch="fix/server-lockfile-${GITHUB_RUN_ID}"
+          branch="fix/${{ inputs.target_branch }}-lockfile-${GITHUB_RUN_ID}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "$branch"
           git add package-lock.json
           git commit -m "fix(server): synchronize npm lockfile"
           git push origin "$branch"
-          gh pr create --base server --head "$branch" --title "fix(server): synchronize npm lockfile for Docker" --body "Regenerated package-lock.json from the server package manifest and validated npm ci and tests. Merge after security checks pass, then rerun the server Docker build."
+          gh pr create --base "${{ inputs.target_branch }}" --head "$branch" --title "fix(${{ inputs.target_branch }}): synchronize npm lockfile" --body "Regenerated package-lock.json from the server package manifest and validated npm ci and tests. Merge after security checks pass, then rerun the server Docker build."
