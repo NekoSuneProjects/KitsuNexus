@@ -90,6 +90,7 @@ const crashGuard = require('./modules/vrchat/tools/crashGuard')
 const quickLaunch = require('./modules/vrchat/launcher/quickLaunch')
 const vrOverlay = require('./modules/vr/overlay/vrOverlayController')
 const hudWindow = require('./modules/vr/overlay/hudWindow')
+const worldSnapshotExport = require('./modules/vrchat/world/worldSnapshotExport')
 const { startTon, stopTon, getTonState, getTonRaw } = require('./modules/integrations/ton/tonModule')
 const tonOsc = require('./modules/integrations/ton/tonOsc')
 const osc = require('./modules/vrchat/osc/oscModule')
@@ -984,6 +985,19 @@ ipcMain.handle('hud:show', (_event, options) => {
 ipcMain.handle('hud:hide', () => { hudWindow.hideDesktop(); return hudWindow.state() })
 ipcMain.handle('hud:config', (_event, options) => { hudWindow.configureDesktop(options); return hudWindow.state() })
 ipcMain.handle('hud:status', () => hudWindow.state())
+ipcMain.handle('hud:exportWorld', async (_event, format = 'json') => {
+  if (!['json', 'csv'].includes(format)) return { ok: false, error: 'Unsupported format' }
+  const data = worldSnapshotExport.snapshot(getVrcWorld())
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export local VRChat world snapshot',
+    defaultPath: 'KitsuNexus-world-snapshot.' + format,
+    filters: [{ name: format.toUpperCase(), extensions: [format] }]
+  })
+  if (result.canceled || !result.filePath) return { ok: false, cancelled: true }
+  const output = format === 'csv' ? worldSnapshotExport.toCsv(data) : JSON.stringify(data, null, 2)
+  await fs.promises.writeFile(result.filePath, output, { encoding: 'utf8', flag: 'w' })
+  return { ok: true, message: 'Saved world snapshot' }
+})
 ipcMain.handle('hud:action', async (event, payload = {}) => {
   // Only a HUD surface may call this privileged bridge.
   const sender = event.sender
