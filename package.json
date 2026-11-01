@@ -155,7 +155,7 @@
     "@audd/sdk": "^1.5.11",
     "@aws-sdk/client-polly": "^3.1081.0",
     "@huggingface/transformers": "^4.2.0",
-    "@nekosuneprojects/vrnotications": "^1.0.2",
+    "@nekosuneprojects/vrnotications": "^1.2.4",
     "acrcloud": "^1.4.0",
     "axios": "^1.20.0",
     "discord-rpc": "^4.0.1",
