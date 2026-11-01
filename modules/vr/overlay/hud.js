@@ -14,13 +14,17 @@ let previousPlayers = null
 const notices = []
 const alerts = document.getElementById('alerts')
 const PREF_KEY = 'kitsunexus-hud-prefs-v1'
-const defaults = { limit: 12, fade: 15, players: true, tiles: true, music: true, heart: true, language: 'en', preset: 'full', joins: true, leaves: true }
+const defaults = { limit: 12, fade: 15, players: true, tiles: true, music: true, heart: true, language: 'en', preset: 'full', joins: true, leaves: true, notices: true, clock: true, sessionVisible: true, corner: 'inline' }
 let prefs = { ...defaults }
 try {
   const stored = JSON.parse(localStorage.getItem(PREF_KEY) || '{}')
   if (stored && typeof stored === 'object') {
     prefs.limit = [3, 6, 12, 20].includes(Number(stored.limit)) ? Number(stored.limit) : 12
     prefs.fade = Number.isFinite(Number(stored.fade)) ? Math.max(0, Math.min(120, Number(stored.fade))) : 15
+    prefs.notices = stored.notices !== false
+    prefs.clock = stored.clock !== false
+    prefs.sessionVisible = stored.sessionVisible !== false
+    prefs.corner = ['inline', 'top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(stored.corner) ? stored.corner : 'inline'
     prefs.joins = stored.joins !== false
     prefs.leaves = stored.leaves !== false
     prefs.players = stored.players !== false
@@ -35,6 +39,14 @@ function renderPrefs () {
   document.getElementById('hudPreset').value = prefs.preset
   document.getElementById('noticeLimit').value = String(prefs.limit)
   document.getElementById('noticeFade').value = String(prefs.fade)
+  document.getElementById('showNotices').checked = prefs.notices
+  document.getElementById('showClock').checked = prefs.clock
+  document.getElementById('showSession').checked = prefs.sessionVisible
+  document.getElementById('noticeCorner').value = prefs.corner
+  document.body.dataset.corner = prefs.corner
+  document.querySelector('[data-widget="alerts"]').hidden = !prefs.notices
+  document.getElementById('clock').closest('.tile').hidden = !prefs.clock
+  document.getElementById('session').closest('.tile').hidden = !prefs.sessionVisible
   document.getElementById('showJoins').checked = prefs.joins
   document.getElementById('showLeaves').checked = prefs.leaves
   document.getElementById('showPlayers').checked = prefs.players
@@ -51,6 +63,10 @@ function savePrefs () {
   prefs.preset = document.getElementById('hudPreset').value
   prefs.limit = Number(document.getElementById('noticeLimit').value)
   prefs.fade = Math.max(0, Math.min(120, Number(document.getElementById('noticeFade').value) || 0))
+  prefs.notices = document.getElementById('showNotices').checked
+  prefs.clock = document.getElementById('showClock').checked
+  prefs.sessionVisible = document.getElementById('showSession').checked
+  prefs.corner = document.getElementById('noticeCorner').value
   prefs.joins = document.getElementById('showJoins').checked
   prefs.leaves = document.getElementById('showLeaves').checked
   prefs.players = document.getElementById('showPlayers').checked
@@ -62,9 +78,9 @@ function savePrefs () {
   renderPrefs()
   renderNotices()
 }
-for (const id of ['noticeLimit', 'noticeFade', 'showJoins', 'showLeaves', 'showPlayers', 'showTiles', 'showMusic', 'showHeart', 'quickLanguage']) {
+for (const id of ['noticeLimit', 'noticeFade', 'showNotices', 'showClock', 'showSession', 'noticeCorner', 'showJoins', 'showLeaves', 'showPlayers', 'showTiles', 'showMusic', 'showHeart', 'quickLanguage']) {
   document.getElementById(id).addEventListener('change', () => {
-    if (['showPlayers', 'showTiles', 'showMusic', 'showHeart'].includes(id)) document.getElementById('hudPreset').value = 'custom'
+    if (['showPlayers', 'showTiles', 'showMusic', 'showHeart', 'showNotices', 'showClock', 'showSession'].includes(id)) document.getElementById('hudPreset').value = 'custom'
     savePrefs()
   })
 }
