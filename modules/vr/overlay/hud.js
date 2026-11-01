@@ -74,7 +74,7 @@ function renderPrefs () {
   document.getElementById('showMusic').checked = prefs.music
   document.getElementById('showHeart').checked = prefs.heart
   document.getElementById('quickLanguage').value = prefs.language
-  document.getElementById('players').hidden = !prefs.players
+  document.querySelector('[data-widget="players"]').hidden = !prefs.players
   document.getElementById('hudTiles').hidden = !prefs.tiles
   document.getElementById('music').closest('.tile').hidden = !prefs.music
   document.getElementById('heart').closest('.tile').hidden = !prefs.heart
@@ -160,12 +160,12 @@ window.kitsunexusHud.onData(state => {
     renderPlayers()
   }
   if (!state || typeof state !== 'object') return
-  if (Object.prototype.hasOwnProperty.call(state, 'fps')) {
+  if (prefs.fps && Object.prototype.hasOwnProperty.call(state, 'fps')) {
     const fps = Number(state.fps)
     document.getElementById('fps').textContent = Number.isFinite(fps) && fps >= 0 && fps <= 1000 ? Math.round(fps) + ' FPS' : 'Unavailable'
   }
-  if (Object.prototype.hasOwnProperty.call(state, 'status')) document.getElementById('hudStatus').textContent = short(state.status, 'Unknown')
-  if (Object.prototype.hasOwnProperty.call(state, 'lyrics')) document.getElementById('lyricsText').textContent = short(state.lyrics, 'No lyrics source connected')
+  if (prefs.status && Object.prototype.hasOwnProperty.call(state, 'status')) document.getElementById('hudStatus').textContent = short(state.status, 'Unknown')
+  if (prefs.lyrics && Object.prototype.hasOwnProperty.call(state, 'lyrics')) document.getElementById('lyricsText').textContent = short(state.lyrics, 'No lyrics source connected')
   if (Object.prototype.hasOwnProperty.call(state, 'session')) document.getElementById('session').textContent = short(state.session, 'Not connected')
   if (prefs.musicFeed && Object.prototype.hasOwnProperty.call(state, 'music')) document.getElementById('music').textContent = short(state.music, 'No track')
   if (prefs.heartFeed && Object.prototype.hasOwnProperty.call(state, 'heart')) document.getElementById('heart').textContent = short(state.heart, 'Not connected')
