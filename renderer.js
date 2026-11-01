@@ -2687,6 +2687,31 @@ api.on('vr:update', s => {
 })
 $('enableVr').addEventListener('change', e => { e.target.checked ? api.vrStart() : api.vrStop(); api.saveSetting('vrEnabled', e.target.checked) })
 
+/* ---------------- KitsuNexus desktop HUD ---------------- */
+async function refreshDesktopHud () {
+  try {
+    const state = await api.hudStatus()
+    setPill('desktopHudState', !!state.running, 'on')
+    $('desktopHudToggle').textContent = state.running ? 'Stop desktop HUD' : 'Start desktop HUD'
+    setText('desktopHudOut', state.running ? 'Running — drag to move, resize from window edges.' : 'Stopped')
+  } catch (err) { setText('desktopHudOut', String(err.message || err)) }
+}
+$('desktopHudToggle').addEventListener('click', async () => {
+  $('desktopHudToggle').disabled = true
+  try {
+    const state = await api.hudStatus()
+    if (state.running) await api.hudHide()
+    else await api.hudShow({ clickThrough: $('desktopHudClickThrough').checked })
+    await refreshDesktopHud()
+  } catch (err) { setText('desktopHudOut', String(err.message || err)) }
+  finally { $('desktopHudToggle').disabled = false }
+})
+$('desktopHudClickThrough').addEventListener('change', async e => {
+  try { await api.hudConfigure({ clickThrough: e.target.checked }) }
+  catch (err) { setText('desktopHudOut', String(err.message || err)) }
+})
+refreshDesktopHud()
+
 /* ---------------- VR overlay (experimental) ---------------- */
 function renderVrOverlayState (running, error) {
   setPill('vrOverlayState', running, 'on')
