@@ -89,6 +89,7 @@ const avatarDb = require('./modules/vrchat/avatars/avatarDb')
 const crashGuard = require('./modules/vrchat/tools/crashGuard')
 const quickLaunch = require('./modules/vrchat/launcher/quickLaunch')
 const vrOverlay = require('./modules/vr/overlay/vrOverlayController')
+const hudWindow = require('./modules/vr/overlay/hudWindow')
 const { startTon, stopTon, getTonState, getTonRaw } = require('./modules/integrations/ton/tonModule')
 const tonOsc = require('./modules/integrations/ton/tonOsc')
 const osc = require('./modules/vrchat/osc/oscModule')
@@ -225,6 +226,10 @@ if (!app.requestSingleInstanceLock()) {
 
 // Forward a module event into the renderer over a named channel.
 function push (channel, payload) {
+  if (channel === 'hr:update') {
+    const bpm = Number(payload?.bpm)
+    hudWindow.broadcast({ heart: Number.isFinite(bpm) && bpm > 0 ? `${bpm} BPM` : 'Not connected' })
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(channel, payload)
   }
@@ -460,6 +465,8 @@ app.on('before-quit', () => {
   if (unsubHotkeyHold) { unsubHotkeyHold(); unsubHotkeyHold = null }
   stopHotkeyTick()
   vrOverlay.stop()
+  hudWindow.hideDesktop()
+  hudWindow.closeVrSurface()
 })
 
 /* ------------------------------------------------------------------ */
@@ -942,6 +949,11 @@ ipcMain.handle('update:startUpdate', async (e, { url, name, version } = {}) => {
 // VR overlay (experimental, Windows + SteamVR only) - mirrors the main
 // window into a floating VR panel. Non-interactive first slice; see
 // modules/vr/overlay/openvrOverlay.js for what is/isn't verified.
+ipcMain.handle('hud:show', (_event, options) => { hudWindow.showDesktop(options); return hudWindow.state() })
+ipcMain.handle('hud:hide', () => { hudWindow.hideDesktop(); return hudWindow.state() })
+ipcMain.handle('hud:config', (_event, options) => { hudWindow.configureDesktop(options); return hudWindow.state() })
+ipcMain.handle('hud:status', () => hudWindow.state())
+
 ipcMain.handle('vrOverlay:isAvailable', () => vrOverlay.isAvailable())
 ipcMain.handle('vrOverlay:start', async () => {
   try {
