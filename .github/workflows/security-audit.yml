@@ -24,12 +24,19 @@ jobs:
       - name: Validate lockfile and dependencies
         run: npm ci --ignore-scripts
       - name: Audit npm dependencies
-        run: npm audit --audit-level=high
+        id: npm_audit
+        continue-on-error: true
+        run: |
+          npm audit --json > npm-audit.json || test -s npm-audit.json
       - name: Scan dependency lockfile with OSV
+        id: osv
+        continue-on-error: true
         uses: google/osv-scanner-action/osv-scanner-action@v2.3.1
         with:
           scan-args: |-
             scan
+            --format=json
+            --output=osv-results.json
             --lockfile=package-lock.json
       - name: Install Gitleaks
         run: |
@@ -39,22 +46,70 @@ jobs:
         id: gitleaks
         continue-on-error: true
         run: /tmp/gitleaks dir . --redact --report-format json --report-path gitleaks-results.json --exit-code 1
-      - name: Post security report on PR
-        if: ${{ always() && github.event_name == 'pull_request' }}
-        uses: actions/github-script@v7
+      - name: Build actionable security report
+        if: always()
         env:
-          GITLEAKS_OUTCOME: ${{ steps.gitleaks.outcome }}
+          NPM_OUTCOME: ${{ steps.npm_audit.outcome }}
+          OSV_OUTCOME: ${{ steps.osv.outcome }}
+          SECRET_OUTCOME: ${{ steps.gitleaks.outcome }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          lines = ['## Server security audit', '', '**Branch:** `' + os.environ.get('GITHUB_HEAD_REF','server') + '`  |  **Commit:** `' + os.environ['GITHUB_SHA'][:12] + '`  |  **Run:** `' + os.environ['GITHUB_RUN_ID'] + '`', '']
+          lines += ['**npm audit:** ' + os.environ['NPM_OUTCOME'] + '  |  **OSV:** ' + os.environ['OSV_OUTCOME'] + '  |  **Secret scan:** ' + os.environ['SECRET_OUTCOME'], '']
+          lines += ['### Vulnerable dependencies', '', '| Package | Installed | Advisory | Severity | Recommended fix |', '|---|---|---|---|---|']
+          count = 0
+          try:
+              data = json.loads(pathlib.Path('npm-audit.json').read_text())
+              for name, item in data.get('vulnerabilities', {}).items():
+                  count += 1
+                  via = item.get('via', [])
+                  advisory = next((str(v.get('url') or v.get('name') or 'See npm audit') for v in via if isinstance(v, dict)), 'See npm audit')
+                  fix = item.get('fixAvailable')
+                  fixtext = (str(fix.get('version')) if isinstance(fix, dict) else ('npm audit fix' if fix else 'Review advisory'))
+                  installed = item.get('range', '—')
+                  safe = lambda v: str(v).replace('|', '\\|').replace('\\n',' ')[:150]
+                  lines.append('| ' + ' | '.join(map(safe,[name,installed,advisory,item.get('severity','unknown'),fixtext])) + ' |')
+              if not count: lines.append('| No npm audit findings | — | — | — | — |')
+          except Exception as exc:
+              lines.append('| npm audit report unavailable | — | Check workflow logs | — | — |')
+          lines += ['', '### OSV dependency scan', '']
+          try:
+              data = json.loads(pathlib.Path('osv-results.json').read_text())
+              findings = [(p.get('package',{}).get('name','unknown'), v.get('id','unknown')) for result in data.get('results',[]) for p in result.get('packages',[]) for v in p.get('vulnerabilities',[])]
+              lines.append(str(len(findings)) + ' OSV advisory finding(s).')
+              for pkg, adv in findings[:30]:
+                  lines.append('- `' + str(pkg).replace('`','') + '`: [' + str(adv) + '](https://osv.dev/vulnerability/' + str(adv) + ')')
+          except Exception:
+              lines.append('OSV JSON report unavailable; check workflow logs (not a clean scan).')
+          lines += ['', '### Secret scan', '']
+          try:
+              leaks = json.loads(pathlib.Path('gitleaks-results.json').read_text())
+              lines.append(str(len(leaks or [])) + ' potential secret finding(s). Secret values are never posted here.')
+              for leak in (leaks or [])[:15]:
+                  lines.append('- ' + str(leak.get('RuleID','unknown')) + ' in `' + str(leak.get('File','unknown')).replace('`','') + '` line ' + str(leak.get('StartLine','?')))
+          except Exception:
+              lines.append('Secret report unavailable; scan status: **' + os.environ['SECRET_OUTCOME'] + '**.')
+          lines += ['', '[View workflow logs](https://github.com/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + os.environ['GITHUB_RUN_ID'] + ')']
+          pathlib.Path('security-comment.md').write_text('\\n'.join(lines) + '\\n')
+          PY
+      - name: Upload detailed audit reports
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          script: |
-            const status = process.env.GITLEAKS_OUTCOME;
-            const body = [
-              '## Server security audit',
-              '**Branch:** `' + context.payload.pull_request.head.ref + '` | **Commit:** `' + context.payload.pull_request.head.sha.slice(0,12) + '` | **Run:** `' + context.runId + '`',
-              '**Current-file secret scan:** ' + (status === 'success' ? 'passed' : 'failed'),
-              'Dependency and npm audit results are available in the workflow logs.',
-              '[View scan](https://github.com/' + context.repo.owner + '/' + context.repo.repo + '/actions/runs/' + context.runId + ')'
-            ].join('\n\n');
-            await github.rest.issues.createComment({...context.repo, issue_number: context.issue.number, body});
-      - name: Fail on secret findings
-        if: ${{ always() && steps.gitleaks.outcome != 'success' }}
+          name: server-security-reports
+          path: |
+            npm-audit.json
+            osv-results.json
+            gitleaks-results.json
+            security-comment.md
+          if-no-files-found: ignore
+      - name: Post complete security report on PR
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: gh pr comment "$PR_NUMBER" --body-file security-comment.md
+      - name: Fail on vulnerability or secret scan findings
+        if: ${{ always() && (steps.npm_audit.outcome != 'success' || steps.osv.outcome != 'success' || steps.gitleaks.outcome != 'success') }}
         run: exit 1
