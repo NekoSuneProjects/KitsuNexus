@@ -1,7 +1,7 @@
 'use strict'
 
 const path = require('path')
-const { BrowserWindow, screen } = require('electron')
+const { BrowserWindow, screen, globalShortcut } = require('electron')
 
 const DEFAULTS = Object.freeze({ width: 430, height: 380, x: null, y: null, opacity: 0.94, clickThrough: false, alwaysOnTop: true })
 let desktop = null
@@ -10,6 +10,28 @@ let onBounds = () => {}
 let lastData = {}
 let desktopOptions = { ...DEFAULTS }
 let onOptions = () => {}
+const RECOVERY_HOTKEY = 'CommandOrControl+Shift+F10'
+let recoveryRegistered = false
+function recoverDesktop () {
+  if (!desktop || desktop.isDestroyed()) return
+  const area = screen.getPrimaryDisplay().workArea
+  desktop.setIgnoreMouseEvents(false)
+  desktop.setOpacity(1)
+  desktop.setAlwaysOnTop(true, 'screen-saver')
+  desktop.setBounds({ x: area.x + 24, y: area.y + 32, width: desktop.getBounds().width, height: desktop.getBounds().height })
+  desktop.showInactive()
+  desktopOptions = normalise({ ...desktopOptions, clickThrough: false, opacity: 1, alwaysOnTop: true })
+  onOptions({ opacity: 1, clickThrough: false, alwaysOnTop: true })
+}
+function registerRecovery () {
+  if (recoveryRegistered) return
+  try { recoveryRegistered = globalShortcut.register(RECOVERY_HOTKEY, recoverDesktop) } catch (_) { recoveryRegistered = false }
+}
+function unregisterRecovery () {
+  if (!recoveryRegistered) return
+  globalShortcut.unregister(RECOVERY_HOTKEY)
+  recoveryRegistered = false
+}
 
 function normalise (input = {}) {
   return {
@@ -98,14 +120,16 @@ function showDesktop (options = {}) {
   if (desktop && !desktop.isDestroyed()) {
     desktop.showInactive()
     configureDesktop(options)
+    registerRecovery()
     return
   }
   desktopOptions = normalise(options)
   desktop = create(desktopOptions, 'desktop')
+  registerRecovery()
   const saveBounds = () => { if (desktop && !desktop.isDestroyed()) onBounds(desktop.getBounds()) }
   desktop.on('moved', saveBounds)
   desktop.on('resized', saveBounds)
-  desktop.on('closed', () => { desktop = null })
+  desktop.on('closed', () => { desktop = null; unregisterRecovery() })
 }
 
 function configureDesktop (options = {}) {
@@ -121,6 +145,7 @@ function configureDesktop (options = {}) {
 function hideDesktop () {
   if (desktop && !desktop.isDestroyed()) desktop.close()
   desktop = null
+  unregisterRecovery()
 }
 
 function getVrSurface () {
@@ -151,6 +176,7 @@ function state () {
   return {
     running: !!(desktop && !desktop.isDestroyed()),
     visible: !!(desktop && !desktop.isDestroyed() && desktop.isVisible()),
+    recoveryHotkey: recoveryRegistered ? RECOVERY_HOTKEY : null,
     bounds: desktop && !desktop.isDestroyed() ? desktop.getBounds() : null,
     options: { opacity: desktopOptions.opacity, clickThrough: desktopOptions.clickThrough, alwaysOnTop: desktopOptions.alwaysOnTop }
   }
