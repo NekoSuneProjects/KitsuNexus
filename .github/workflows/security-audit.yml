@@ -62,7 +62,15 @@ jobs:
         id: gitleaks
         if: ${{ steps.install_gitleaks.outcome == 'success' }}
         continue-on-error: true
-        run: /tmp/gitleaks git . --report-format json --report-path gitleaks-results.json --exit-code 1
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # Scan the current PR changes, not every historical commit.
+          # --no-git inspects the current working tree; --log-opts limits git scan
+          # to commits introduced by this pull request.
+          /tmp/gitleaks git . --log-opts="${BASE_SHA}..${HEAD_SHA}" --report-format json --report-path gitleaks-results.json --exit-code 1
       - name: Build actionable PR report
         if: always()
         env:
