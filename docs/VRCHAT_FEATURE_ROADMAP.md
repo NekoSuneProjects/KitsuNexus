@@ -21,6 +21,8 @@ This is an original KitsuNexus implementation plan. All integrations should use 
 - [x] Desktop HUD visibility fallback, off-screen bounds recovery and actual visibility reporting
 - [x] Emergency Ctrl+Shift+F10 click-through recovery while the desktop HUD is running
 - [x] Bounded, scrollable join/leave notification history with clear action
+- [x] HUD-local persisted translation target, Enter-to-send, notification limits and fade duration
+- [x] HUD-local visibility toggles for player list, statistics, music and heart-rate tiles (not independent native windows)
 - [~] SteamVR device status: optional helper transport, response validation and disconnect reporting implemented; native OpenVR helper and real device readings still missing
 - [ ] Windows packaged HUD smoke tests and physical SteamVR validation
 
