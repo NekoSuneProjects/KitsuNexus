@@ -437,13 +437,19 @@ app.whenReady().then(async () => {
   })
   crashGuard.start({ enabled: settings.get('autoRejoin', false), getLocation: () => { const w = getVrcWorld(); return (w.inWorld && w.worldId && w.instanceId) ? `${w.worldId}:${w.instanceId}` : '' } })
   setInterval(() => pawprints.tickCommit(), 60000)
-  setInterval(() => {
+  let hudMediaBusy = false
+  const updateHudMedia = async () => {
+    if (hudMediaBusy) return
+    hudMediaBusy = true
     try {
-      const now = getNowPlaying()
+      const now = await getNowPlaying()
       const track = typeof now === 'string' ? now : [now?.artist, now?.title].filter(Boolean).join(' — ')
       hudWindow.broadcast({ music: track || 'No track' })
-    } catch (_) {}
-  }, 5000) // persist ongoing world time
+    } catch (_) { hudWindow.broadcast({ music: 'No track' }) }
+    finally { hudMediaBusy = false }
+  }
+  setInterval(updateHudMedia, 15000)
+  updateHudMedia() // persist ongoing world time
   // Stagger the pollers so they don't all hit the API at once on launch.
   setTimeout(startFriendDiff, 8000)
   setTimeout(startNotifPoll, 14000)
@@ -963,7 +969,17 @@ ipcMain.handle('update:startUpdate', async (e, { url, name, version } = {}) => {
 hudWindow.setBoundsCallback(bounds => {
   settings.set('hudDesktopBounds', bounds)
 })
-ipcMain.handle('hud:show', (_event, options) => { hudWindow.showDesktop({ ...settings.get('hudDesktopBounds', {}), ...options, width: options?.width || settings.get('hudDesktopBounds', {}).width, height: options?.height || settings.get('hudDesktopBounds', {}).height }); return hudWindow.state() })
+ipcMain.handle('hud:show', (_event, options) => {
+  const bounds = settings.get('hudDesktopBounds', {})
+  hudWindow.showDesktop({ ...bounds, ...options })
+  const world = getVrcWorld()
+  const sendInitial = () => hudWindow.broadcast({
+    session: world?.inWorld ? String(world.worldName || 'In VRChat') : 'Not in world',
+    players: Array.isArray(world?.players) ? world.players.slice(0, 80).map(String) : []
+  })
+  setTimeout(sendInitial, 700)
+  return hudWindow.state()
+})
 ipcMain.handle('hud:hide', () => { hudWindow.hideDesktop(); return hudWindow.state() })
 ipcMain.handle('hud:config', (_event, options) => { hudWindow.configureDesktop(options); return hudWindow.state() })
 ipcMain.handle('hud:status', () => hudWindow.state())
