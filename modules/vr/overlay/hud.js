@@ -12,6 +12,7 @@ function short (value, fallback) {
 }
 let previousPlayers = null
 const notices = []
+const alerts = document.getElementById('alerts')
 const PREF_KEY = 'kitsunexus-hud-prefs-v1'
 const defaults = { limit: 12, fade: 15, players: true, tiles: true, music: true, heart: true, language: 'en' }
 let prefs = { ...defaults }
@@ -67,7 +68,6 @@ function renderNotices () {
   alerts.textContent = active.slice(0, prefs.limit).map(n => n.text).join(' | ')
 }
 setInterval(renderNotices, 1000)
-const alerts = document.getElementById('alerts')
 function addNotice (message) {
   notices.unshift({ at: Date.now(), text: new Date().toLocaleTimeString() + ' · ' + message })
   if (notices.length > 20) notices.length = 20
