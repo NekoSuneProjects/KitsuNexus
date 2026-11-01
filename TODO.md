@@ -1,5 +1,10 @@
 ## Independent KitsuNexus HUD work
 
+- [x] Persist HUD overlay interaction settings.
+- [x] Save current world snapshot as JSON or CSV.
+- [ ] Verify with Windows Electron and physical SteamVR headset.
+
+
 - [x] Quick Actions: media play/pause/previous/next, OSC chat, translation preview and target language choice.
 - [x] Current-instance player names and join/leave notices from local VRChat logs.
 - [x] Saved desktop overlay position/size, dedicated drag header, state replay and async now-playing updates.
