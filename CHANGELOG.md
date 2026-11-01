@@ -6,6 +6,10 @@ This project follows [Semantic Versioning](https://semver.org/).
 ## Unreleased
 
 ### Added
+- Added JSON and CSV export buttons for current world snapshots.
+- Saved HUD interaction preferences persist between restarts.
+
+### Added
 - **KitsuNexus HUD Quick Actions and player radar.** Local desktop quick controls for media playback, OSC chatbox on/off, immediate chat sends and translation previews with language choice. HUD now uses the existing VRChat log parser for world/player data and join/leave notices, the local media session reader for music, and existing heart-rate events. Desktop position/size persists across sessions.
 
 ### Fixed
