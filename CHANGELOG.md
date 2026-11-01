@@ -5,6 +5,35 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.81] - 2026-11-01
+
+### Added
+- Independent desktop and VR HUD surfaces, Quick Actions for media and OSC chatbox, player radar and join/leave notifications.
+- Persistent desktop HUD position, size, and interaction preferences; translation previews and language selection.
+
+### Fixed
+- HUD refresh and capture while the main application is minimised; asynchronous media session polling and window state replay.
+- Updated `@nekosuneprojects/vrnotications` to 1.2.4 and refreshed dependency lockfiles, including patched `minimatch` resolution for the application and updater.
+- Scoped PR secret scanning to current checked-out files and included branch, commit, and workflow run identifiers in audit comments.
+
+
+### Added
+- Added JSON and CSV export buttons for current world snapshots.
+- Saved HUD interaction preferences persist between restarts.
+
+### Added
+- **KitsuNexus HUD Quick Actions and player radar.** Local desktop quick controls for media playback, OSC chatbox on/off, immediate chat sends and translation previews with language choice. HUD now uses the existing VRChat log parser for world/player data and join/leave notices, the local media session reader for music, and existing heart-rate events. Desktop position/size persists across sessions.
+
+### Fixed
+- **HUD state and window controls.** Added a frameless drag region, cached state replay after each HUD window loads, and awaited asynchronous Windows media-session reads with overlapping polls prevented.
+
+### Added
+- Added a standalone, transparent KitsuNexus desktop HUD with click-through control and separate lifecycle from SteamVR.
+- Added dedicated display-only HUD rendering surfaces for desktop and VR, without capturing the main app window.
+
+### Fixed
+- VR capture now reads its own HUD surface rather than skipping updates when the main window is minimised.
+
 ## [1.0.80] - 2026-10-20
 
 ### Community Booster

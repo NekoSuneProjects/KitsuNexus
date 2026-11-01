@@ -1,0 +1,161 @@
+name: PR security audit
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  scan:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+      - name: Set up Node.js for dependency remediation
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Refresh lockfiles and apply compatible npm security fixes
+        id: remediate
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --ignore-scripts --no-audit
+          npm audit fix --package-lock-only --ignore-scripts || true
+          (
+            cd updater
+            npm install --package-lock-only --ignore-scripts --no-audit
+            npm audit fix --package-lock-only --ignore-scripts || true
+          )
+          git diff --check
+          git add package-lock.json updater/package-lock.json
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "fix(deps): automatically refresh audited npm lockfiles"
+            git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+          fi
+      - name: Scan dependency lockfiles with OSV
+        id: osv
+        continue-on-error: true
+        uses: google/osv-scanner-action/osv-scanner-action@v2.3.1
+        with:
+          scan-args: |-
+            scan
+            --recursive
+            --format=json
+            --output=osv-results.json
+            ./
+      - name: Install open-source Gitleaks CLI (no organisation licence required)
+        id: install_gitleaks
+        continue-on-error: true
+        run: |
+          curl --fail --location --retry 3 --silent --show-error https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz -o /tmp/gitleaks.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          /tmp/gitleaks version
+      - name: Scan current source files for secrets
+        id: gitleaks
+        if: ${{ steps.install_gitleaks.outcome == 'success' }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          # Inspect the checked-out source tree at the current PR commit.
+          # Do not report historical fixtures already removed from the files.
+          /tmp/gitleaks dir . --report-format json --report-path gitleaks-results.json --exit-code 1
+      - name: Build actionable PR report
+        if: always()
+        env:
+          OSV_OUTCOME: ${{ steps.osv.outcome }}
+          GITLEAKS_OUTCOME: ${{ steps.gitleaks.outcome }}
+          INSTALL_OUTCOME: ${{ steps.install_gitleaks.outcome }}
+          REMEDIATE_OUTCOME: ${{ steps.remediate.outcome }}
+          AUDIT_BRANCH: ${{ github.event.pull_request.head.ref }}
+          AUDIT_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          lines = ['## Security audit — needs attention', '', '**Branch:** `%s`  |  **Commit:** `%s`  |  **Workflow run:** `%s`' % (os.environ['AUDIT_BRANCH'], os.environ['AUDIT_SHA'][:12], os.environ['GITHUB_RUN_ID']), '', 'Dependency scan: **%s**; secret scan: **%s**.' % (os.environ['OSV_OUTCOME'], os.environ['GITLEAKS_OUTCOME']), '']
+          if os.environ.get('REMEDIATE_OUTCOME') != 'success': lines.append('Automatic lockfile refresh failed. Review workflow logs before merging.')
+          path = pathlib.Path('osv-results.json')
+          count = 0
+          if path.exists():
+              try:
+                  data = json.loads(path.read_text())
+                  lines += ['### Vulnerable dependencies', '', '| Module | Installed | CVE / advisory | What is vulnerable | Suggested fixed version | File |', '|---|---|---|---|---|---|']
+                  for result in data.get('results', []):
+                      pkg = result.get('package', {})
+                      source = result.get('source', {})
+                      for finding in result.get('packages', []):
+                          p = finding.get('package', {})
+                          for vuln in finding.get('vulnerabilities', []):
+                              count += 1
+                              if count > 35: continue
+                              fixes = []
+                              for affected in vuln.get('affected', []):
+                                  for rng in affected.get('ranges', []):
+                                      fixes.extend(e.get('fixed') for e in rng.get('events', []) if e.get('fixed'))
+                              def safe(x): return str(x or '—').replace('|', '\\|').replace('\\n', ' ')[:110]
+                              aliases = [x for x in vuln.get('aliases', []) if x.startswith('CVE-')]
+                              identifier = vuln.get('id', '')
+                              advisory = '[%s](https://osv.dev/vulnerability/%s)' % (safe(identifier), safe(identifier))
+                              if aliases:
+                                  advisory += '<br>' + '<br>'.join('[%s](https://nvd.nist.gov/vuln/detail/%s)' % (safe(x), safe(x)) for x in aliases[:3])
+                              detail = vuln.get('summary') or vuln.get('details') or 'Open advisory for technical details'
+                              lines.append('| %s | %s | %s | %s | %s | %s |' % (safe(p.get('name')), safe(p.get('version')), advisory, safe(detail), safe(', '.join(dict.fromkeys(fixes)) or 'Review advisory'), safe(source.get('path') or result.get('source', {}).get('path'))))
+                  if not count: lines.append('| No parsed advisories | — | — | — | — |')
+                  if count > 35: lines.append('\nShowing 35 of %s findings. Download the full JSON report from the workflow.' % count)
+              except Exception as exc:
+                  lines.append('OSV report could not be parsed: %s' % str(exc)[:150])
+          else:
+              lines.append('OSV did not produce a JSON report. Check the scanner setup/logs.')
+          lines += ['', '### Secret scan', '']
+          if os.environ['INSTALL_OUTCOME'] != 'success':
+              lines.append('Gitleaks CLI installation failed. Review workflow logs.')
+          elif pathlib.Path('gitleaks-results.json').exists():
+              try:
+                  leaks = json.loads(pathlib.Path('gitleaks-results.json').read_text())
+                  lines.append('%s potential secret finding(s). Review the private workflow artifact; **secret values are not included in this comment**.' % len(leaks))
+                  for leak in leaks[:15]:
+                      lines.append('- %s in `%s` (line %s)' % (str(leak.get('RuleID','Unknown rule'))[:80], str(leak.get('File','unknown')).replace('`','')[:120], leak.get('StartLine','?')))
+              except Exception: lines.append('Could not parse Gitleaks report.')
+          else:
+              lines.append('No secret findings report produced; check logs if the scan failed.')
+          lines += ['', '[View workflow logs](https://github.com/%s/actions/runs/%s)' % (os.environ['GITHUB_REPOSITORY'],os.environ['GITHUB_RUN_ID']), '', 'Scanner errors are not automatically confirmed vulnerabilities. Review affected versions before upgrading.']
+          pathlib.Path('security-comment.md').write_text('\n'.join(lines) + '\n')
+          PY
+      - name: Upload detailed audit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            osv-results.json
+            gitleaks-results.json
+            security-comment.md
+          if-no-files-found: ignore
+      - name: Post a new PR security result for each scan
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "${{ steps.remediate.outcome }}" = "success" ] && [ "${{ steps.osv.outcome }}" = "success" ] && [ "${{ steps.install_gitleaks.outcome }}" = "success" ] && [ "${{ steps.gitleaks.outcome }}" = "success" ]; then
+            cat > security-comment.md <<'EOF'
+          ## Security audit — passed
+          
+          **Branch:** `${{ github.event.pull_request.head.ref }}`  |  **Commit:** `${{ github.event.pull_request.head.sha }}`  |  **Workflow run:** `${{ github.run_id }}`
+          
+          Both dependency vulnerability scanning and secret scanning completed successfully with no findings.
+          
+          **Security checks are clear. This PR is ready for other required reviews, tests and build checks before merging.**
+          EOF
+          fi
+          gh pr comment "$PR_NUMBER" --body-file security-comment.md
+      - name: Fail for scan findings or errors
+        if: ${{ always() && (steps.remediate.outcome != 'success' || steps.osv.outcome != 'success' || steps.install_gitleaks.outcome != 'success' || steps.gitleaks.outcome != 'success') }}
+        run: exit 1

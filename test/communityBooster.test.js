@@ -26,7 +26,7 @@ function grant (level = 1) {
 
 function fixture () {
   let time = 1000
-  let credential = 'token-a'
+  let credential = 'fixture-token-alpha'
   let level = 5
   let failed = false
   let requests = 0
@@ -79,7 +79,7 @@ test('paired server issues temporary rewards that disappear on confirmation or c
 test('pairing switches, server revocations and unpaired state revoke old perks immediately', async () => {
   const f = fixture()
   await f.svc.refresh()
-  f.setToken('token-b')
+  f.setToken('fixture-token-beta')
   assert.equal(f.svc.snapshot().tier, 'none')
   f.setResponse(() => { const err = new Error('Revoked'); err.status = 401; throw err })
   assert.equal((await f.svc.refresh()).state, 'revoked')
@@ -100,7 +100,7 @@ test('late responses from previous paired accounts never activate another userâ€
   let done
   f.setResponse(() => new Promise(resolve => { done = resolve }))
   const oldRequest = f.svc.refresh()
-  f.setToken('new-pairing')
+  f.setToken('fixture-pairing-new')
   assert.equal(f.svc.snapshot().tier, 'none')
   done(grant(5))
   assert.equal((await oldRequest).tier, 'none')
@@ -112,12 +112,12 @@ test('new pairing refreshes immediately even while an older pairing request is p
   const pending = new Map()
   f.setResponse(token => new Promise(resolve => pending.set(token, resolve)))
   const oldRequest = f.svc.refresh()
-  f.setToken('token-b')
+  f.setToken('fixture-token-beta')
   const newRequest = f.svc.refresh(true)
   assert.equal(f.requests(), 2)
-  pending.get('token-b')(grant(1))
+  pending.get('fixture-token-beta')(grant(1))
   assert.equal((await newRequest).tier, 'spark')
-  pending.get('token-a')(grant(5))
+  pending.get('fixture-token-alpha')(grant(5))
   assert.equal((await oldRequest).tier, 'spark')
   assert.equal(f.svc.snapshot().tier, 'spark')
 })
