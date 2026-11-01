@@ -39,7 +39,8 @@ function create (options, mode) {
       contextIsolation: true,
       sandbox: false,
       preload: path.join(__dirname, 'hudPreload.js'),
-      backgroundThrottling: false
+      backgroundThrottling: false,
+      offscreen: mode === 'vr'
     }
   })
   window.setMenuBarVisibility(false)
