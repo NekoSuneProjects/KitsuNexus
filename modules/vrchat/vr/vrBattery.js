@@ -7,6 +7,7 @@ const { execFile } = require('child_process')
 let onUpdate = null
 let pollTimer = null
 let inFlight = false
+let generation = 0
 let last = { available: false, devices: [], at: 0, reason: 'OpenVR helper not installed' }
 const ROLES = new Set(['hmd', 'left', 'right', 'controller', 'tracker', 'base-station', 'other'])
 function helperPath () {
