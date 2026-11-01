@@ -105,12 +105,21 @@ jobs:
             gitleaks-results.json
             security-comment.md
           if-no-files-found: ignore
-      - name: Post or update PR findings only when attention needed
-        if: ${{ always() && (steps.osv.outcome != 'success' || steps.install_gitleaks.outcome != 'success' || steps.gitleaks.outcome == 'failure') }}
+      - name: Post or update PR security result
+        if: ${{ always() }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
+          if [ "${{ steps.osv.outcome }}" = "success" ] && [ "${{ steps.install_gitleaks.outcome }}" = "success" ] && [ "${{ steps.gitleaks.outcome }}" = "success" ]; then
+            cat > security-comment.md <<'EOF'
+          ## Security audit — passed
+          
+          Both dependency vulnerability scanning and secret scanning completed successfully with no findings.
+          
+          **Security checks are clear. This PR is ready for other required reviews, tests and build checks before merging.**
+          EOF
+          fi
           gh pr comment "$PR_NUMBER" --edit-last --body-file security-comment.md || gh pr comment "$PR_NUMBER" --body-file security-comment.md
       - name: Fail for scan findings or errors
         if: ${{ always() && (steps.osv.outcome != 'success' || steps.install_gitleaks.outcome != 'success' || steps.gitleaks.outcome == 'failure') }}
