@@ -1,0 +1,82 @@
+name: KitsuNexus Test Builds (Windows + Linux x64)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or commit to test
+        required: true
+        type: string
+        default: fix/desktop-hud-visibility-1.0.82
+
+permissions:
+  contents: read
+
+jobs:
+  test-build:
+    name: Test build (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-x64
+            os: windows-latest
+          - platform: linux-x64
+            os: ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install Linux packaging dependencies
+        if: matrix.platform == 'linux-x64'
+        run: sudo apt-get update && sudo apt-get install -y rpm fakeroot dpkg libudev-dev
+      - name: Install application dependencies
+        run: npm install
+        env:
+          ONNXRUNTIME_NODE_INSTALL: skip
+      - name: Run unit tests
+        run: npm test
+      - name: Install updater dependencies
+        working-directory: updater
+        run: npm install
+      - name: Build Windows updater helper
+        if: matrix.platform == 'windows-x64'
+        working-directory: updater
+        shell: pwsh
+        run: |
+          npx electron-builder --win --publish never
+          Copy-Item 'dist\updater.exe' 'updater.exe' -Force
+      - name: Build Linux updater helper
+        if: matrix.platform == 'linux-x64'
+        working-directory: updater
+        run: |
+          npx electron-builder --linux dir --x64 --publish never
+          BIN_DIR=$(find dist -maxdepth 1 -iname '*-unpacked' | head -1)
+          test -n "$BIN_DIR"
+          rm -rf linux-unpacked
+          cp -R "$BIN_DIR" linux-unpacked
+      - name: Build Windows test packages
+        if: matrix.platform == 'windows-x64'
+        run: npx electron-builder --win --x64 --publish never
+      - name: Build Linux test packages
+        if: matrix.platform == 'linux-x64'
+        run: npx electron-builder --linux --x64 --publish never
+      - name: Upload test artifacts (24-hour retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: KitsuNexus-test-${{ matrix.platform }}
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.tar.gz
+            dist/*.deb
+          if-no-files-found: error
+          retention-days: 1
