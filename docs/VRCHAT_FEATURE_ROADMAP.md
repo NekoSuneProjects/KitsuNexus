@@ -23,12 +23,12 @@ This is an original KitsuNexus implementation plan. All integrations should use 
 - [x] Bounded, scrollable join/leave notification history with clear action
 - [x] HUD-local persisted translation target, Enter-to-send, notification limits and fade duration
 - [x] HUD-local visibility toggles for player list, statistics, music and heart-rate tiles (not independent native windows)
-- [~] SteamVR device status: optional helper transport, response validation and disconnect reporting implemented; native OpenVR helper and real device readings still missing
+- [~] SteamVR device status: optional helper transport, response validation, disconnect reporting and stale-response suppression implemented; native OpenVR helper and real device readings still missing
 - [ ] Windows packaged HUD smoke tests and physical SteamVR validation
 
 - [x] Separate persisted join/leave notification filters in PR #23
 - [x] HUD layout presets and local OSC message presets added in PR #23
-- [~] Local history module and unit tests added; live event integration and UI remain pending
+- [~] Local history module, unit tests, opt-in live world/player/portal event recording and desktop HUD history browser/clear implemented; full retention controls, exports and runtime tests pending
 
 ## HUD / Quick Actions
 - [~] Optional renderer-side live HUD, player monitoring, music and heart feed controls; upstream collection must also be disabled when off before this is complete
