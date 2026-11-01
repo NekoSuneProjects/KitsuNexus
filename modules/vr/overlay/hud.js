@@ -14,13 +14,16 @@ let previousPlayers = null
 const notices = []
 const alerts = document.getElementById('alerts')
 const PREF_KEY = 'kitsunexus-hud-prefs-v1'
-const defaults = { limit: 12, fade: 15, players: true, tiles: true, music: true, heart: true, language: 'en', preset: 'full', joins: true, leaves: true, notices: true, clock: true, sessionVisible: true, corner: 'inline', textSize: 'normal', live: true, monitorPlayers: true, musicFeed: true, heartFeed: true }
+const defaults = { limit: 12, fade: 15, players: true, tiles: true, music: true, heart: true, language: 'en', preset: 'full', joins: true, leaves: true, notices: true, clock: true, sessionVisible: true, corner: 'inline', textSize: 'normal', live: true, monitorPlayers: true, musicFeed: true, heartFeed: true, fps: true, status: true, lyrics: false }
 let prefs = { ...defaults }
 try {
   const stored = JSON.parse(localStorage.getItem(PREF_KEY) || '{}')
   if (stored && typeof stored === 'object') {
     prefs.limit = [3, 6, 12, 20].includes(Number(stored.limit)) ? Number(stored.limit) : 12
     prefs.fade = Number.isFinite(Number(stored.fade)) ? Math.max(0, Math.min(120, Number(stored.fade))) : 15
+    prefs.fps = stored.fps !== false
+    prefs.status = stored.status !== false
+    prefs.lyrics = stored.lyrics === true
     prefs.live = stored.live !== false
     prefs.monitorPlayers = stored.monitorPlayers !== false
     prefs.musicFeed = stored.musicFeed !== false
@@ -44,6 +47,12 @@ function renderPrefs () {
   document.getElementById('hudPreset').value = prefs.preset
   document.getElementById('noticeLimit').value = String(prefs.limit)
   document.getElementById('noticeFade').value = String(prefs.fade)
+  document.getElementById('showFps').checked = prefs.fps
+  document.getElementById('showStatus').checked = prefs.status
+  document.getElementById('showLyrics').checked = prefs.lyrics
+  document.getElementById('fpsTile').hidden = !prefs.fps
+  document.getElementById('statusTile').hidden = !prefs.status
+  document.getElementById('lyricsWidget').hidden = !prefs.lyrics
   document.getElementById('enableHudUpdates').checked = prefs.live
   document.getElementById('enablePlayerMonitoring').checked = prefs.monitorPlayers
   document.getElementById('enableMusicFeed').checked = prefs.musicFeed
@@ -74,6 +83,9 @@ function savePrefs () {
   prefs.preset = document.getElementById('hudPreset').value
   prefs.limit = Number(document.getElementById('noticeLimit').value)
   prefs.fade = Math.max(0, Math.min(120, Number(document.getElementById('noticeFade').value) || 0))
+  prefs.fps = document.getElementById('showFps').checked
+  prefs.status = document.getElementById('showStatus').checked
+  prefs.lyrics = document.getElementById('showLyrics').checked
   prefs.live = document.getElementById('enableHudUpdates').checked
   prefs.monitorPlayers = document.getElementById('enablePlayerMonitoring').checked
   prefs.musicFeed = document.getElementById('enableMusicFeed').checked
@@ -94,7 +106,7 @@ function savePrefs () {
   renderPrefs()
   renderNotices()
 }
-for (const id of ['enableHudUpdates', 'enablePlayerMonitoring', 'enableMusicFeed', 'enableHeartFeed', 'hudTextSize', 'noticeLimit', 'noticeFade', 'showNotices', 'showClock', 'showSession', 'noticeCorner', 'showJoins', 'showLeaves', 'showPlayers', 'showTiles', 'showMusic', 'showHeart', 'quickLanguage']) {
+for (const id of ['showFps', 'showStatus', 'showLyrics', 'enableHudUpdates', 'enablePlayerMonitoring', 'enableMusicFeed', 'enableHeartFeed', 'hudTextSize', 'noticeLimit', 'noticeFade', 'showNotices', 'showClock', 'showSession', 'noticeCorner', 'showJoins', 'showLeaves', 'showPlayers', 'showTiles', 'showMusic', 'showHeart', 'quickLanguage']) {
   document.getElementById(id).addEventListener('change', () => {
     if (['showPlayers', 'showTiles', 'showMusic', 'showHeart', 'showNotices', 'showClock', 'showSession'].includes(id)) document.getElementById('hudPreset').value = 'custom'
     savePrefs()
@@ -148,6 +160,12 @@ window.kitsunexusHud.onData(state => {
     renderPlayers()
   }
   if (!state || typeof state !== 'object') return
+  if (Object.prototype.hasOwnProperty.call(state, 'fps')) {
+    const fps = Number(state.fps)
+    document.getElementById('fps').textContent = Number.isFinite(fps) && fps >= 0 && fps <= 1000 ? Math.round(fps) + ' FPS' : 'Unavailable'
+  }
+  if (Object.prototype.hasOwnProperty.call(state, 'status')) document.getElementById('hudStatus').textContent = short(state.status, 'Unknown')
+  if (Object.prototype.hasOwnProperty.call(state, 'lyrics')) document.getElementById('lyricsText').textContent = short(state.lyrics, 'No lyrics source connected')
   if (Object.prototype.hasOwnProperty.call(state, 'session')) document.getElementById('session').textContent = short(state.session, 'Not connected')
   if (prefs.musicFeed && Object.prototype.hasOwnProperty.call(state, 'music')) document.getElementById('music').textContent = short(state.music, 'No track')
   if (prefs.heartFeed && Object.prototype.hasOwnProperty.call(state, 'heart')) document.getElementById('heart').textContent = short(state.heart, 'Not connected')
