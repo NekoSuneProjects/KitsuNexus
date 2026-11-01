@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
@@ -21,6 +21,25 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - name: Refresh server lockfile and apply compatible dependency fixes
+        id: remediate
+        if: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --ignore-scripts --no-audit
+          npm audit fix --package-lock-only --ignore-scripts || true
+          git diff --check
+          git add package-lock.json
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "fix(server deps): refresh audited lockfile"
+            git push origin "HEAD:$HEAD_BRANCH"
+          fi
       - name: Validate lockfile and dependencies
         run: npm ci --ignore-scripts
       - name: Audit npm dependencies
