@@ -53,7 +53,7 @@ jobs:
           if path.exists():
               try:
                   data = json.loads(path.read_text())
-                  lines += ['### Vulnerable dependencies', '', '| Module | Installed | Advisory | Suggested fixed version | File |', '|---|---|---|---|---|']
+                  lines += ['### Vulnerable dependencies', '', '| Module | Installed | CVE / advisory | What is vulnerable | Suggested fixed version | File |', '|---|---|---|---|---|---|']
                   for result in data.get('results', []):
                       pkg = result.get('package', {})
                       source = result.get('source', {})
@@ -67,7 +67,13 @@ jobs:
                                   for rng in affected.get('ranges', []):
                                       fixes.extend(e.get('fixed') for e in rng.get('events', []) if e.get('fixed'))
                               def safe(x): return str(x or '—').replace('|', '\\|').replace('\\n', ' ')[:110]
-                              lines.append('| %s | %s | [%s](https://osv.dev/vulnerability/%s) | %s | %s |' % (safe(p.get('name')), safe(p.get('version')), safe(vuln.get('id')), safe(vuln.get('id')), safe(', '.join(dict.fromkeys(fixes)) or 'Review advisory'), safe(source.get('path') or result.get('source', {}).get('path'))))
+                              aliases = [x for x in vuln.get('aliases', []) if x.startswith('CVE-')]
+                              identifier = vuln.get('id', '')
+                              advisory = '[%s](https://osv.dev/vulnerability/%s)' % (safe(identifier), safe(identifier))
+                              if aliases:
+                                  advisory += '<br>' + '<br>'.join('[%s](https://nvd.nist.gov/vuln/detail/%s)' % (safe(x), safe(x)) for x in aliases[:3])
+                              detail = vuln.get('summary') or vuln.get('details') or 'Open advisory for technical details'
+                              lines.append('| %s | %s | %s | %s | %s | %s |' % (safe(p.get('name')), safe(p.get('version')), advisory, safe(detail), safe(', '.join(dict.fromkeys(fixes)) or 'Review advisory'), safe(source.get('path') or result.get('source', {}).get('path'))))
                   if not count: lines.append('| No parsed advisories | — | — | — | — |')
                   if count > 35: lines.append('\nShowing 35 of %s findings. Download the full JSON report from the workflow.' % count)
               except Exception as exc:
