@@ -355,3 +355,23 @@ if (!widgetMode) {
     if (button) button.textContent = (state.detached ? 'Close ' : 'Pop out ') + state.widget
   })
 }
+
+if (!widgetMode) {
+  const historyView = document.getElementById('historyEvents')
+  const historyEnabled = document.getElementById('historyEnabled')
+  async function refreshHistory () {
+    try {
+      const result = await window.kitsunexusHud.history({ op: 'list' })
+      historyEnabled.checked = result.enabled === true
+      historyView.textContent = (result.events || []).map(e => new Date(e.at).toLocaleString() + ' / ' + e.kind + ' / ' + (e.name || e.worldId || '')).join('\n') || 'No saved history'
+    } catch (error) { historyView.textContent = 'History unavailable: ' + String(error.message || error) }
+  }
+  historyEnabled.addEventListener('change', async () => { await window.kitsunexusHud.history({ op: 'enabled', enabled: historyEnabled.checked }); refreshHistory() })
+  document.getElementById('historyRefresh').addEventListener('click', refreshHistory)
+  document.getElementById('historyClear').addEventListener('click', async () => {
+    if (!window.confirm('Delete all locally saved encounter history?')) return
+    await window.kitsunexusHud.history({ op: 'clear' })
+    refreshHistory()
+  })
+  refreshHistory()
+}
