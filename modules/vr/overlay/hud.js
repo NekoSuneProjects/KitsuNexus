@@ -13,7 +13,7 @@ function short (value, fallback) {
 let previousPlayers = null
 const notices = []
 const PREF_KEY = 'kitsunexus-hud-prefs-v1'
-const defaults = { limit: 12, fade: 15, players: true, tiles: true, language: 'en' }
+const defaults = { limit: 12, fade: 15, players: true, tiles: true, music: true, heart: true, language: 'en' }
 let prefs = { ...defaults }
 try {
   const stored = JSON.parse(localStorage.getItem(PREF_KEY) || '{}')
@@ -22,6 +22,8 @@ try {
     prefs.fade = Number.isFinite(Number(stored.fade)) ? Math.max(0, Math.min(120, Number(stored.fade))) : 15
     prefs.players = stored.players !== false
     prefs.tiles = stored.tiles !== false
+    prefs.music = stored.music !== false
+    prefs.heart = stored.heart !== false
     prefs.language = typeof stored.language === 'string' && /^[a-z]{2,3}(-[A-Z]{2})?$/.test(stored.language) ? stored.language : 'en'
   }
 } catch (_) {}
@@ -30,21 +32,27 @@ function renderPrefs () {
   document.getElementById('noticeFade').value = String(prefs.fade)
   document.getElementById('showPlayers').checked = prefs.players
   document.getElementById('showTiles').checked = prefs.tiles
+  document.getElementById('showMusic').checked = prefs.music
+  document.getElementById('showHeart').checked = prefs.heart
   document.getElementById('quickLanguage').value = prefs.language
   document.getElementById('players').hidden = !prefs.players
   document.getElementById('hudTiles').hidden = !prefs.tiles
+  document.getElementById('music').closest('.tile').hidden = !prefs.music
+  document.getElementById('heart').closest('.tile').hidden = !prefs.heart
 }
 function savePrefs () {
   prefs.limit = Number(document.getElementById('noticeLimit').value)
   prefs.fade = Math.max(0, Math.min(120, Number(document.getElementById('noticeFade').value) || 0))
   prefs.players = document.getElementById('showPlayers').checked
   prefs.tiles = document.getElementById('showTiles').checked
+  prefs.music = document.getElementById('showMusic').checked
+  prefs.heart = document.getElementById('showHeart').checked
   prefs.language = document.getElementById('quickLanguage').value
   try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)) } catch (_) {}
   renderPrefs()
   renderNotices()
 }
-for (const id of ['noticeLimit', 'noticeFade', 'showPlayers', 'showTiles', 'quickLanguage']) {
+for (const id of ['noticeLimit', 'noticeFade', 'showPlayers', 'showTiles', 'showMusic', 'showHeart', 'quickLanguage']) {
   document.getElementById(id).addEventListener('change', savePrefs)
 }
 document.getElementById('resetHudPrefs').addEventListener('click', () => {
