@@ -34,8 +34,8 @@ This is an original KitsuNexus implementation plan. All integrations should use 
 - [ ] Direct language selector and multiple translation targets
 - [ ] Push-to-talk / voice translation with microphone consent
 - [~] In-window draggable widget layout with saved positions and reset; independent native windows and full resizing remain pending
-- [ ] Pinned player-list, lyrics, compact status/FPS and notification windows
-- [~] Notification corner selector (inline/four corners), visibility, limits, fade and scroll; independent native notification window pending
+- [~] Local player search, selectable/pinned names, and notice pause implemented; lyrics, compact FPS/status and independent windows pending
+- [~] Notification corner selector (inline/four corners), visibility, limits, fade, scroll, pause and text-size control; independent native notification window pending
 - [ ] OS-level hotkeys and user-configurable safety gate
 - [ ] Script-created windows in an isolated, permission-controlled sandbox
 - [ ] In-headset input only after proper native OpenVR interaction testing
