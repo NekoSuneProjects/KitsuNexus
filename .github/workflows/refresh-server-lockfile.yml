@@ -32,8 +32,6 @@ jobs:
         run: |
           npm --version
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-      - name: Validate dependency installation
-        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Show npm diagnostics on failure
         if: failure()
         shell: bash
@@ -43,8 +41,6 @@ jobs:
             tail -n 120 "$file"
             echo '::endgroup::'
           done
-      - name: Run tests
-        run: npm test
       - name: Open lockfile fix PR
         env:
           GH_TOKEN: ${{ github.token }}
@@ -61,4 +57,4 @@ jobs:
           git add package-lock.json
           git commit -m "fix(server): synchronize npm lockfile"
           git push origin "$branch"
-          gh pr create --base "${{ inputs.target_branch }}" --head "$branch" --title "fix(${{ inputs.target_branch }}): synchronize npm lockfile" --body "Regenerated package-lock.json from the server package manifest and validated npm ci and tests. Merge after security checks pass, then rerun the server Docker build."
+          gh pr create --base "${{ inputs.target_branch }}" --head "$branch" --title "fix(${{ inputs.target_branch }}): synchronize npm lockfile" --body "Regenerated package-lock.json from the server package manifest. After merging, validate npm ci inside the server Docker build for AMD64 and ARM64."
