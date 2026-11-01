@@ -17,6 +17,13 @@ This is an original KitsuNexus implementation plan. All integrations should use 
 - [ ] Physically validate OpenVR display/capture in SteamVR
 - [ ] Run packaged Electron smoke tests on Windows
 
+## PR #23 progress (not yet release-verified)
+- [x] Desktop HUD visibility fallback, off-screen bounds recovery and actual visibility reporting
+- [x] Emergency Ctrl+Shift+F10 click-through recovery while the desktop HUD is running
+- [x] Bounded, scrollable join/leave notification history with clear action
+- [~] SteamVR device status: optional helper transport, response validation and disconnect reporting implemented; native OpenVR helper and real device readings still missing
+- [ ] Windows packaged HUD smoke tests and physical SteamVR validation
+
 ## HUD / Quick Actions
 - [ ] Direct language selector and multiple translation targets
 - [ ] Push-to-talk / voice translation with microphone consent
