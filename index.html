@@ -1027,8 +1027,15 @@
             <div id="vrOut" class="muted" style="margin-top:10px">Requires native OpenVR helper (see README).</div>
           </div>
           <div class="card">
+            <h3>KitsuNexus Desktop HUD <span class="pill" id="desktopHudState">off</span></h3>
+            <div class="muted" style="font-size:.72rem;margin-bottom:8px">Separate lightweight, transparent desktop overlay. Move and resize it freely; it works without SteamVR.</div>
+            <button class="btn" id="desktopHudToggle">Start desktop HUD</button>
+            <label style="display:block;margin-top:8px"><input type="checkbox" id="desktopHudClickThrough"> Click-through (disable to move or resize)</label>
+            <div id="desktopHudOut" class="muted" style="margin-top:8px">Stopped</div>
+          </div>
+          <div class="card">
             <h3>🥽 VR Overlay <span class="pill" id="vrOverlayState">off</span> <span class="muted" style="font-size:.68rem">(experimental)</span></h3>
-            <div class="muted" style="font-size:.72rem;margin-bottom:6px">Mirrors this app into a floating panel in your headset via SteamVR, so you don't have to tab out to desktop. Windows + SteamVR only, needs your headset connected and powered on. First version: view-only (not yet clickable in VR).</div>
+            <div class="muted" style="font-size:.72rem;margin-bottom:6px">Displays a dedicated KitsuNexus HUD in your SteamVR headset, independently of the desktop app window. Windows + SteamVR only, needs your headset connected and powered on. First version: view-only (not yet clickable in VR).</div>
             <button class="btn" id="vrOverlayToggle">Start VR overlay</button>
             <div id="vrOverlayOut" class="muted" style="margin-top:10px">Stopped</div>
           </div>
