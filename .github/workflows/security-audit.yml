@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   audit:
@@ -35,4 +36,25 @@ jobs:
           curl --fail --location --retry 3 --silent --show-error https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz -o /tmp/gitleaks.tar.gz
           tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
       - name: Scan current server files for secrets
-        run: /tmp/gitleaks dir . --redact --exit-code 1
+        id: gitleaks
+        continue-on-error: true
+        run: /tmp/gitleaks dir . --redact --report-format json --report-path gitleaks-results.json --exit-code 1
+      - name: Post security report on PR
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        env:
+          GITLEAKS_OUTCOME: ${{ steps.gitleaks.outcome }}
+        with:
+          script: |
+            const status = process.env.GITLEAKS_OUTCOME;
+            const body = [
+              '## Server security audit',
+              '**Branch:** `' + context.payload.pull_request.head.ref + '` | **Commit:** `' + context.payload.pull_request.head.sha.slice(0,12) + '` | **Run:** `' + context.runId + '`',
+              '**Current-file secret scan:** ' + (status === 'success' ? 'passed' : 'failed'),
+              'Dependency and npm audit results are available in the workflow logs.',
+              '[View scan](https://github.com/' + context.repo.owner + '/' + context.repo.repo + '/actions/runs/' + context.runId + ')'
+            ].join('\\n\\n');
+            await github.rest.issues.createComment({...context.repo, issue_number: context.issue.number, body});
+      - name: Fail on secret findings
+        if: ${{ always() && steps.gitleaks.outcome != 'success' }}
+        run: exit 1
