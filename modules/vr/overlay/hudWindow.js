@@ -1,7 +1,8 @@
 'use strict'
 
 const path = require('path')
-const { BrowserWindow, screen, globalShortcut, ipcMain } = require('electron')
+const fs = require('fs')
+const { BrowserWindow, screen, globalShortcut, ipcMain, app } = require('electron')
 
 const DEFAULTS = Object.freeze({ width: 430, height: 380, x: null, y: null, opacity: 0.94, clickThrough: false, alwaysOnTop: true })
 let desktop = null
@@ -9,6 +10,28 @@ let vr = null
 const detached = new Map()
 const detachable = new Set(['players', 'alerts', 'tiles', 'lyrics'])
 const detachedBounds = new Map()
+const detachedOpen = new Set()
+let restored = false
+function geometryPath () { return path.join(app.getPath('userData'), 'desktop-hud-widgets.json') }
+function persistWidgets () {
+  try {
+    fs.mkdirSync(path.dirname(geometryPath()), { recursive: true })
+    fs.writeFileSync(geometryPath(), JSON.stringify({ version: 1, bounds: Object.fromEntries(detachedBounds), open: [...detachedOpen] }))
+  } catch (error) { console.warn('[Desktop HUD] Widget settings could not be saved:', error.message) }
+}
+function restoreWidgets () {
+  if (restored) return
+  restored = true
+  try {
+    const saved = JSON.parse(fs.readFileSync(geometryPath(), 'utf8'))
+    if (saved.version !== 1) return
+    for (const widget of detachable) {
+      const bounds = saved.bounds?.[widget]
+      if (bounds && [bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) && bounds.width >= 200 && bounds.height >= 100) detachedBounds.set(widget, bounds)
+      if (saved.open?.includes(widget)) detachedOpen.add(widget)
+    }
+  } catch (_) {}
+}
 let onBounds = () => {}
 let lastData = {}
 let desktopOptions = { ...DEFAULTS }
@@ -128,24 +151,32 @@ function create (options, mode) {
 function toggleDetached (event, widget) {
   if (!desktop || desktop.isDestroyed() || event.sender !== desktop.webContents || !detachable.has(widget)) return { ok: false }
   const existing = detached.get(widget)
-  if (existing && !existing.isDestroyed()) { existing.close(); return { ok: true, detached: false } }
+  if (existing && !existing.isDestroyed()) { detachedOpen.delete(widget); persistWidgets(); existing.close(); return { ok: true, detached: false } }
   const area = screen.getPrimaryDisplay().workArea
   const saved = detachedBounds.get(widget)
   const cfg = { width: 340, height: widget === 'tiles' ? 260 : 180, x: saved?.x ?? area.x + 80, y: saved?.y ?? area.y + 80 }
-  const bounds = visibleBounds(cfg)
+  const bounds = visibleBounds({ ...cfg, width: saved?.width || cfg.width, height: saved?.height || cfg.height })
   const win = new BrowserWindow({ width: saved?.width || cfg.width, height: saved?.height || cfg.height, x: bounds.x, y: bounds.y, frame: false, transparent: true, resizable: true, alwaysOnTop: true, skipTaskbar: true, backgroundColor: '#00000000', webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: false, preload: path.join(__dirname, 'hudPreload.js') } })
   win.setMenuBarVisibility(false)
   win.loadFile(path.join(__dirname, 'hud.html'), { query: { mode: 'desktop', widget } })
   win.webContents.on('did-finish-load', () => { if (!win.isDestroyed()) win.webContents.send('kitsunexus:hud-data', lastData) })
-  const save = () => { if (!win.isDestroyed()) detachedBounds.set(widget, win.getBounds()) }
+  const save = () => { if (!win.isDestroyed()) { detachedBounds.set(widget, win.getBounds()); persistWidgets() } }
   win.on('moved', save); win.on('resized', save)
-  win.on('closed', () => { detached.delete(widget); if (desktop && !desktop.isDestroyed()) desktop.webContents.send('kitsunexus:widget-state', { widget, detached: false }) })
+  win.on('closed', () => { if (!closingDetached) { detachedOpen.delete(widget); persistWidgets() } detached.delete(widget); if (desktop && !desktop.isDestroyed()) desktop.webContents.send('kitsunexus:widget-state', { widget, detached: false }) })
   detached.set(widget, win)
+  detachedOpen.add(widget)
+  persistWidgets()
   desktop.webContents.send('kitsunexus:widget-state', { widget, detached: true })
   return { ok: true, detached: true }
 }
 ipcMain.handle('kitsunexus:detach-widget', toggleDetached)
-function closeDetached () { for (const win of detached.values()) if (!win.isDestroyed()) win.close(); detached.clear() }
+let closingDetached = false
+function closeDetached () {
+  closingDetached = true
+  for (const win of detached.values()) if (!win.isDestroyed()) win.close()
+  detached.clear()
+  closingDetached = false
+}
 
 function showDesktop (options = {}) {
   if (desktop && !desktop.isDestroyed()) {
@@ -155,7 +186,11 @@ function showDesktop (options = {}) {
     return
   }
   desktopOptions = normalise(options)
+  restoreWidgets()
   desktop = create(desktopOptions, 'desktop')
+  for (const widget of [...detachedOpen]) {
+    try { toggleDetached({ sender: desktop.webContents }, widget) } catch (error) { console.warn('[Desktop HUD] Could not restore widget:', widget, error.message) }
+  }
   registerRecovery()
   const saveBounds = () => { if (desktop && !desktop.isDestroyed()) onBounds(desktop.getBounds()) }
   const recoverIfDisconnected = () => {
