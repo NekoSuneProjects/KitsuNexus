@@ -89,6 +89,8 @@ const avatarDb = require('./modules/vrchat/avatars/avatarDb')
 const crashGuard = require('./modules/vrchat/tools/crashGuard')
 const quickLaunch = require('./modules/vrchat/launcher/quickLaunch')
 const vrOverlay = require('./modules/vr/overlay/vrOverlayController')
+const hudWindow = require('./modules/vr/overlay/hudWindow')
+const worldSnapshotExport = require('./modules/vrchat/world/worldSnapshotExport')
 const { startTon, stopTon, getTonState, getTonRaw } = require('./modules/integrations/ton/tonModule')
 const tonOsc = require('./modules/integrations/ton/tonOsc')
 const osc = require('./modules/vrchat/osc/oscModule')
@@ -225,6 +227,10 @@ if (!app.requestSingleInstanceLock()) {
 
 // Forward a module event into the renderer over a named channel.
 function push (channel, payload) {
+  if (channel === 'hr:update') {
+    const bpm = Number(payload?.bpm)
+    hudWindow.broadcast({ heart: Number.isFinite(bpm) && bpm > 0 ? `${bpm} BPM` : 'Not connected' })
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(channel, payload)
   }
@@ -420,6 +426,10 @@ app.whenReady().then(async () => {
   if (settings.get('screenshotMetadata', false)) screenshotMetadata.start()
   startVrcWorld(w => {
     push('vrc:world', w)
+    hudWindow.broadcast({
+      session: w.inWorld ? String(w.worldName || 'In VRChat') : 'Not in world',
+      players: Array.isArray(w.players) ? w.players.slice(0, 80).map(name => String(name).slice(0, 64)) : []
+    })
     setVrcContext({ worldName: w.inWorld ? w.worldName : '', joinUrl: w.joinUrl, worldUrl: w.worldUrl, profileUrl: w.profileUrl })
     pawprints.setWorld(w.inWorld ? w.worldName : '')
     logWorldDiff(w)
@@ -427,7 +437,20 @@ app.whenReady().then(async () => {
     if (w.portalSeq && w.portalSeq !== lastPortalSeq) { lastPortalSeq = w.portalSeq; gamelog.log('portal', w.lastPortal || 'Someone', 'dropped a portal', w.worldName) }
   })
   crashGuard.start({ enabled: settings.get('autoRejoin', false), getLocation: () => { const w = getVrcWorld(); return (w.inWorld && w.worldId && w.instanceId) ? `${w.worldId}:${w.instanceId}` : '' } })
-  setInterval(() => pawprints.tickCommit(), 60000) // persist ongoing world time
+  setInterval(() => pawprints.tickCommit(), 60000)
+  let hudMediaBusy = false
+  const updateHudMedia = async () => {
+    if (hudMediaBusy) return
+    hudMediaBusy = true
+    try {
+      const now = await getNowPlaying()
+      const track = typeof now === 'string' ? now : [now?.artist, now?.title].filter(Boolean).join(' — ')
+      hudWindow.broadcast({ music: track || 'No track' })
+    } catch (_) { hudWindow.broadcast({ music: 'No track' }) }
+    finally { hudMediaBusy = false }
+  }
+  setInterval(updateHudMedia, 15000)
+  updateHudMedia() // persist ongoing world time
   // Stagger the pollers so they don't all hit the API at once on launch.
   setTimeout(startFriendDiff, 8000)
   setTimeout(startNotifPoll, 14000)
@@ -460,6 +483,8 @@ app.on('before-quit', () => {
   if (unsubHotkeyHold) { unsubHotkeyHold(); unsubHotkeyHold = null }
   stopHotkeyTick()
   vrOverlay.stop()
+  hudWindow.hideDesktop()
+  hudWindow.closeVrSurface()
 })
 
 /* ------------------------------------------------------------------ */
@@ -942,6 +967,70 @@ ipcMain.handle('update:startUpdate', async (e, { url, name, version } = {}) => {
 // VR overlay (experimental, Windows + SteamVR only) - mirrors the main
 // window into a floating VR panel. Non-interactive first slice; see
 // modules/vr/overlay/openvrOverlay.js for what is/isn't verified.
+hudWindow.setBoundsCallback(bounds => {
+  settings.set('hudDesktopBounds', bounds)
+})
+hudWindow.setOptionsCallback(options => settings.set('hudDesktopOptions', options))
+ipcMain.handle('hud:show', (_event, options) => {
+  const bounds = settings.get('hudDesktopBounds', {})
+  hudWindow.showDesktop({ ...bounds, ...settings.get('hudDesktopOptions', {}), ...options })
+  const world = getVrcWorld()
+  const sendInitial = () => hudWindow.broadcast({
+    session: world?.inWorld ? String(world.worldName || 'In VRChat') : 'Not in world',
+    players: Array.isArray(world?.players) ? world.players.slice(0, 80).map(String) : []
+  })
+  setTimeout(sendInitial, 700)
+  return hudWindow.state()
+})
+ipcMain.handle('hud:hide', () => { hudWindow.hideDesktop(); return hudWindow.state() })
+ipcMain.handle('hud:config', (_event, options) => { hudWindow.configureDesktop(options); return hudWindow.state() })
+ipcMain.handle('hud:status', () => hudWindow.state())
+ipcMain.handle('hud:exportWorld', async (_event, format = 'json') => {
+  if (!['json', 'csv'].includes(format)) return { ok: false, error: 'Unsupported format' }
+  const data = worldSnapshotExport.snapshot(getVrcWorld())
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export local VRChat world snapshot',
+    defaultPath: 'KitsuNexus-world-snapshot.' + format,
+    filters: [{ name: format.toUpperCase(), extensions: [format] }]
+  })
+  if (result.canceled || !result.filePath) return { ok: false, cancelled: true }
+  const output = format === 'csv' ? worldSnapshotExport.toCsv(data) : JSON.stringify(data, null, 2)
+  await fs.promises.writeFile(result.filePath, output, { encoding: 'utf8', flag: 'w' })
+  return { ok: true, message: 'Saved world snapshot' }
+})
+ipcMain.handle('hud:action', async (event, payload = {}) => {
+  // Only a HUD surface may call this privileged bridge.
+  const sender = event.sender
+  if (!sender || sender.isDestroyed() || !sender.getURL().startsWith('file://') ||
+      !sender.getURL().includes('/hud.html')) return { ok: false, error: 'Untrusted HUD sender' }
+  const type = String(payload.type || '')
+  if (['playpause', 'next', 'previous'].includes(type)) {
+    try { await pressMediaKey(type); return { ok: true, message: 'Media key sent' } }
+    catch (err) { return { ok: false, error: err.message } }
+  }
+  if (type === 'toggleChatbox') {
+    const enabled = !settings.get('hudOscChatboxEnabled', true)
+    settings.set('hudOscChatboxEnabled', enabled)
+    return { ok: true, message: enabled ? 'Quick chat enabled' : 'Quick chat disabled' }
+  }
+  const text = String(payload.text || '').trim().slice(0, 2000)
+  if (!text) return { ok: false, error: 'Enter a message first' }
+  if (type === 'send') {
+    if (!settings.get('hudOscChatboxEnabled', true)) return { ok: false, error: 'Quick chat is disabled' }
+    osc.sendChatboxMessage(text.slice(0, 144), false)
+    return { ok: true, message: 'Sent to VRChat chatbox (144-character limit)' }
+  }
+  if (type === 'translate') {
+    try {
+      const output = await translateText({ provider: 'libretranslate', endpoint: TRANSLATE_PROVIDERS.libretranslate.endpoint,
+        source: 'auto', target: String(payload.target || 'en').slice(0, 12), text })
+      return { ok: true, translatedText: String(output.translatedText || '').slice(0, 2000), message: 'Translated — review before sending' }
+    } catch (err) { return { ok: false, error: err.message } }
+  }
+  return { ok: false, error: 'Unknown quick action' }
+})
+
+
 ipcMain.handle('vrOverlay:isAvailable', () => vrOverlay.isAvailable())
 ipcMain.handle('vrOverlay:start', async () => {
   try {

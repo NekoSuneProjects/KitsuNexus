@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'">
+<title>KitsuNexus HUD</title>
+<style>
+:root{font-family:system-ui,Segoe UI,sans-serif;color:#faf8ff;color-scheme:dark}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:transparent}
+.panel{height:100%;padding:14px;border-radius:22px;overflow:hidden;
+background:linear-gradient(145deg,rgba(32,24,58,.93),rgba(13,18,34,.90));
+border:1px solid rgba(188,161,255,.42);box-shadow:0 8px 36px rgba(0,0,0,.28)}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;-webkit-app-region:drag;user-select:none}
+.brand{font-weight:800;letter-spacing:.06em;font-size:18px}.accent{color:#bea6ff}
+.tag{font-size:11px;border:1px solid #826aa4;border-radius:20px;padding:4px 10px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile{background:rgba(255,255,255,.065);border:1px solid rgba(255,255,255,.08);padding:9px;border-radius:14px;min-width:0}
+.label{font-size:11px;color:#c5b9de;text-transform:uppercase;letter-spacing:.08em}
+.value{font-size:17px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:6px}
+.footer{margin-top:9px;color:#c5b9de;font-size:11px}
+.actions{margin-top:9px;display:flex;flex-wrap:wrap;gap:5px}
+.actions button{-webkit-app-region:no-drag;background:#45365e;color:#fff;border:1px solid #8f77b0;border-radius:8px;padding:5px 9px;cursor:pointer;font-size:12px}
+.quick{display:flex;gap:6px;margin-top:8px}
+.quick select{background:#151126;color:#fff;border:1px solid #73618b;border-radius:8px;padding:6px;max-width:84px}
+.quick input{-webkit-app-region:no-drag;background:#151126;border:1px solid #73618b;border-radius:8px;color:white;padding:6px;min-width:0;flex:1}
+.quick button{-webkit-app-region:no-drag;background:#7b59bb;color:#fff;border:0;border-radius:8px;padding:6px 10px;cursor:pointer}
+#players{margin-top:8px;max-height:63px;overflow:auto;white-space:normal;line-height:1.5;font-size:11px;color:#ded3ef}
+#alerts{font-size:11px;color:#e3c6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
+#actionStatus{font-size:11px;margin-top:4px;color:#d5c3f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body[data-mode="vr"] .interactive{display:none}
+</style>
+</head>
+<body>
+<div class="panel">
+  <div class="header"><div class="brand"><span class="accent">Kitsu</span>Nexus HUD</div><div class="tag" id="mode">Desktop</div></div>
+  <div class="grid">
+    <div class="tile"><div class="label">Local time</div><div class="value" id="clock">--:--</div></div>
+    <div class="tile"><div class="label">Session</div><div class="value" id="session">Not connected</div></div>
+    <div class="tile"><div class="label">Now playing</div><div class="value" id="music">No track</div></div>
+    <div class="tile"><div class="label">Health</div><div class="value" id="heart">Not connected</div></div>
+  </div>
+  <div id="players" aria-label="Current instance players">Waiting for player data…</div>
+  <div id="alerts" role="status" aria-live="polite"></div>
+  <div class="interactive">
+  <div class="actions"><button data-action="playpause">Play / Pause</button><button data-action="previous">Previous</button><button data-action="next">Next</button><button data-action="toggleChatbox">Toggle OSC chat</button></div>
+  <div class="quick"><select id="quickLanguage" aria-label="Translate to"><option value="en">English</option><option value="ja">日本語</option><option value="es">Español</option><option value="de">Deutsch</option><option value="fr">Français</option><option value="pt">Português</option><option value="ko">한국어</option><option value="zh">中文</option></select><input id="quickMessage" maxlength="2000" placeholder="Message / translated text" aria-label="Chatbox message"><button id="quickSend">Send</button><button id="quickTranslate">Translate</button></div>
+  <div id="actionStatus" role="status" aria-live="polite"></div>
+</div>
+<div class="footer">KitsuNexus • local desktop and VR tools</div>
+</div>
+<script src="hud.js"></script>
+</body>
+</html>
