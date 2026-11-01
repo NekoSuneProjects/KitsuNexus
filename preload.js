@@ -116,6 +116,7 @@ window.electronAPI = {
   hudHide: () => ipcRenderer.invoke('hud:hide'),
   hudConfigure: options => ipcRenderer.invoke('hud:config', options),
   hudStatus: () => ipcRenderer.invoke('hud:status'),
+  hudExportWorld: format => ipcRenderer.invoke('hud:exportWorld', format),
   vrOverlayIsAvailable: () => ipcRenderer.invoke('vrOverlay:isAvailable'),
   vrOverlayStart: () => ipcRenderer.invoke('vrOverlay:start'),
   vrOverlayStop: () => ipcRenderer.invoke('vrOverlay:stop'),
