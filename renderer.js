@@ -2687,6 +2687,41 @@ api.on('vr:update', s => {
 })
 $('enableVr').addEventListener('change', e => { e.target.checked ? api.vrStart() : api.vrStop(); api.saveSetting('vrEnabled', e.target.checked) })
 
+/* ---------------- KitsuNexus desktop HUD ---------------- */
+async function refreshDesktopHud () {
+  try {
+    const state = await api.hudStatus()
+    setPill('desktopHudState', !!state.running, 'on')
+    if (state.options) $('desktopHudClickThrough').checked = !!state.options.clickThrough
+    $('desktopHudToggle').textContent = state.running ? 'Stop desktop HUD' : 'Start desktop HUD'
+    setText('desktopHudOut', state.running ? 'Running — drag to move, resize from window edges.' : 'Stopped')
+  } catch (err) { setText('desktopHudOut', String(err.message || err)) }
+}
+$('desktopHudToggle').addEventListener('click', async () => {
+  $('desktopHudToggle').disabled = true
+  try {
+    const state = await api.hudStatus()
+    if (state.running) await api.hudHide()
+    else await api.hudShow()
+    await refreshDesktopHud()
+  } catch (err) { setText('desktopHudOut', String(err.message || err)) }
+  finally { $('desktopHudToggle').disabled = false }
+})
+$('desktopHudClickThrough').addEventListener('change', async e => {
+  try { await api.hudConfigure({ clickThrough: e.target.checked }) }
+  catch (err) { setText('desktopHudOut', String(err.message || err)) }
+})
+refreshDesktopHud()
+for (const [id, format] of [['hudExportJson', 'json'], ['hudExportCsv', 'csv']]) {
+  $(id).addEventListener('click', async () => {
+    try {
+      const result = await api.hudExportWorld(format)
+      if (result?.error) setText('desktopHudOut', result.error)
+      else if (result?.ok) setText('desktopHudOut', result.message || 'Export saved')
+    } catch (err) { setText('desktopHudOut', String(err.message || err)) }
+  })
+}
+
 /* ---------------- VR overlay (experimental) ---------------- */
 function renderVrOverlayState (running, error) {
   setPill('vrOverlayState', running, 'on')
