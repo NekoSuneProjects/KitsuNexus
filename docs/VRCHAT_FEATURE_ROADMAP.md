@@ -40,7 +40,7 @@ This is an original KitsuNexus implementation plan. All integrations should use 
 - [ ] OS-level hotkeys and user-configurable safety gate
 - [ ] Script-created windows in an isolated, permission-controlled sandbox
 - [ ] In-headset input only after proper native OpenVR interaction testing
-- [~] Multi-monitor bounds recovery, always-on-top and click-through recovery hotkey; monitor selector and native VRChat window anchoring pending
+- [~] Desktop window recovery after monitor disconnect/metrics changes, reachable title bar, always-on-top and click-through recovery hotkey; explicit monitor selector and VRChat window anchoring pending
 
 ## SteamVR device status
 - [ ] Real HMD/controller/tracker battery readings, charging and low-battery alerts
