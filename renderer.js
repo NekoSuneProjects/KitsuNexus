@@ -2712,6 +2712,15 @@ $('desktopHudClickThrough').addEventListener('change', async e => {
   catch (err) { setText('desktopHudOut', String(err.message || err)) }
 })
 refreshDesktopHud()
+for (const [id, format] of [['hudExportJson', 'json'], ['hudExportCsv', 'csv']]) {
+  $(id).addEventListener('click', async () => {
+    try {
+      const result = await api.hudExportWorld(format)
+      if (result?.error) setText('desktopHudOut', result.error)
+      else if (result?.ok) setText('desktopHudOut', result.message || 'Export saved')
+    } catch (err) { setText('desktopHudOut', String(err.message || err)) }
+  })
+}
 
 /* ---------------- VR overlay (experimental) ---------------- */
 function renderVrOverlayState (running, error) {
