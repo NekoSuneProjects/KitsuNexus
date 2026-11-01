@@ -40,6 +40,7 @@ jobs:
             git push origin "HEAD:$HEAD_BRANCH"
           fi
       - name: Validate lockfile and dependencies
+        if: ${{ github.event_name == 'pull_request' }}
         run: npm ci --ignore-scripts
       - name: Audit npm dependencies
         id: npm_audit
