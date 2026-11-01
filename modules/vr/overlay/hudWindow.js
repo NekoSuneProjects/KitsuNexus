@@ -37,7 +37,8 @@ function create (options, mode) {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true,
+      sandbox: false,
+      preload: path.join(__dirname, 'hudPreload.js'),
       backgroundThrottling: false
     }
   })
