@@ -90,6 +90,27 @@ const crashGuard = require('./modules/vrchat/tools/crashGuard')
 const quickLaunch = require('./modules/vrchat/launcher/quickLaunch')
 const vrOverlay = require('./modules/vr/overlay/vrOverlayController')
 const hudWindow = require('./modules/vr/overlay/hudWindow')
+const { LocalHistory } = require('./modules/vrchat/history/localHistory')
+let localHistory = null
+let historyPrevious = { world: '', players: new Set(), portalSeq: null }
+function historyStore () {
+  if (!localHistory) {
+    localHistory = new LocalHistory(path.join(app.getPath('userData'), 'vrc-local-history.json'), { retentionDays: 30, limit: 1000 })
+    localHistory.load()
+  }
+  return localHistory
+}
+function recordWorldHistory (w) {
+  if (!settings.get('hudHistoryEnabled', false)) { historyPrevious = { world: '', players: new Set(), portalSeq: null }; return }
+  const world = w?.inWorld ? String(w.worldId || w.worldName || '') : ''
+  const players = new Set(Array.isArray(w?.players) ? w.players.filter(x => typeof x === 'string').slice(0, 80) : [])
+  try {
+    if (world && world !== historyPrevious.world) historyStore().add({ kind: 'world', worldId: String(w.worldId || ''), instanceId: String(w.instanceId || ''), name: String(w.worldName || '') })
+    if (world) for (const name of players) if (!historyPrevious.players.has(name)) historyStore().add({ kind: 'encounter', worldId: String(w.worldId || ''), instanceId: String(w.instanceId || ''), name })
+    if (world && w.portalSeq != null && historyPrevious.portalSeq != null && w.portalSeq !== historyPrevious.portalSeq) historyStore().add({ kind: 'portal', worldId: String(w.worldId || ''), name: String(w.lastPortal || '') })
+  } catch (error) { console.warn('[History] Failed to record local event:', error.message) }
+  historyPrevious = { world, players, portalSeq: w?.portalSeq ?? null }
+}
 const worldSnapshotExport = require('./modules/vrchat/world/worldSnapshotExport')
 const { startTon, stopTon, getTonState, getTonRaw } = require('./modules/integrations/ton/tonModule')
 const tonOsc = require('./modules/integrations/ton/tonOsc')
@@ -425,6 +446,7 @@ app.whenReady().then(async () => {
   if (settings.get('tonAutoManager', false)) tonManager.ensureRunning().then(r => { if (r && r.ok) push('tonmgr:status', { installed: true, running: true }) }).catch(() => {})
   if (settings.get('screenshotMetadata', false)) screenshotMetadata.start()
   startVrcWorld(w => {
+    recordWorldHistory(w)
     push('vrc:world', w)
     hudWindow.broadcast({
       session: w.inWorld ? String(w.worldName || 'In VRChat') : 'Not in world',
@@ -997,6 +1019,13 @@ ipcMain.handle('hud:exportWorld', async (_event, format = 'json') => {
   const output = format === 'csv' ? worldSnapshotExport.toCsv(data) : JSON.stringify(data, null, 2)
   await fs.promises.writeFile(result.filePath, output, { encoding: 'utf8', flag: 'w' })
   return { ok: true, message: 'Saved world snapshot' }
+})
+ipcMain.handle('hud:history', (_event, request = {}) => {
+  const op = String(request.op || 'list')
+  if (op === 'enabled') { settings.set('hudHistoryEnabled', request.enabled === true); return { ok: true, enabled: settings.get('hudHistoryEnabled', false) } }
+  if (op === 'list') return { ok: true, enabled: settings.get('hudHistoryEnabled', false), events: settings.get('hudHistoryEnabled', false) ? historyStore().list().slice(0, 100) : [] }
+  if (op === 'clear') { historyStore().clear(); return { ok: true, events: [] } }
+  return { ok: false, error: 'Unsupported history operation' }
 })
 ipcMain.handle('hud:action', async (event, payload = {}) => {
   // Only a HUD surface may call this privileged bridge.
