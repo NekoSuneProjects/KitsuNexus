@@ -12,8 +12,8 @@ const route = require('../src/routes/communityBooster')
 const { catalogue, rewardsFor, verifiedCount } = require('../src/services/communityBooster')
 
 const token = 'test-paired-device-secret'
-const GUILD_A = '123456789012345678'
-const GUILD_B = '876543210987654321'
+const GUILD_A = 'fixture-guild-a'
+const GUILD_B = 'fixture-guild-b'
 let server
 let base
 let members = {}
@@ -34,8 +34,8 @@ before(async () => {
   config.discordOfficialGuildId = GUILD_A
   config.discordBoosterGuildIds = [GUILD_A, GUILD_B]
   config.discordBotToken = 'test-bot-token'
-  config.discordBoostTierRoles = { 2: '222222222222222222', 5: '555555555555555555' }
-  config.discordBoostTierRolesByGuild = { [GUILD_B]: { 3: '333333333333333333' } }
+  config.discordBoostTierRoles = { 2: 'fixture-role-2', 5: 'fixture-role-5' }
+  config.discordBoostTierRolesByGuild = { [GUILD_B]: { 3: 'fixture-role-3' } }
   gateway.isReady = () => !unavailable
   gateway.isInGuild = guildId => !missingGuilds.includes(guildId)
   gateway.fetchGuildMember = async guildId => {
@@ -84,11 +84,11 @@ test('no Discord link gives zero rewards to an authenticated account', async () 
 test('configured booster servers remain protected from automatic guild removal', () => {
   assert.equal(gateway.isProtectedGuild(GUILD_A), true)
   assert.equal(gateway.isProtectedGuild(GUILD_B), true)
-  assert.equal(gateway.isProtectedGuild('999999999999999999'), false)
+  assert.equal(gateway.isProtectedGuild('fixture-other-guild'), false)
 })
 
 test('verified active boost unlocks Spark and higher roles upgrade while actively boosting', async () => {
-  await db.DiscordLink.create({ userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', discordId: '987654321098765432' })
+  await db.DiscordLink.create({ userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', discordId: 'fixture-discord-user' })
   members = { [GUILD_A]: { premiumSince: new Date(), roles: { cache: new Map() } } }
   const spark = (await get('/api/community-booster/me')).data
   assert.equal(spark.activeBoostCount, 1)
