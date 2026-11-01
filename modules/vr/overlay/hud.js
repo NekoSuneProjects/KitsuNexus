@@ -10,7 +10,20 @@ setInterval(showTime, 15000)
 function short (value, fallback) {
   return typeof value === 'string' && value.trim() ? value.slice(0, 110) : fallback
 }
+let previousPlayers = null
 window.kitsunexusHud.onData(state => {
+  if (Array.isArray(state?.players)) {
+    const incoming = state.players.filter(p => typeof p === 'string').slice(0, 80)
+    const names = new Set(incoming)
+    if (previousPlayers !== null) {
+      const joined = incoming.filter(p => !previousPlayers.has(p))
+      const left = [...previousPlayers].filter(p => !names.has(p))
+      const event = joined.length ? joined[0] + ' joined' : left.length ? left[0] + ' left' : ''
+      if (event) document.getElementById('alerts').textContent = event
+    }
+    previousPlayers = names
+    document.getElementById('players').textContent = incoming.length ? 'Players (' + incoming.length + '): ' + incoming.join(' • ') : 'No players detected'
+  }
   if (!state || typeof state !== 'object') return
   if (Object.prototype.hasOwnProperty.call(state, 'session')) document.getElementById('session').textContent = short(state.session, 'Not connected')
   if (Object.prototype.hasOwnProperty.call(state, 'music')) document.getElementById('music').textContent = short(state.music, 'No track')
