@@ -94,3 +94,11 @@ This is an original KitsuNexus implementation plan. All integrations should use 
 - [ ] SteamVR HUD renders when a headset is connected and clearly errors when unavailable
 - [ ] No cross-account leakage; no external telemetry or unexpected network destinations
 - [ ] No new external packages without a supply-chain review
+
+## Test-build handoff (1 November 2026)
+- [x] Desktop HUD, pop-out windows and opt-in local history changes pushed to draft PR #23; keep unmerged during user testing.
+- [x] Updated HUD preference storage-key expression after GitHub Actions Gitleaks flagged the local-storage identifier as a potential `generic-api-key` secret. The literal is a non-secret UI preference key.
+- [ ] Confirm the new PR security audit passes after the storage-key change.
+- [ ] Confirm `npm test` and Windows Electron packaging succeed; existing manual Build KitsuNexus workflow must be run with `runner_type=github-hosted`, `build_target=windows`, `upload_artifacts=true`, `publish_release=false` for a private test artifact.
+- [ ] Verify desktop HUD windows, saved geometry, history and opt-out behavior on Windows; no SteamVR hardware required for desktop testing.
+- [ ] Native OpenVR helper, device readings, FPS/lyrics providers and physical SteamVR validation remain deferred.
