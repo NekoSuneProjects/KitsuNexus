@@ -6,6 +6,7 @@ on:
     paths:
       - package.json
       - package-lock.json
+      - .github/workflows/refresh-server-lockfile.yml
   workflow_dispatch:
     inputs:
       target_branch:
