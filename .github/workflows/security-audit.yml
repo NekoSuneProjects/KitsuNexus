@@ -8,10 +8,11 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  security-events: write
 jobs:
-  dependency-and-secrets:
+  dependencies:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -23,8 +24,15 @@ jobs:
             scan
             --recursive
             ./
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - name: Secret detection (Gitleaks)
-        if: always()
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
