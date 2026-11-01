@@ -10,6 +10,7 @@ const path = require('path')
 const fs = require('fs')
 const os = require('os')
 const overlay = require('./openvrOverlay')
+const hud = require('./hudWindow')
 
 let mainWindowRef = null
 let captureTimer = null
@@ -24,12 +25,12 @@ function init (mainWindow, statusCb) {
 }
 
 async function captureAndPush () {
-  if (!running || busy || !mainWindowRef || mainWindowRef.isDestroyed()) return
-  // Skip capture when the window is hidden/minimised — no useful frame to push
-  if (mainWindowRef.isMinimized && mainWindowRef.isMinimized()) return
+  if (!running || busy) return
   busy = true
   try {
-    const image = await mainWindowRef.webContents.capturePage()
+    const surface = hud.getVrSurface()
+    if (surface.webContents.isLoading()) return
+    const image = await surface.webContents.capturePage()
     await fs.promises.writeFile(framePath, image.toPNG())
     overlay.updateFrame(framePath)
   } catch (err) {
@@ -43,8 +44,14 @@ async function start ({ intervalMs = 500 } = {}) {
   if (running) return
   if (!overlay.isAvailable()) throw new Error('SteamVR does not appear to be installed.')
 
-  await overlay.start({ overlayKey: 'KitsuNexus.mirror', overlayName: 'KitsuNexus' })
-  framePath = path.join(os.tmpdir(), 'KitsuNexus-vr-frame.png')
+  hud.getVrSurface()
+  try {
+    await overlay.start({ overlayKey: 'KitsuNexus.hud', overlayName: 'KitsuNexus HUD' })
+  } catch (err) {
+    hud.closeVrSurface()
+    throw err
+  }
+  framePath = path.join(os.tmpdir(), `KitsuNexus-vr-frame-${process.pid}.png`)
   running = true
   onStatus({ running: true })
 
@@ -56,6 +63,7 @@ function stop () {
   if (captureTimer) { clearInterval(captureTimer); captureTimer = null }
   running = false
   try { overlay.stop() } catch (_) {}
+  hud.closeVrSurface()
   if (framePath) { try { fs.unlinkSync(framePath) } catch (_) {} }
   onStatus({ running: false })
 }
