@@ -425,6 +425,7 @@ app.whenReady().then(async () => {
   if (settings.get('screenshotMetadata', false)) screenshotMetadata.start()
   startVrcWorld(w => {
     push('vrc:world', w)
+    hudWindow.broadcast({ session: w.inWorld ? String(w.worldName || 'In VRChat') : 'Not in world' })
     setVrcContext({ worldName: w.inWorld ? w.worldName : '', joinUrl: w.joinUrl, worldUrl: w.worldUrl, profileUrl: w.profileUrl })
     pawprints.setWorld(w.inWorld ? w.worldName : '')
     logWorldDiff(w)
@@ -432,7 +433,14 @@ app.whenReady().then(async () => {
     if (w.portalSeq && w.portalSeq !== lastPortalSeq) { lastPortalSeq = w.portalSeq; gamelog.log('portal', w.lastPortal || 'Someone', 'dropped a portal', w.worldName) }
   })
   crashGuard.start({ enabled: settings.get('autoRejoin', false), getLocation: () => { const w = getVrcWorld(); return (w.inWorld && w.worldId && w.instanceId) ? `${w.worldId}:${w.instanceId}` : '' } })
-  setInterval(() => pawprints.tickCommit(), 60000) // persist ongoing world time
+  setInterval(() => pawprints.tickCommit(), 60000)
+  setInterval(() => {
+    try {
+      const now = getNowPlaying()
+      const track = typeof now === 'string' ? now : [now?.artist, now?.title].filter(Boolean).join(' — ')
+      hudWindow.broadcast({ music: track || 'No track' })
+    } catch (_) {}
+  }, 5000) // persist ongoing world time
   // Stagger the pollers so they don't all hit the API at once on launch.
   setTimeout(startFriendDiff, 8000)
   setTimeout(startNotifPoll, 14000)
@@ -949,10 +957,45 @@ ipcMain.handle('update:startUpdate', async (e, { url, name, version } = {}) => {
 // VR overlay (experimental, Windows + SteamVR only) - mirrors the main
 // window into a floating VR panel. Non-interactive first slice; see
 // modules/vr/overlay/openvrOverlay.js for what is/isn't verified.
-ipcMain.handle('hud:show', (_event, options) => { hudWindow.showDesktop(options); return hudWindow.state() })
+hudWindow.setBoundsCallback(bounds => {
+  settings.set('hudDesktopBounds', bounds)
+})
+ipcMain.handle('hud:show', (_event, options) => { hudWindow.showDesktop({ ...settings.get('hudDesktopBounds', {}), ...options, width: options?.width || settings.get('hudDesktopBounds', {}).width, height: options?.height || settings.get('hudDesktopBounds', {}).height }); return hudWindow.state() })
 ipcMain.handle('hud:hide', () => { hudWindow.hideDesktop(); return hudWindow.state() })
 ipcMain.handle('hud:config', (_event, options) => { hudWindow.configureDesktop(options); return hudWindow.state() })
 ipcMain.handle('hud:status', () => hudWindow.state())
+ipcMain.handle('hud:action', async (event, payload = {}) => {
+  // Only a HUD surface may call this privileged bridge.
+  const sender = event.sender
+  if (!sender || sender.isDestroyed() || !sender.getURL().startsWith('file://') ||
+      !sender.getURL().includes('/hud.html')) return { ok: false, error: 'Untrusted HUD sender' }
+  const type = String(payload.type || '')
+  if (['playpause', 'next', 'previous'].includes(type)) {
+    try { await pressMediaKey(type); return { ok: true, message: 'Media key sent' } }
+    catch (err) { return { ok: false, error: err.message } }
+  }
+  if (type === 'toggleChatbox') {
+    const enabled = !settings.get('hudOscChatboxEnabled', true)
+    settings.set('hudOscChatboxEnabled', enabled)
+    return { ok: true, message: enabled ? 'Quick chat enabled' : 'Quick chat disabled' }
+  }
+  const text = String(payload.text || '').trim().slice(0, 2000)
+  if (!text) return { ok: false, error: 'Enter a message first' }
+  if (type === 'send') {
+    if (!settings.get('hudOscChatboxEnabled', true)) return { ok: false, error: 'Quick chat is disabled' }
+    osc.sendChatboxMessage(text.slice(0, 144), false)
+    return { ok: true, message: 'Sent to VRChat chatbox (144-character limit)' }
+  }
+  if (type === 'translate') {
+    try {
+      const output = await translateText({ provider: 'libretranslate', endpoint: TRANSLATE_PROVIDERS.libretranslate.endpoint,
+        source: 'auto', target: String(payload.target || 'en').slice(0, 12), text })
+      return { ok: true, translatedText: String(output.translatedText || '').slice(0, 2000), message: 'Translated — review before sending' }
+    } catch (err) { return { ok: false, error: err.message } }
+  }
+  return { ok: false, error: 'Unknown quick action' }
+})
+
 
 ipcMain.handle('vrOverlay:isAvailable', () => vrOverlay.isAvailable())
 ipcMain.handle('vrOverlay:start', async () => {
