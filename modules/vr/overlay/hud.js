@@ -11,7 +11,7 @@ function short (value, fallback) {
 }
 window.kitsunexusHud.onData(state => {
   if (!state || typeof state !== 'object') return
-  document.getElementById('session').textContent = short(state.session, 'Not connected')
-  document.getElementById('music').textContent = short(state.music, 'No track')
-  document.getElementById('heart').textContent = short(state.heart, 'Not connected')
+  if (Object.prototype.hasOwnProperty.call(state, 'session')) document.getElementById('session').textContent = short(state.session, 'Not connected')
+  if (Object.prototype.hasOwnProperty.call(state, 'music')) document.getElementById('music').textContent = short(state.music, 'No track')
+  if (Object.prototype.hasOwnProperty.call(state, 'heart')) document.getElementById('heart').textContent = short(state.heart, 'Not connected')
 })
