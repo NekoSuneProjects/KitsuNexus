@@ -31,6 +31,7 @@ This is an original KitsuNexus implementation plan. All integrations should use 
 - [~] Local history module and unit tests added; live event integration and UI remain pending
 
 ## HUD / Quick Actions
+- [~] Optional renderer-side live HUD, player monitoring, music and heart feed controls; upstream collection must also be disabled when off before this is complete
 - [ ] Direct language selector and multiple translation targets
 - [ ] Push-to-talk / voice translation with microphone consent
 - [~] In-window draggable widget layout with saved positions and reset; independent native windows and full resizing remain pending
