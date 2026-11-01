@@ -13,7 +13,7 @@ function short (value, fallback) {
 let previousPlayers = null
 const notices = []
 const PREF_KEY = 'kitsunexus-hud-prefs-v1'
-const defaults = { limit: 12, fade: 15, players: true, tiles: true }
+const defaults = { limit: 12, fade: 15, players: true, tiles: true, language: 'en' }
 let prefs = { ...defaults }
 try {
   const stored = JSON.parse(localStorage.getItem(PREF_KEY) || '{}')
@@ -22,6 +22,7 @@ try {
     prefs.fade = Number.isFinite(Number(stored.fade)) ? Math.max(0, Math.min(120, Number(stored.fade))) : 15
     prefs.players = stored.players !== false
     prefs.tiles = stored.tiles !== false
+    prefs.language = typeof stored.language === 'string' && /^[a-z]{2,3}(-[A-Z]{2})?$/.test(stored.language) ? stored.language : 'en'
   }
 } catch (_) {}
 function renderPrefs () {
@@ -29,6 +30,7 @@ function renderPrefs () {
   document.getElementById('noticeFade').value = String(prefs.fade)
   document.getElementById('showPlayers').checked = prefs.players
   document.getElementById('showTiles').checked = prefs.tiles
+  document.getElementById('quickLanguage').value = prefs.language
   document.getElementById('players').hidden = !prefs.players
   document.getElementById('hudTiles').hidden = !prefs.tiles
 }
@@ -37,11 +39,12 @@ function savePrefs () {
   prefs.fade = Math.max(0, Math.min(120, Number(document.getElementById('noticeFade').value) || 0))
   prefs.players = document.getElementById('showPlayers').checked
   prefs.tiles = document.getElementById('showTiles').checked
+  prefs.language = document.getElementById('quickLanguage').value
   try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)) } catch (_) {}
   renderPrefs()
   renderNotices()
 }
-for (const id of ['noticeLimit', 'noticeFade', 'showPlayers', 'showTiles']) {
+for (const id of ['noticeLimit', 'noticeFade', 'showPlayers', 'showTiles', 'quickLanguage']) {
   document.getElementById(id).addEventListener('change', savePrefs)
 }
 document.getElementById('resetHudPrefs').addEventListener('click', () => {
@@ -70,8 +73,8 @@ window.kitsunexusHud.onData(state => {
     if (previousPlayers !== null) {
       const joined = incoming.filter(p => !previousPlayers.has(p))
       const left = [...previousPlayers].filter(p => !names.has(p))
-      const event = joined.length ? joined[0] + ' joined' : left.length ? left[0] + ' left' : ''
-      if (event) addNotice(event)
+      for (const name of joined.slice(0, 20)) addNotice(name + ' joined')
+      for (const name of left.slice(0, 20)) addNotice(name + ' left')
     }
     previousPlayers = names
     document.getElementById('players').textContent = incoming.length ? 'Players (' + incoming.length + '): ' + incoming.join(' • ') : 'No players detected'
@@ -96,3 +99,10 @@ async function performAction (type) {
 document.querySelectorAll('[data-action]').forEach(button => button.addEventListener('click', () => performAction(button.dataset.action)))
 document.getElementById('quickSend').addEventListener('click', () => performAction('send'))
 document.getElementById('quickTranslate').addEventListener('click', () => performAction('translate'))
+
+quickMessage.addEventListener('keydown', event => {
+  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+    event.preventDefault()
+    performAction('send')
+  }
+})
