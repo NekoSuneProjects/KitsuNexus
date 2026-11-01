@@ -1,6 +1,8 @@
 'use strict'
 const mode = new URLSearchParams(location.search).get('mode')
 document.body.dataset.mode = mode === 'vr' ? 'vr' : 'desktop'
+const widgetMode = new URLSearchParams(location.search).get('widget')
+if (['players', 'alerts', 'tiles', 'lyrics'].includes(widgetMode)) document.body.dataset.widget = widgetMode
 document.getElementById('mode').textContent = mode === 'vr' ? 'SteamVR' : 'Desktop'
 function showTime () {
   document.getElementById('clock').textContent = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(new Date())
@@ -336,3 +338,20 @@ document.getElementById('clearPins').addEventListener('click', () => {
   try { localStorage.removeItem(PIN_KEY) } catch (_) {}
   renderPlayers()
 })
+
+// Pop-out windows are separate Electron windows, not simulated in-panel transforms.
+if (!widgetMode) {
+  document.querySelectorAll('[data-detach]').forEach(button => button.addEventListener('click', async () => {
+    button.disabled = true
+    try {
+      const result = await window.kitsunexusHud.toggleWidget(button.dataset.detach)
+      if (!result?.ok) actionStatus.textContent = 'Could not open pop-out window'
+      else button.textContent = (result.detached ? 'Close ' : 'Pop out ') + button.dataset.detach
+    } catch (error) { actionStatus.textContent = String(error.message || error) }
+    finally { button.disabled = false }
+  }))
+  window.kitsunexusHud.onWidgetState(state => {
+    const button = [...document.querySelectorAll('[data-detach]')].find(item => item.dataset.detach === state.widget)
+    if (button) button.textContent = (state.detached ? 'Close ' : 'Pop out ') + state.widget
+  })
+}
