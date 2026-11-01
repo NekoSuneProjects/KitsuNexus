@@ -41,20 +41,15 @@ jobs:
             tail -n 120 "$file"
             echo '::endgroup::'
           done
-      - name: Open lockfile fix PR
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Commit refreshed lockfile to server
         shell: bash
         run: |
           if git diff --quiet -- package-lock.json; then
             echo "Lockfile already synchronized."
             exit 0
           fi
-          branch="fix/${{ inputs.target_branch }}-lockfile-${GITHUB_RUN_ID}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git switch -c "$branch"
           git add package-lock.json
           git commit -m "fix(server): synchronize npm lockfile"
-          git push origin "$branch"
-          gh pr create --base "${{ inputs.target_branch }}" --head "$branch" --title "fix(${{ inputs.target_branch }}): synchronize npm lockfile" --body "Regenerated package-lock.json from the server package manifest. After merging, validate npm ci inside the server Docker build for AMD64 and ARM64."
+          git push origin HEAD:server
