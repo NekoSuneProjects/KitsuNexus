@@ -1,0 +1,43 @@
+name: Refresh server dependency lockfile
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: server
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Regenerate lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Validate dependency installation
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run tests
+        run: npm test
+      - name: Open lockfile fix PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo "Lockfile already synchronized."
+            exit 0
+          fi
+          branch="fix/server-lockfile-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add package-lock.json
+          git commit -m "fix(server): synchronize npm lockfile"
+          git push origin "$branch"
+          gh pr create --base server --head "$branch" --title "fix(server): synchronize npm lockfile for Docker" --body "Regenerated package-lock.json from the server package manifest and validated npm ci and tests. Merge after security checks pass, then rerun the server Docker build."
