@@ -969,9 +969,10 @@ ipcMain.handle('update:startUpdate', async (e, { url, name, version } = {}) => {
 hudWindow.setBoundsCallback(bounds => {
   settings.set('hudDesktopBounds', bounds)
 })
+hudWindow.setOptionsCallback(options => settings.set('hudDesktopOptions', options))
 ipcMain.handle('hud:show', (_event, options) => {
   const bounds = settings.get('hudDesktopBounds', {})
-  hudWindow.showDesktop({ ...bounds, ...options })
+  hudWindow.showDesktop({ ...bounds, ...settings.get('hudDesktopOptions', {}), ...options })
   const world = getVrcWorld()
   const sendInitial = () => hudWindow.broadcast({
     session: world?.inWorld ? String(world.worldName || 'In VRChat') : 'Not in world',
