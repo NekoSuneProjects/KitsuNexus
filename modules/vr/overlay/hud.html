@@ -11,7 +11,7 @@
 .panel{height:100%;padding:14px;border-radius:22px;overflow:hidden;
 background:linear-gradient(145deg,rgba(32,24,58,.93),rgba(13,18,34,.90));
 border:1px solid rgba(188,161,255,.42);box-shadow:0 8px 36px rgba(0,0,0,.28)}
-.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;-webkit-app-region:drag;user-select:none}
 .brand{font-weight:800;letter-spacing:.06em;font-size:18px}.accent{color:#bea6ff}
 .tag{font-size:11px;border:1px solid #826aa4;border-radius:20px;padding:4px 10px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -20,10 +20,10 @@ border:1px solid rgba(188,161,255,.42);box-shadow:0 8px 36px rgba(0,0,0,.28)}
 .value{font-size:17px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:6px}
 .footer{margin-top:9px;color:#c5b9de;font-size:11px}
 .actions{margin-top:9px;display:flex;flex-wrap:wrap;gap:5px}
-.actions button{background:#45365e;color:#fff;border:1px solid #8f77b0;border-radius:8px;padding:5px 9px;cursor:pointer;font-size:12px}
+.actions button{-webkit-app-region:no-drag;background:#45365e;color:#fff;border:1px solid #8f77b0;border-radius:8px;padding:5px 9px;cursor:pointer;font-size:12px}
 .quick{display:flex;gap:6px;margin-top:8px}
-.quick input{background:#151126;border:1px solid #73618b;border-radius:8px;color:white;padding:6px;min-width:0;flex:1}
-.quick button{background:#7b59bb;color:#fff;border:0;border-radius:8px;padding:6px 10px;cursor:pointer}
+.quick input{-webkit-app-region:no-drag;background:#151126;border:1px solid #73618b;border-radius:8px;color:white;padding:6px;min-width:0;flex:1}
+.quick button{-webkit-app-region:no-drag;background:#7b59bb;color:#fff;border:0;border-radius:8px;padding:6px 10px;cursor:pointer}
 #players{margin-top:8px;max-height:63px;overflow:auto;white-space:normal;line-height:1.5;font-size:11px;color:#ded3ef}
 #alerts{font-size:11px;color:#e3c6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
 #actionStatus{font-size:11px;margin-top:4px;color:#d5c3f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
