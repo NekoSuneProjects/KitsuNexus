@@ -17,11 +17,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: npm
       - name: Regenerate lockfile
-        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+        run: |
+          npm --version
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Validate dependency installation
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Show npm diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          for file in $(find "$HOME/.npm/_logs" -maxdepth 1 -name '*debug-0.log' -type f 2>/dev/null | sort | tail -3); do
+            echo "::group::npm diagnostic: $file"
+            tail -n 120 "$file"
+            echo '::endgroup::'
+          done
       - name: Run tests
         run: npm test
       - name: Open lockfile fix PR
