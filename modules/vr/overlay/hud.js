@@ -14,13 +14,14 @@ let previousPlayers = null
 const notices = []
 const alerts = document.getElementById('alerts')
 const PREF_KEY = 'kitsunexus-hud-prefs-v1'
-const defaults = { limit: 12, fade: 15, players: true, tiles: true, music: true, heart: true, language: 'en', preset: 'full', joins: true, leaves: true, notices: true, clock: true, sessionVisible: true, corner: 'inline' }
+const defaults = { limit: 12, fade: 15, players: true, tiles: true, music: true, heart: true, language: 'en', preset: 'full', joins: true, leaves: true, notices: true, clock: true, sessionVisible: true, corner: 'inline', textSize: 'normal' }
 let prefs = { ...defaults }
 try {
   const stored = JSON.parse(localStorage.getItem(PREF_KEY) || '{}')
   if (stored && typeof stored === 'object') {
     prefs.limit = [3, 6, 12, 20].includes(Number(stored.limit)) ? Number(stored.limit) : 12
     prefs.fade = Number.isFinite(Number(stored.fade)) ? Math.max(0, Math.min(120, Number(stored.fade))) : 15
+    prefs.textSize = ['small', 'normal', 'large'].includes(stored.textSize) ? stored.textSize : 'normal'
     prefs.notices = stored.notices !== false
     prefs.clock = stored.clock !== false
     prefs.sessionVisible = stored.sessionVisible !== false
@@ -39,6 +40,8 @@ function renderPrefs () {
   document.getElementById('hudPreset').value = prefs.preset
   document.getElementById('noticeLimit').value = String(prefs.limit)
   document.getElementById('noticeFade').value = String(prefs.fade)
+  document.getElementById('hudTextSize').value = prefs.textSize
+  document.body.dataset.textSize = prefs.textSize
   document.getElementById('showNotices').checked = prefs.notices
   document.getElementById('showClock').checked = prefs.clock
   document.getElementById('showSession').checked = prefs.sessionVisible
@@ -63,6 +66,7 @@ function savePrefs () {
   prefs.preset = document.getElementById('hudPreset').value
   prefs.limit = Number(document.getElementById('noticeLimit').value)
   prefs.fade = Math.max(0, Math.min(120, Number(document.getElementById('noticeFade').value) || 0))
+  prefs.textSize = document.getElementById('hudTextSize').value
   prefs.notices = document.getElementById('showNotices').checked
   prefs.clock = document.getElementById('showClock').checked
   prefs.sessionVisible = document.getElementById('showSession').checked
@@ -78,7 +82,7 @@ function savePrefs () {
   renderPrefs()
   renderNotices()
 }
-for (const id of ['noticeLimit', 'noticeFade', 'showNotices', 'showClock', 'showSession', 'noticeCorner', 'showJoins', 'showLeaves', 'showPlayers', 'showTiles', 'showMusic', 'showHeart', 'quickLanguage']) {
+for (const id of ['hudTextSize', 'noticeLimit', 'noticeFade', 'showNotices', 'showClock', 'showSession', 'noticeCorner', 'showJoins', 'showLeaves', 'showPlayers', 'showTiles', 'showMusic', 'showHeart', 'quickLanguage']) {
   document.getElementById(id).addEventListener('change', () => {
     if (['showPlayers', 'showTiles', 'showMusic', 'showHeart', 'showNotices', 'showClock', 'showSession'].includes(id)) document.getElementById('hudPreset').value = 'custom'
     savePrefs()
@@ -110,6 +114,7 @@ function renderNotices () {
 }
 setInterval(renderNotices, 1000)
 function addNotice (message) {
+  if (document.getElementById('pauseNotices').checked) return
   notices.unshift({ at: Date.now(), text: new Date().toLocaleTimeString() + ' · ' + message })
   if (notices.length > 20) notices.length = 20
   renderNotices()
@@ -126,7 +131,8 @@ window.kitsunexusHud.onData(state => {
       for (const name of (prefs.leaves ? left : []).slice(0, 20)) addNotice(name + ' left')
     }
     previousPlayers = names
-    document.getElementById('players').textContent = incoming.length ? 'Players (' + incoming.length + '): ' + incoming.join(' • ') : 'No players detected'
+    currentPlayers = incoming
+    renderPlayers()
   }
   if (!state || typeof state !== 'object') return
   if (Object.prototype.hasOwnProperty.call(state, 'session')) document.getElementById('session').textContent = short(state.session, 'Not connected')
@@ -261,3 +267,41 @@ for (const widget of widgets) {
   })
 }
 applyLayout()
+
+// Locally pinned player names are visual preferences, not VRChat account identifiers.
+const PIN_KEY = 'kitsunexus-hud-pinned-players-v1'
+let pinnedPlayers = []
+try { const stored = JSON.parse(localStorage.getItem(PIN_KEY) || '[]'); if (Array.isArray(stored)) pinnedPlayers = stored.filter(v => typeof v === 'string' && v.length <= 110).slice(0, 30) } catch (_) {}
+let currentPlayers = []
+let selectedPlayer = ''
+function renderPlayers () {
+  const holder = document.getElementById('players')
+  const query = document.getElementById('playerSearch').value.trim().toLocaleLowerCase()
+  const filtered = currentPlayers.filter(name => name.toLocaleLowerCase().includes(query)).sort((a, b) => Number(pinnedPlayers.includes(b)) - Number(pinnedPlayers.includes(a)))
+  holder.replaceChildren()
+  const heading = document.createElement('span')
+  heading.textContent = 'Players (' + currentPlayers.length + '): '
+  holder.append(heading)
+  if (!filtered.length) holder.append(document.createTextNode(query ? 'No matches' : 'No players detected'))
+  for (const name of filtered) {
+    const button = document.createElement('button')
+    button.className = 'player' + (pinnedPlayers.includes(name) ? ' pinned' : '')
+    button.type = 'button'
+    button.textContent = (pinnedPlayers.includes(name) ? '★ ' : '') + name
+    button.setAttribute('aria-pressed', String(selectedPlayer === name))
+    button.addEventListener('click', () => { selectedPlayer = name; renderPlayers() })
+    holder.append(button)
+  }
+}
+document.getElementById('playerSearch').addEventListener('input', renderPlayers)
+document.getElementById('pinPlayer').addEventListener('click', () => {
+  if (!selectedPlayer || !currentPlayers.includes(selectedPlayer)) return
+  pinnedPlayers = pinnedPlayers.includes(selectedPlayer) ? pinnedPlayers.filter(x => x !== selectedPlayer) : [...pinnedPlayers, selectedPlayer].slice(-30)
+  try { localStorage.setItem(PIN_KEY, JSON.stringify(pinnedPlayers)) } catch (_) {}
+  renderPlayers()
+})
+document.getElementById('clearPins').addEventListener('click', () => {
+  pinnedPlayers = []
+  try { localStorage.removeItem(PIN_KEY) } catch (_) {}
+  renderPlayers()
+})
