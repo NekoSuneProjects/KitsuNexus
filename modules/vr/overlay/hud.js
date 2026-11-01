@@ -148,7 +148,7 @@ function addNotice (message) {
 document.getElementById('clearAlerts').addEventListener('click', () => { notices.length = 0; alerts.textContent = '' })
 window.kitsunexusHud.onData(state => {
   if (!prefs.live) return
-  if (prefs.monitorPlayers && Array.isArray(state?.players)) {
+  if ((prefs.monitorPlayers || widgetMode === 'players') && Array.isArray(state?.players)) {
     const incoming = state.players.filter(p => typeof p === 'string').slice(0, 80)
     const names = new Set(incoming)
     if (previousPlayers !== null) {
@@ -162,15 +162,15 @@ window.kitsunexusHud.onData(state => {
     renderPlayers()
   }
   if (!state || typeof state !== 'object') return
-  if (prefs.fps && Object.prototype.hasOwnProperty.call(state, 'fps')) {
+  if ((prefs.fps || widgetMode === 'tiles') && Object.prototype.hasOwnProperty.call(state, 'fps')) {
     const fps = Number(state.fps)
     document.getElementById('fps').textContent = Number.isFinite(fps) && fps >= 0 && fps <= 1000 ? Math.round(fps) + ' FPS' : 'Unavailable'
   }
-  if (prefs.status && Object.prototype.hasOwnProperty.call(state, 'status')) document.getElementById('hudStatus').textContent = short(state.status, 'Unknown')
-  if (prefs.lyrics && Object.prototype.hasOwnProperty.call(state, 'lyrics')) document.getElementById('lyricsText').textContent = short(state.lyrics, 'No lyrics source connected')
+  if ((prefs.status || widgetMode === 'tiles') && Object.prototype.hasOwnProperty.call(state, 'status')) document.getElementById('hudStatus').textContent = short(state.status, 'Unknown')
+  if ((prefs.lyrics || widgetMode === 'lyrics') && Object.prototype.hasOwnProperty.call(state, 'lyrics')) document.getElementById('lyricsText').textContent = short(state.lyrics, 'No lyrics source connected')
   if (Object.prototype.hasOwnProperty.call(state, 'session')) document.getElementById('session').textContent = short(state.session, 'Not connected')
-  if (prefs.musicFeed && Object.prototype.hasOwnProperty.call(state, 'music')) document.getElementById('music').textContent = short(state.music, 'No track')
-  if (prefs.heartFeed && Object.prototype.hasOwnProperty.call(state, 'heart')) document.getElementById('heart').textContent = short(state.heart, 'Not connected')
+  if ((prefs.musicFeed || widgetMode === 'tiles') && Object.prototype.hasOwnProperty.call(state, 'music')) document.getElementById('music').textContent = short(state.music, 'No track')
+  if ((prefs.heartFeed || widgetMode === 'tiles') && Object.prototype.hasOwnProperty.call(state, 'heart')) document.getElementById('heart').textContent = short(state.heart, 'Not connected')
 })
 
 const actionStatus = document.getElementById('actionStatus')
