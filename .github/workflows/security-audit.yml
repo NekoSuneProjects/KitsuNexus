@@ -40,13 +40,13 @@ jobs:
           GITLEAKS_OUTCOME: ${{ steps.gitleaks.outcome }}
         run: |
           {
-            echo '## Security audit needs attention'
+            echo '## Security audit — needs attention'
             echo ''
             echo "- Dependency scan: $OSV_OUTCOME"
             echo "- Secret scan: $GITLEAKS_OUTCOME"
             echo ''
             echo "See [the workflow run](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) for details."
-            echo 'A scanner failure can indicate a vulnerability or a tool/configuration error. Do not post secret values.'
+            echo 'GitHub Actions detected a security scan failure. Please review and fix the findings or workflow error before merging. Do not post secret values.'
           } > /tmp/security-comment.md
           gh pr comment "$PR_NUMBER" --body-file /tmp/security-comment.md
       - name: Fail checks if scans failed
