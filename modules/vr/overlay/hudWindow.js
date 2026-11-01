@@ -51,11 +51,16 @@ function visibleBounds (cfg) {
   const primary = screen.getPrimaryDisplay().workArea
   const x = cfg.x == null ? primary.x + primary.width - cfg.width - 24 : cfg.x
   const y = cfg.y == null ? primary.y + 32 : cfg.y
-  const intersects = displays.some(area =>
-    x < area.x + area.width && x + cfg.width > area.x &&
-    y < area.y + area.height && y + cfg.height > area.y
+  // Keep the draggable title bar reachable even after a monitor is disconnected.
+  const visible = displays.find(area =>
+    x + cfg.width > area.x + 48 && x < area.x + area.width - 48 &&
+    y + 40 > area.y && y < area.y + area.height - 40
   )
-  return intersects ? { x, y } : {
+  if (visible) return {
+    x: Math.max(visible.x - cfg.width + 96, Math.min(x, visible.x + visible.width - 96)),
+    y: Math.max(visible.y, Math.min(y, visible.y + visible.height - 40))
+  }
+  return {
     x: primary.x + Math.max(0, primary.width - cfg.width - 24),
     y: primary.y + 32
   }
@@ -128,9 +133,22 @@ function showDesktop (options = {}) {
   desktop = create(desktopOptions, 'desktop')
   registerRecovery()
   const saveBounds = () => { if (desktop && !desktop.isDestroyed()) onBounds(desktop.getBounds()) }
+  const recoverIfDisconnected = () => {
+    if (!desktop || desktop.isDestroyed()) return
+    const current = desktop.getBounds()
+    const next = visibleBounds(current)
+    if (current.x !== next.x || current.y !== next.y) desktop.setPosition(next.x, next.y)
+  }
+  screen.on('display-removed', recoverIfDisconnected)
+  screen.on('display-metrics-changed', recoverIfDisconnected)
   desktop.on('moved', saveBounds)
   desktop.on('resized', saveBounds)
-  desktop.on('closed', () => { desktop = null; unregisterRecovery() })
+  desktop.on('closed', () => {
+    screen.removeListener('display-removed', recoverIfDisconnected)
+    screen.removeListener('display-metrics-changed', recoverIfDisconnected)
+    desktop = null
+    unregisterRecovery()
+  })
 }
 
 function configureDesktop (options = {}) {
