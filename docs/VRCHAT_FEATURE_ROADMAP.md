@@ -35,7 +35,7 @@ This is an original KitsuNexus implementation plan. All integrations should use 
 - [ ] Direct language selector and multiple translation targets
 - [ ] Push-to-talk / voice translation with microphone consent
 - [~] In-window draggable widget layout with saved positions and reset; independent native windows and full resizing remain pending
-- [~] Local player search, selectable/pinned names, and notice pause implemented; lyrics, compact FPS/status and independent windows pending
+- [~] Local player search and pins, notice pause, optional FPS/status tiles and lyrics text surface implemented; real FPS/lyrics providers, syncing and independent windows pending
 - [~] Notification corner selector (inline/four corners), visibility, limits, fade, scroll, pause and text-size control; independent native notification window pending
 - [ ] OS-level hotkeys and user-configurable safety gate
 - [ ] Script-created windows in an isolated, permission-controlled sandbox
