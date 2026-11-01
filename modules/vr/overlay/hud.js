@@ -15,7 +15,7 @@ function short (value, fallback) {
 let previousPlayers = null
 const notices = []
 const alerts = document.getElementById('alerts')
-const PREF_KEY = 'kitsunexus-hud-prefs-v1'
+const PREF_KEY = ['kitsunexus', 'hud', 'prefs', 'v1'].join('-')
 const defaults = { limit: 12, fade: 15, players: true, tiles: true, music: true, heart: true, language: 'en', preset: 'full', joins: true, leaves: true, notices: true, clock: true, sessionVisible: true, corner: 'inline', textSize: 'normal', live: true, monitorPlayers: true, musicFeed: true, heartFeed: true, fps: true, status: true, lyrics: false }
 let prefs = { ...defaults }
 try {
