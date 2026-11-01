@@ -178,5 +178,8 @@
   "devDependencies": {
     "electron": "^42.11.16",
     "electron-builder": "^26.15.0"
+  },
+  "overrides": {
+    "minimatch": "^11.0.1"
   }
 }
