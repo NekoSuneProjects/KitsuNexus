@@ -43,8 +43,10 @@ function tick () {
     return
   }
   inFlight = true
+  const requestGeneration = generation
   execFile(helper, ['--json'], { timeout: 4000, maxBuffer: 128 * 1024, windowsHide: true }, (err, stdout) => {
     inFlight = false
+    if (requestGeneration !== generation) return
     if (err) {
       publish({ available: false, devices: [], at: Date.now(), reason: 'OpenVR helper failed or SteamVR disconnected' })
       return
@@ -61,6 +63,7 @@ function startVrBattery (listener, intervalMs = 15000) {
   pollTimer = setInterval(tick, Math.max(5000, Number(intervalMs) || 15000))
 }
 function stopVrBattery () {
+  generation++
   if (pollTimer) clearInterval(pollTimer)
   pollTimer = null
   onUpdate = null
