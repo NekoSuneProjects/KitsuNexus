@@ -194,6 +194,10 @@ function applyLayout () {
   for (const widget of widgets) {
     const cfg = savedLayout[widget.dataset.widget]
     if (!cfg || !Number.isFinite(cfg.x) || !Number.isFinite(cfg.y)) continue
+    if (['players', 'alerts'].includes(widget.dataset.widget)) {
+      if (Number.isFinite(cfg.width)) widget.style.width = Math.max(120, Math.min(700, cfg.width)) + 'px'
+      if (Number.isFinite(cfg.height)) widget.style.height = Math.max(40, Math.min(500, cfg.height)) + 'px'
+    }
     widget.style.transform = 'translate(' + Math.max(-250, Math.min(250, cfg.x)) + 'px,' + Math.max(-250, Math.min(250, cfg.y)) + 'px)'
   }
 }
@@ -209,6 +213,16 @@ document.getElementById('resetLayout').addEventListener('click', () => {
   persistLayout()
 })
 for (const widget of widgets) {
+  if (['players', 'alerts'].includes(widget.dataset.widget) && typeof ResizeObserver !== 'undefined') {
+    let initialized = false
+    new ResizeObserver(() => {
+      if (!initialized) { initialized = true; return }
+      if (!editLayout.checked || mode === 'vr') return
+      const cfg = savedLayout[widget.dataset.widget] || { x: 0, y: 0 }
+      savedLayout[widget.dataset.widget] = { ...cfg, width: widget.offsetWidth, height: widget.offsetHeight }
+      persistLayout()
+    }).observe(widget)
+  }
   const handle = widget.querySelector('.widget-handle')
   if (!handle) continue
   handle.addEventListener('pointerdown', event => {
