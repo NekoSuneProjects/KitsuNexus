@@ -11,6 +11,14 @@ function short (value, fallback) {
   return typeof value === 'string' && value.trim() ? value.slice(0, 110) : fallback
 }
 let previousPlayers = null
+const notices = []
+const alerts = document.getElementById('alerts')
+function addNotice (message) {
+  notices.unshift(new Date().toLocaleTimeString() + ' · ' + message)
+  if (notices.length > 12) notices.length = 12
+  alerts.textContent = notices.join(' | ')
+}
+document.getElementById('clearAlerts').addEventListener('click', () => { notices.length = 0; alerts.textContent = '' })
 window.kitsunexusHud.onData(state => {
   if (Array.isArray(state?.players)) {
     const incoming = state.players.filter(p => typeof p === 'string').slice(0, 80)
@@ -19,7 +27,7 @@ window.kitsunexusHud.onData(state => {
       const joined = incoming.filter(p => !previousPlayers.has(p))
       const left = [...previousPlayers].filter(p => !names.has(p))
       const event = joined.length ? joined[0] + ' joined' : left.length ? left[0] + ' left' : ''
-      if (event) document.getElementById('alerts').textContent = event
+      if (event) addNotice(event)
     }
     previousPlayers = names
     document.getElementById('players').textContent = incoming.length ? 'Players (' + incoming.length + '): ' + incoming.join(' • ') : 'No players detected'
