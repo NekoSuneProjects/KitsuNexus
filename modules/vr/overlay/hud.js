@@ -35,7 +35,7 @@ const quickMessage = document.getElementById('quickMessage')
 async function performAction (type) {
   actionStatus.textContent = 'Working…'
   try {
-    const response = await window.kitsunexusHud.action({ type, text: quickMessage.value, target: 'en' })
+    const response = await window.kitsunexusHud.action({ type, text: quickMessage.value, target: document.getElementById('quickLanguage').value })
     if (!response || response.ok === false) throw new Error(response?.error || 'Action failed')
     if (type === 'translate') quickMessage.value = String(response.translatedText || quickMessage.value).slice(0, 2000)
     actionStatus.textContent = response.message || 'Ready'
