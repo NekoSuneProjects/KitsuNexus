@@ -27,14 +27,14 @@ border:1px solid rgba(188,161,255,.42);box-shadow:0 8px 36px rgba(0,0,0,.28)}
 .quick button{-webkit-app-region:no-drag;background:#7b59bb;color:#fff;border:0;border-radius:8px;padding:6px 10px;cursor:pointer}
 #players{margin-top:8px;max-height:63px;overflow:auto;white-space:normal;line-height:1.5;font-size:11px;color:#ded3ef}
 #alerts{font-size:11px;color:#e3c6ff;max-height:52px;overflow:auto;white-space:normal;margin-top:3px}
-#actionStatus{font-size:11px;margin-top:4px;color:#d5c3f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#hudPreferences{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:11px}#hudPreferences select,#hudPreferences input{background:#151126;color:#fff;border:1px solid #73618b;border-radius:6px;max-width:65px}#hudPreferences button{background:#45365e;color:white;border:1px solid #8f77b0;border-radius:6px}#actionStatus{font-size:11px;margin-top:4px;color:#d5c3f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body[data-mode="vr"] .interactive{display:none}
 </style>
 </head>
 <body>
 <div class="panel">
   <div class="header"><div class="brand"><span class="accent">Kitsu</span>Nexus HUD</div><div class="tag" id="mode">Desktop</div></div>
-  <div class="grid">
+  <div class="grid" id="hudTiles">
     <div class="tile"><div class="label">Local time</div><div class="value" id="clock">--:--</div></div>
     <div class="tile"><div class="label">Session</div><div class="value" id="session">Not connected</div></div>
     <div class="tile"><div class="label">Now playing</div><div class="value" id="music">No track</div></div>
@@ -43,6 +43,7 @@ body[data-mode="vr"] .interactive{display:none}
   <div id="players" aria-label="Current instance players">Waiting for player data…</div>
   <div id="alerts" role="status" aria-live="polite"></div><div class="interactive"><button id="clearAlerts" title="Clear join and leave notifications">Clear notices</button></div>
   <div class="interactive">
+  <div id="hudPreferences"><label>Notices <select id="noticeLimit"><option>3</option><option>6</option><option selected>12</option><option>20</option></select></label><label>Fade (s) <input id="noticeFade" type="number" min="0" max="120" value="15"></label><label><input id="showPlayers" type="checkbox" checked> Players</label><label><input id="showTiles" type="checkbox" checked> Stats</label><button id="resetHudPrefs">Reset</button></div>
   <div class="actions"><button data-action="playpause">Play / Pause</button><button data-action="previous">Previous</button><button data-action="next">Next</button><button data-action="toggleChatbox">Toggle OSC chat</button></div>
   <div class="quick"><select id="quickLanguage" aria-label="Translate to"><option value="en">English</option><option value="ja">日本語</option><option value="es">Español</option><option value="de">Deutsch</option><option value="fr">Français</option><option value="pt">Português</option><option value="ko">한국어</option><option value="zh">中文</option></select><input id="quickMessage" maxlength="2000" placeholder="Message / translated text" aria-label="Chatbox message"><button id="quickSend">Send</button><button id="quickTranslate">Translate</button></div>
   <div id="actionStatus" role="status" aria-live="polite"></div>
