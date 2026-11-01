@@ -33,7 +33,7 @@ This is an original KitsuNexus implementation plan. All integrations should use 
 ## HUD / Quick Actions
 - [ ] Direct language selector and multiple translation targets
 - [ ] Push-to-talk / voice translation with microphone consent
-- [ ] Draggable/resizable independent widgets and configurable presets
+- [~] In-window draggable widget layout with saved positions and reset; independent native windows and full resizing remain pending
 - [ ] Pinned player-list, lyrics, compact status/FPS and notification windows
 - [ ] Overlay corner positioning, notification limits, fade durations, scroll settings
 - [ ] OS-level hotkeys and user-configurable safety gate
