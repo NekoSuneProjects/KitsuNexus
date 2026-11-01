@@ -26,6 +26,7 @@ This is an original KitsuNexus implementation plan. All integrations should use 
 - [~] SteamVR device status: optional helper transport, response validation and disconnect reporting implemented; native OpenVR helper and real device readings still missing
 - [ ] Windows packaged HUD smoke tests and physical SteamVR validation
 
+- [x] Separate persisted join/leave notification filters in PR #23
 - [x] HUD layout presets and local OSC message presets added in PR #23
 - [~] Local history module and unit tests added; live event integration and UI remain pending
 
