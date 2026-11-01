@@ -3,7 +3,7 @@
 const path = require('path')
 const { BrowserWindow, screen } = require('electron')
 
-const DEFAULTS = Object.freeze({ width: 400, height: 260, x: null, y: null, opacity: 0.94, clickThrough: false, alwaysOnTop: true })
+const DEFAULTS = Object.freeze({ width: 430, height: 380, x: null, y: null, opacity: 0.94, clickThrough: false, alwaysOnTop: true })
 let desktop = null
 let vr = null
 let onBounds = () => {}
@@ -11,7 +11,7 @@ let onBounds = () => {}
 function normalise (input = {}) {
   return {
     width: Math.max(280, Math.min(800, Number(input.width) || DEFAULTS.width)),
-    height: Math.max(170, Math.min(650, Number(input.height) || DEFAULTS.height)),
+    height: Math.max(280, Math.min(750, Number(input.height) || DEFAULTS.height)),
     x: Number.isFinite(input.x) ? input.x : null,
     y: Number.isFinite(input.y) ? input.y : null,
     opacity: Math.max(0.25, Math.min(1, Number(input.opacity) || DEFAULTS.opacity)),
