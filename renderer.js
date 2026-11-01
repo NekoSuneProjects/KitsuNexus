@@ -2692,6 +2692,7 @@ async function refreshDesktopHud () {
   try {
     const state = await api.hudStatus()
     setPill('desktopHudState', !!state.running, 'on')
+    if (state.options) $('desktopHudClickThrough').checked = !!state.options.clickThrough
     $('desktopHudToggle').textContent = state.running ? 'Stop desktop HUD' : 'Start desktop HUD'
     setText('desktopHudOut', state.running ? 'Running — drag to move, resize from window edges.' : 'Stopped')
   } catch (err) { setText('desktopHudOut', String(err.message || err)) }
@@ -2701,7 +2702,7 @@ $('desktopHudToggle').addEventListener('click', async () => {
   try {
     const state = await api.hudStatus()
     if (state.running) await api.hudHide()
-    else await api.hudShow({ clickThrough: $('desktopHudClickThrough').checked })
+    else await api.hudShow()
     await refreshDesktopHud()
   } catch (err) { setText('desktopHudOut', String(err.message || err)) }
   finally { $('desktopHudToggle').disabled = false }
