@@ -25,5 +25,10 @@
     "jsonwebtoken": "^9.0.3",
     "sequelize": "^6.37.8",
     "sqlite3": "^6.0.1"
+  },
+  "overrides": {
+    "minimatch": "^11.0.1",
+    "qs": "^6.16.1",
+    "uuid": "^11.1.1"
   }
 }
