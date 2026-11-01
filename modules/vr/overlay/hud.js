@@ -1,5 +1,4 @@
 'use strict'
-const { ipcRenderer } = require('electron')
 const mode = new URLSearchParams(location.search).get('mode')
 document.getElementById('mode').textContent = mode === 'vr' ? 'SteamVR' : 'Desktop'
 function showTime () {
@@ -10,7 +9,7 @@ setInterval(showTime, 15000)
 function short (value, fallback) {
   return typeof value === 'string' && value.trim() ? value.slice(0, 110) : fallback
 }
-ipcRenderer.on('kitsunexus:hud-data', (_event, state) => {
+window.kitsunexusHud.onData(state => {
   if (!state || typeof state !== 'object') return
   document.getElementById('session').textContent = short(state.session, 'Not connected')
   document.getElementById('music').textContent = short(state.music, 'No track')
