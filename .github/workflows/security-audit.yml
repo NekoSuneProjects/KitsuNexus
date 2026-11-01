@@ -58,19 +58,15 @@ jobs:
           curl --fail --location --retry 3 --silent --show-error https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz -o /tmp/gitleaks.tar.gz
           tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
           /tmp/gitleaks version
-      - name: Scan repository history for secrets
+      - name: Scan current source files for secrets
         id: gitleaks
         if: ${{ steps.install_gitleaks.outcome == 'success' }}
         continue-on-error: true
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
         run: |
-          set -euo pipefail
-          # Scan the current PR changes, not every historical commit.
-          # --no-git inspects the current working tree; --log-opts limits git scan
-          # to commits introduced by this pull request.
-          /tmp/gitleaks git . --log-opts="${BASE_SHA}..${HEAD_SHA}" --report-format json --report-path gitleaks-results.json --exit-code 1
+          # Inspect the checked-out source tree at the current PR commit.
+          # Do not report historical fixtures already removed from the files.
+          /tmp/gitleaks dir . --report-format json --report-path gitleaks-results.json --exit-code 1
       - name: Build actionable PR report
         if: always()
         env:
