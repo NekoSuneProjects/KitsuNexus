@@ -1,3 +1,13 @@
+## Independent KitsuNexus HUD work
+
+- [x] Add independent desktop HUD Electron window and controls.
+- [x] Capture a separate VR HUD surface instead of the full main app.
+- [ ] Validate the VR HUD against a physical headset and SteamVR installation.
+- [ ] Add more local VRChat session and currently playing music data to HUD tiles.
+- [ ] Add persistent widget configuration and hotkeys.
+
+---
+
 # KitsuNexus — TODO / Roadmap
 
 - [x] Replace recoverable-error OK popups with non-blocking notices, correct failed microphone startup state, and capture unexpected desktop/renderer failures in a rotating diagnostic log.
