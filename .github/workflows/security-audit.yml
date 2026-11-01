@@ -1,23 +1,21 @@
-name: Security audit
+name: PR security audit
 on:
   pull_request:
-  push:
-    branches: [main]
-  schedule:
-    - cron: '17 4 * * 1'
-  workflow_dispatch:
+    types: [opened, synchronize, reopened]
 permissions:
   contents: read
-  issues: write
+  pull-requests: write
 jobs:
-  dependencies:
+  scan:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: OSV dependency vulnerability scan
+          fetch-depth: 0
+      - name: Scan dependencies with OSV
         id: osv
         continue-on-error: true
         uses: google/osv-scanner-action/osv-scanner-action@v2.3.1
@@ -26,37 +24,31 @@ jobs:
             scan
             --recursive
             ./
-      - name: Report failed OSV scan on PR only
-        if: ${{ github.event_name == 'pull_request' && steps.osv.outcome == 'failure' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          gh pr comment "$PR_NUMBER" --body "Security audit: OSV dependency scan failed or detected vulnerable dependencies. See [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details. A failed scan alone does not confirm a CVE."
-      - name: Require successful OSV scan
-        if: ${{ steps.osv.outcome == 'failure' }}
-        run: exit 1
-  secrets:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Gitleaks secret scan
+      - name: Scan secrets with Gitleaks
         id: gitleaks
+        if: always()
         continue-on-error: true
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Report failed secret scan on PR only
-        if: ${{ github.event_name == 'pull_request' && steps.gitleaks.outcome == 'failure' }}
+      - name: Comment only when scanners fail
+        if: ${{ always() && (steps.osv.outcome == 'failure' || steps.gitleaks.outcome == 'failure') }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          OSV_OUTCOME: ${{ steps.osv.outcome }}
+          GITLEAKS_OUTCOME: ${{ steps.gitleaks.outcome }}
         run: |
-          gh pr comment "$PR_NUMBER" --body "Security audit: Gitleaks scan failed or detected a potential secret. Review [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) securely. Do not post secret values in PR comments."
-      - name: Require successful secret scan
-        if: ${{ steps.gitleaks.outcome == 'failure' }}
+          {
+            echo '## Security audit needs attention'
+            echo ''
+            echo "- Dependency scan: $OSV_OUTCOME"
+            echo "- Secret scan: $GITLEAKS_OUTCOME"
+            echo ''
+            echo "See [the workflow run](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) for details."
+            echo 'A scanner failure can indicate a vulnerability or a tool/configuration error. Do not post secret values.'
+          } > /tmp/security-comment.md
+          gh pr comment "$PR_NUMBER" --body-file /tmp/security-comment.md
+      - name: Fail checks if scans failed
+        if: ${{ always() && (steps.osv.outcome == 'failure' || steps.gitleaks.outcome == 'failure') }}
         run: exit 1
