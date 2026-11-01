@@ -23,14 +23,29 @@ function normalise (input = {}) {
   }
 }
 
+function visibleBounds (cfg) {
+  const displays = screen.getAllDisplays().map(display => display.workArea)
+  const primary = screen.getPrimaryDisplay().workArea
+  const x = cfg.x == null ? primary.x + primary.width - cfg.width - 24 : cfg.x
+  const y = cfg.y == null ? primary.y + 32 : cfg.y
+  const intersects = displays.some(area =>
+    x < area.x + area.width && x + cfg.width > area.x &&
+    y < area.y + area.height && y + cfg.height > area.y
+  )
+  return intersects ? { x, y } : {
+    x: primary.x + Math.max(0, primary.width - cfg.width - 24),
+    y: primary.y + 32
+  }
+}
+
 function create (options, mode) {
   const cfg = normalise(options)
-  const display = screen.getPrimaryDisplay().workArea
+  const bounds = visibleBounds(cfg)
   const window = new BrowserWindow({
     width: cfg.width,
     height: cfg.height,
-    x: cfg.x == null ? display.x + display.width - cfg.width - 24 : cfg.x,
-    y: cfg.y == null ? display.y + 32 : cfg.y,
+    x: bounds.x,
+    y: bounds.y,
     frame: false,
     transparent: true,
     resizable: mode === 'desktop',
@@ -55,7 +70,23 @@ function create (options, mode) {
   if (mode === 'desktop') {
     window.setOpacity(cfg.opacity)
     window.setIgnoreMouseEvents(cfg.clickThrough, { forward: true })
-    window.once('ready-to-show', () => window.showInactive())
+    // Transparent windows may never emit ready-to-show on some GPU/driver setups.
+    let shown = false
+    const reveal = () => {
+      if (shown || window.isDestroyed()) return
+      shown = true
+      window.showInactive()
+      if (cfg.alwaysOnTop) window.setAlwaysOnTop(true, 'screen-saver')
+    }
+    window.once('ready-to-show', reveal)
+    window.webContents.once('did-finish-load', reveal)
+    window.webContents.on('did-fail-load', (_event, code, description) => {
+      console.error('[Desktop HUD] Failed to load:', code, description)
+    })
+    window.webContents.on('render-process-gone', (_event, details) => {
+      console.error('[Desktop HUD] Renderer exited:', details.reason)
+    })
+    setTimeout(reveal, 2500).unref?.()
   } else {
     // Off-screen painted surface, no extra desktop window.
     window.webContents.setFrameRate?.(15)
@@ -81,7 +112,7 @@ function configureDesktop (options = {}) {
   if (!desktop || desktop.isDestroyed()) return
   desktopOptions = normalise({ ...desktopOptions, ...options })
   const cfg = desktopOptions
-  desktop.setAlwaysOnTop(cfg.alwaysOnTop, 'floating')
+  desktop.setAlwaysOnTop(cfg.alwaysOnTop, 'screen-saver')
   desktop.setOpacity(cfg.opacity)
   desktop.setIgnoreMouseEvents(cfg.clickThrough, { forward: true })
   onOptions({ opacity: cfg.opacity, clickThrough: cfg.clickThrough, alwaysOnTop: cfg.alwaysOnTop })
@@ -119,6 +150,7 @@ function setOptionsCallback (callback) { onOptions = typeof callback === 'functi
 function state () {
   return {
     running: !!(desktop && !desktop.isDestroyed()),
+    visible: !!(desktop && !desktop.isDestroyed() && desktop.isVisible()),
     bounds: desktop && !desktop.isDestroyed() ? desktop.getBounds() : null,
     options: { opacity: desktopOptions.opacity, clickThrough: desktopOptions.clickThrough, alwaysOnTop: desktopOptions.alwaysOnTop }
   }
