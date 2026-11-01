@@ -156,10 +156,11 @@ function toggleDetached (event, widget) {
   const saved = detachedBounds.get(widget)
   const cfg = { width: 340, height: widget === 'tiles' ? 260 : 180, x: saved?.x ?? area.x + 80, y: saved?.y ?? area.y + 80 }
   const bounds = visibleBounds({ ...cfg, width: saved?.width || cfg.width, height: saved?.height || cfg.height })
-  const win = new BrowserWindow({ width: saved?.width || cfg.width, height: saved?.height || cfg.height, x: bounds.x, y: bounds.y, frame: false, transparent: true, resizable: true, alwaysOnTop: true, skipTaskbar: true, backgroundColor: '#00000000', webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: false, preload: path.join(__dirname, 'hudPreload.js') } })
+  const win = new BrowserWindow({ width: saved?.width || cfg.width, height: saved?.height || cfg.height, x: bounds.x, y: bounds.y, frame: false, transparent: true, resizable: true, alwaysOnTop: true, skipTaskbar: true, show: false, backgroundColor: '#00000000', webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: false, preload: path.join(__dirname, 'hudPreload.js') } })
   win.setMenuBarVisibility(false)
   win.loadFile(path.join(__dirname, 'hud.html'), { query: { mode: 'desktop', widget } })
-  win.webContents.on('did-finish-load', () => { if (!win.isDestroyed()) win.webContents.send('kitsunexus:hud-data', lastData) })
+  win.webContents.on('did-finish-load', () => { if (!win.isDestroyed()) { win.webContents.send('kitsunexus:hud-data', lastData); win.showInactive() } })
+  win.webContents.on('did-fail-load', (_event, code, reason) => console.error('[Desktop HUD] Pop-out failed:', widget, code, reason))
   const save = () => { if (!win.isDestroyed()) { detachedBounds.set(widget, win.getBounds()); persistWidgets() } }
   win.on('moved', save); win.on('resized', save)
   win.on('closed', () => { if (!closingDetached) { detachedOpen.delete(widget); persistWidgets() } detached.delete(widget); if (desktop && !desktop.isDestroyed()) desktop.webContents.send('kitsunexus:widget-state', { widget, detached: false }) })
