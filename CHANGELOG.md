@@ -5,6 +5,13 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+- Added a standalone, transparent KitsuNexus desktop HUD with click-through control and separate lifecycle from SteamVR.
+- Added dedicated display-only HUD rendering surfaces for desktop and VR, without capturing the main app window.
+
+### Fixed
+- VR capture now reads its own HUD surface rather than skipping updates when the main window is minimised.
+
 ## [1.0.80] - 2026-10-20
 
 ### Community Booster
