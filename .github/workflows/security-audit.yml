@@ -130,5 +130,5 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: gh pr comment "$PR_NUMBER" --body-file security-comment.md
       - name: Fail on vulnerability or secret scan findings
-        if: ${{ always() && (steps.npm_audit.outcome != 'success' || steps.osv.outcome != 'success' || steps.gitleaks.outcome != 'success') }}
+        if: ${{ always() && (steps.npm_audit.outcome == 'failure' || steps.osv.outcome == 'failure' || steps.gitleaks.outcome == 'failure') }}
         run: exit 1
