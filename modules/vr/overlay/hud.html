@@ -22,6 +22,7 @@ border:1px solid rgba(188,161,255,.42);box-shadow:0 8px 36px rgba(0,0,0,.28)}
 .actions{margin-top:9px;display:flex;flex-wrap:wrap;gap:5px}
 .actions button{-webkit-app-region:no-drag;background:#45365e;color:#fff;border:1px solid #8f77b0;border-radius:8px;padding:5px 9px;cursor:pointer;font-size:12px}
 .quick{display:flex;gap:6px;margin-top:8px}
+.quick select{background:#151126;color:#fff;border:1px solid #73618b;border-radius:8px;padding:6px;max-width:84px}
 .quick input{-webkit-app-region:no-drag;background:#151126;border:1px solid #73618b;border-radius:8px;color:white;padding:6px;min-width:0;flex:1}
 .quick button{-webkit-app-region:no-drag;background:#7b59bb;color:#fff;border:0;border-radius:8px;padding:6px 10px;cursor:pointer}
 #players{margin-top:8px;max-height:63px;overflow:auto;white-space:normal;line-height:1.5;font-size:11px;color:#ded3ef}
@@ -43,7 +44,7 @@ body[data-mode="vr"] .interactive{display:none}
   <div id="alerts" role="status" aria-live="polite"></div>
   <div class="interactive">
   <div class="actions"><button data-action="playpause">Play / Pause</button><button data-action="previous">Previous</button><button data-action="next">Next</button><button data-action="toggleChatbox">Toggle OSC chat</button></div>
-  <div class="quick"><input id="quickMessage" maxlength="2000" placeholder="Message / translated text" aria-label="Chatbox message"><button id="quickSend">Send</button><button id="quickTranslate">Translate</button></div>
+  <div class="quick"><select id="quickLanguage" aria-label="Translate to"><option value="en">English</option><option value="ja">日本語</option><option value="es">Español</option><option value="de">Deutsch</option><option value="fr">Français</option><option value="pt">Português</option><option value="ko">한국어</option><option value="zh">中文</option></select><input id="quickMessage" maxlength="2000" placeholder="Message / translated text" aria-label="Chatbox message"><button id="quickSend">Send</button><button id="quickTranslate">Translate</button></div>
   <div id="actionStatus" role="status" aria-live="polite"></div>
 </div>
 <div class="footer">KitsuNexus • local desktop and VR tools</div>
