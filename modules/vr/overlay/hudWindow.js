@@ -18,7 +18,8 @@ function recoverDesktop () {
   desktop.setIgnoreMouseEvents(false)
   desktop.setOpacity(1)
   desktop.setAlwaysOnTop(true, 'screen-saver')
-  desktop.setBounds({ x: area.x + 24, y: area.y + 32, width: desktop.getBounds().width, height: desktop.getBounds().height })
+  const bounds = desktop.getBounds()
+  desktop.setBounds({ x: area.x + 24, y: area.y + 32, width: Math.min(bounds.width, area.width), height: Math.min(bounds.height, area.height) })
   desktop.showInactive()
   desktopOptions = normalise({ ...desktopOptions, clickThrough: false, opacity: 1, alwaysOnTop: true })
   onOptions({ opacity: 1, clickThrough: false, alwaysOnTop: true })
@@ -35,8 +36,8 @@ function unregisterRecovery () {
 
 function normalise (input = {}) {
   return {
-    width: Math.max(280, Math.min(800, Number(input.width) || DEFAULTS.width)),
-    height: Math.max(280, Math.min(750, Number(input.height) || DEFAULTS.height)),
+    width: Math.round(Math.max(280, Math.min(800, Number(input.width) || DEFAULTS.width))),
+    height: Math.round(Math.max(280, Math.min(750, Number(input.height) || DEFAULTS.height))),
     x: Number.isFinite(input.x) ? input.x : null,
     y: Number.isFinite(input.y) ? input.y : null,
     opacity: Math.max(0.25, Math.min(1, Number(input.opacity) || DEFAULTS.opacity)),
@@ -139,6 +140,10 @@ function configureDesktop (options = {}) {
   desktop.setAlwaysOnTop(cfg.alwaysOnTop, 'screen-saver')
   desktop.setOpacity(cfg.opacity)
   desktop.setIgnoreMouseEvents(cfg.clickThrough, { forward: true })
+  if (options.x !== undefined || options.y !== undefined || options.width !== undefined || options.height !== undefined) {
+    const bounds = visibleBounds(cfg)
+    desktop.setBounds({ x: bounds.x, y: bounds.y, width: cfg.width, height: cfg.height })
+  }
   onOptions({ opacity: cfg.opacity, clickThrough: cfg.clickThrough, alwaysOnTop: cfg.alwaysOnTop })
 }
 
