@@ -180,3 +180,54 @@ document.getElementById('copyQuickMessage').addEventListener('click', async () =
     actionStatus.textContent = 'Message copied'
   } catch (_) { actionStatus.textContent = 'Clipboard permission unavailable' }
 })
+
+// Desktop-only HUD widget arrangement. Positions remain inside the HUD window.
+const LAYOUT_KEY = 'kitsunexus-hud-widget-layout-v1'
+const widgets = [...document.querySelectorAll('.widget[data-widget]')]
+const editLayout = document.getElementById('editLayout')
+let savedLayout = {}
+try {
+  const parsed = JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}')
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) savedLayout = parsed
+} catch (_) {}
+function applyLayout () {
+  for (const widget of widgets) {
+    const cfg = savedLayout[widget.dataset.widget]
+    if (!cfg || !Number.isFinite(cfg.x) || !Number.isFinite(cfg.y)) continue
+    widget.style.transform = 'translate(' + Math.max(-250, Math.min(250, cfg.x)) + 'px,' + Math.max(-250, Math.min(250, cfg.y)) + 'px)'
+  }
+}
+function persistLayout () {
+  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(savedLayout)) } catch (_) {}
+}
+editLayout.addEventListener('change', () => {
+  document.body.classList.toggle('layout-edit', editLayout.checked && mode !== 'vr')
+})
+document.getElementById('resetLayout').addEventListener('click', () => {
+  savedLayout = {}
+  widgets.forEach(widget => { widget.style.transform = ''; widget.style.width = ''; widget.style.height = '' })
+  persistLayout()
+})
+for (const widget of widgets) {
+  const handle = widget.querySelector('.widget-handle')
+  if (!handle) continue
+  handle.addEventListener('pointerdown', event => {
+    if (!editLayout.checked || mode === 'vr' || event.button !== 0) return
+    event.preventDefault()
+    const key = widget.dataset.widget
+    const start = { x: event.clientX, y: event.clientY }
+    const old = savedLayout[key] || { x: 0, y: 0 }
+    handle.setPointerCapture(event.pointerId)
+    const move = e => {
+      const x = Math.max(-250, Math.min(250, old.x + e.clientX - start.x))
+      const y = Math.max(-250, Math.min(250, old.y + e.clientY - start.y))
+      widget.style.transform = 'translate(' + x + 'px,' + y + 'px)'
+      savedLayout[key] = { x, y }
+    }
+    const end = () => { handle.removeEventListener('pointermove', move); persistLayout() }
+    handle.addEventListener('pointermove', move)
+    handle.addEventListener('pointerup', end, { once: true })
+    handle.addEventListener('pointercancel', end, { once: true })
+  })
+}
+applyLayout()
