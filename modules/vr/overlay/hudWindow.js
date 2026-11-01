@@ -6,6 +6,7 @@ const { BrowserWindow, screen } = require('electron')
 const DEFAULTS = Object.freeze({ width: 400, height: 260, x: null, y: null, opacity: 0.94, clickThrough: false, alwaysOnTop: true })
 let desktop = null
 let vr = null
+let onBounds = () => {}
 
 function normalise (input = {}) {
   return {
@@ -63,6 +64,9 @@ function showDesktop (options = {}) {
     return
   }
   desktop = create(options, 'desktop')
+  const saveBounds = () => { if (desktop && !desktop.isDestroyed()) onBounds(desktop.getBounds()) }
+  desktop.on('moved', saveBounds)
+  desktop.on('resized', saveBounds)
   desktop.on('closed', () => { desktop = null })
 }
 
@@ -97,6 +101,8 @@ function broadcast (data) {
   }
 }
 
+function setBoundsCallback (callback) { onBounds = typeof callback === 'function' ? callback : () => {} }
+
 function state () {
   return {
     running: !!(desktop && !desktop.isDestroyed()),
@@ -104,4 +110,4 @@ function state () {
   }
 }
 
-module.exports = { showDesktop, configureDesktop, hideDesktop, getVrSurface, closeVrSurface, broadcast, state }
+module.exports = { showDesktop, configureDesktop, hideDesktop, getVrSurface, closeVrSurface, broadcast, state, setBoundsCallback }
