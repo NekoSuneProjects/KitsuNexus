@@ -54,7 +54,7 @@ function renderPrefs () {
   document.getElementById('showLyrics').checked = prefs.lyrics
   document.getElementById('fpsTile').hidden = !prefs.fps
   document.getElementById('statusTile').hidden = !prefs.status
-  document.getElementById('lyricsWidget').hidden = !prefs.lyrics
+  document.getElementById('lyricsWidget').hidden = widgetMode === 'lyrics' ? false : !prefs.lyrics
   document.getElementById('enableHudUpdates').checked = prefs.live
   document.getElementById('enablePlayerMonitoring').checked = prefs.monitorPlayers
   document.getElementById('enableMusicFeed').checked = prefs.musicFeed
@@ -66,7 +66,7 @@ function renderPrefs () {
   document.getElementById('showSession').checked = prefs.sessionVisible
   document.getElementById('noticeCorner').value = prefs.corner
   document.body.dataset.corner = prefs.corner
-  document.querySelector('[data-widget="alerts"]').hidden = !prefs.notices
+  document.querySelector('[data-widget="alerts"]').hidden = widgetMode === 'alerts' ? false : !prefs.notices
   document.getElementById('clock').closest('.tile').hidden = !prefs.clock
   document.getElementById('session').closest('.tile').hidden = !prefs.sessionVisible
   document.getElementById('showJoins').checked = prefs.joins
@@ -76,8 +76,8 @@ function renderPrefs () {
   document.getElementById('showMusic').checked = prefs.music
   document.getElementById('showHeart').checked = prefs.heart
   document.getElementById('quickLanguage').value = prefs.language
-  document.querySelector('[data-widget="players"]').hidden = !prefs.players
-  document.getElementById('hudTiles').hidden = !prefs.tiles
+  document.querySelector('[data-widget="players"]').hidden = widgetMode === 'players' ? false : !prefs.players
+  document.getElementById('hudTiles').hidden = widgetMode === 'tiles' ? false : !prefs.tiles
   document.getElementById('music').closest('.tile').hidden = !prefs.music
   document.getElementById('heart').closest('.tile').hidden = !prefs.heart
 }
