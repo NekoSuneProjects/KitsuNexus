@@ -53,7 +53,7 @@ jobs:
               '**Current-file secret scan:** ' + (status === 'success' ? 'passed' : 'failed'),
               'Dependency and npm audit results are available in the workflow logs.',
               '[View scan](https://github.com/' + context.repo.owner + '/' + context.repo.repo + '/actions/runs/' + context.runId + ')'
-            ].join('\\n\\n');
+            ].join('\n\n');
             await github.rest.issues.createComment({...context.repo, issue_number: context.issue.number, body});
       - name: Fail on secret findings
         if: ${{ always() && steps.gitleaks.outcome != 'success' }}
