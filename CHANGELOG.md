@@ -5,6 +5,18 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.81] - 2026-11-01
+
+### Added
+- Independent desktop and VR HUD surfaces, Quick Actions for media and OSC chatbox, player radar and join/leave notifications.
+- Persistent desktop HUD position, size, and interaction preferences; translation previews and language selection.
+
+### Fixed
+- HUD refresh and capture while the main application is minimised; asynchronous media session polling and window state replay.
+- Updated `@nekosuneprojects/vrnotications` to 1.2.4 and refreshed dependency lockfiles, including patched `minimatch` resolution for the application and updater.
+- Scoped PR secret scanning to current checked-out files and included branch, commit, and workflow run identifiers in audit comments.
+
+
 ### Added
 - Added JSON and CSV export buttons for current world snapshots.
 - Saved HUD interaction preferences persist between restarts.
