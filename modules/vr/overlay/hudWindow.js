@@ -1,11 +1,14 @@
 'use strict'
 
 const path = require('path')
-const { BrowserWindow, screen, globalShortcut } = require('electron')
+const { BrowserWindow, screen, globalShortcut, ipcMain } = require('electron')
 
 const DEFAULTS = Object.freeze({ width: 430, height: 380, x: null, y: null, opacity: 0.94, clickThrough: false, alwaysOnTop: true })
 let desktop = null
 let vr = null
+const detached = new Map()
+const detachable = new Set(['players', 'alerts', 'tiles', 'lyrics'])
+const detachedBounds = new Map()
 let onBounds = () => {}
 let lastData = {}
 let desktopOptions = { ...DEFAULTS }
@@ -122,6 +125,28 @@ function create (options, mode) {
   return window
 }
 
+function toggleDetached (event, widget) {
+  if (!desktop || desktop.isDestroyed() || event.sender !== desktop.webContents || !detachable.has(widget)) return { ok: false }
+  const existing = detached.get(widget)
+  if (existing && !existing.isDestroyed()) { existing.close(); return { ok: true, detached: false } }
+  const area = screen.getPrimaryDisplay().workArea
+  const saved = detachedBounds.get(widget)
+  const cfg = { width: 340, height: widget === 'tiles' ? 260 : 180, x: saved?.x ?? area.x + 80, y: saved?.y ?? area.y + 80 }
+  const bounds = visibleBounds(cfg)
+  const win = new BrowserWindow({ width: saved?.width || cfg.width, height: saved?.height || cfg.height, x: bounds.x, y: bounds.y, frame: false, transparent: true, resizable: true, alwaysOnTop: true, skipTaskbar: true, backgroundColor: '#00000000', webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: false, preload: path.join(__dirname, 'hudPreload.js') } })
+  win.setMenuBarVisibility(false)
+  win.loadFile(path.join(__dirname, 'hud.html'), { query: { mode: 'desktop', widget } })
+  win.webContents.on('did-finish-load', () => { if (!win.isDestroyed()) win.webContents.send('kitsunexus:hud-data', lastData) })
+  const save = () => { if (!win.isDestroyed()) detachedBounds.set(widget, win.getBounds()) }
+  win.on('moved', save); win.on('resized', save)
+  win.on('closed', () => { detached.delete(widget); if (desktop && !desktop.isDestroyed()) desktop.webContents.send('kitsunexus:widget-state', { widget, detached: false }) })
+  detached.set(widget, win)
+  desktop.webContents.send('kitsunexus:widget-state', { widget, detached: true })
+  return { ok: true, detached: true }
+}
+ipcMain.handle('kitsunexus:detach-widget', toggleDetached)
+function closeDetached () { for (const win of detached.values()) if (!win.isDestroyed()) win.close(); detached.clear() }
+
 function showDesktop (options = {}) {
   if (desktop && !desktop.isDestroyed()) {
     desktop.showInactive()
@@ -144,6 +169,7 @@ function showDesktop (options = {}) {
   desktop.on('moved', saveBounds)
   desktop.on('resized', saveBounds)
   desktop.on('closed', () => {
+    closeDetached()
     screen.removeListener('display-removed', recoverIfDisconnected)
     screen.removeListener('display-metrics-changed', recoverIfDisconnected)
     desktop = null
@@ -166,6 +192,7 @@ function configureDesktop (options = {}) {
 }
 
 function hideDesktop () {
+  closeDetached()
   if (desktop && !desktop.isDestroyed()) desktop.close()
   desktop = null
   unregisterRecovery()
@@ -184,7 +211,7 @@ function closeVrSurface () {
 function broadcast (data) {
   if (!data || typeof data !== 'object') return
   lastData = { ...lastData, ...data }
-  for (const win of [desktop, vr]) {
+  for (const win of [desktop, vr, ...detached.values()]) {
     if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) {
       win.webContents.send('kitsunexus:hud-data', lastData)
     }
