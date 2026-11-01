@@ -35,11 +35,11 @@ This is an original KitsuNexus implementation plan. All integrations should use 
 - [ ] Push-to-talk / voice translation with microphone consent
 - [~] In-window draggable widget layout with saved positions and reset; independent native windows and full resizing remain pending
 - [ ] Pinned player-list, lyrics, compact status/FPS and notification windows
-- [ ] Overlay corner positioning, notification limits, fade durations, scroll settings
+- [~] Notification corner selector (inline/four corners), visibility, limits, fade and scroll; independent native notification window pending
 - [ ] OS-level hotkeys and user-configurable safety gate
 - [ ] Script-created windows in an isolated, permission-controlled sandbox
 - [ ] In-headset input only after proper native OpenVR interaction testing
-- [ ] Multi-monitor settings, always-on-top levels, click-through recovery hotkey
+- [~] Multi-monitor bounds recovery, always-on-top and click-through recovery hotkey; monitor selector and native VRChat window anchoring pending
 
 ## SteamVR device status
 - [ ] Real HMD/controller/tracker battery readings, charging and low-battery alerts
