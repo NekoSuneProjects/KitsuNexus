@@ -1,5 +1,10 @@
 ## Independent KitsuNexus HUD work
 
+- [x] Quick Actions: media play/pause/previous/next, OSC chat, translation preview and target language choice.
+- [x] Current-instance player names and join/leave notices from local VRChat logs.
+- [x] Saved desktop overlay position/size, dedicated drag header, state replay and async now-playing updates.
+- [ ] Follow through on `docs/VRCHAT_FEATURE_ROADMAP.md` for advanced features, grouped moderation and account tools.
+
 - [x] Add independent desktop HUD Electron window and controls.
 - [x] Capture a separate VR HUD surface instead of the full main app.
 - [ ] Validate the VR HUD against a physical headset and SteamVR installation.
