@@ -57,7 +57,10 @@ function savePrefs () {
   renderNotices()
 }
 for (const id of ['noticeLimit', 'noticeFade', 'showPlayers', 'showTiles', 'showMusic', 'showHeart', 'quickLanguage']) {
-  document.getElementById(id).addEventListener('change', savePrefs)
+  document.getElementById(id).addEventListener('change', () => {
+    if (['showPlayers', 'showTiles', 'showMusic', 'showHeart'].includes(id)) document.getElementById('hudPreset').value = 'custom'
+    savePrefs()
+  })
 }
 document.getElementById('hudPreset').addEventListener('change', () => {
   const selected = document.getElementById('hudPreset').value
