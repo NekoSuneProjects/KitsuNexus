@@ -14,13 +14,15 @@ let previousPlayers = null
 const notices = []
 const alerts = document.getElementById('alerts')
 const PREF_KEY = 'kitsunexus-hud-prefs-v1'
-const defaults = { limit: 12, fade: 15, players: true, tiles: true, music: true, heart: true, language: 'en', preset: 'full' }
+const defaults = { limit: 12, fade: 15, players: true, tiles: true, music: true, heart: true, language: 'en', preset: 'full', joins: true, leaves: true }
 let prefs = { ...defaults }
 try {
   const stored = JSON.parse(localStorage.getItem(PREF_KEY) || '{}')
   if (stored && typeof stored === 'object') {
     prefs.limit = [3, 6, 12, 20].includes(Number(stored.limit)) ? Number(stored.limit) : 12
     prefs.fade = Number.isFinite(Number(stored.fade)) ? Math.max(0, Math.min(120, Number(stored.fade))) : 15
+    prefs.joins = stored.joins !== false
+    prefs.leaves = stored.leaves !== false
     prefs.players = stored.players !== false
     prefs.tiles = stored.tiles !== false
     prefs.music = stored.music !== false
@@ -33,6 +35,8 @@ function renderPrefs () {
   document.getElementById('hudPreset').value = prefs.preset
   document.getElementById('noticeLimit').value = String(prefs.limit)
   document.getElementById('noticeFade').value = String(prefs.fade)
+  document.getElementById('showJoins').checked = prefs.joins
+  document.getElementById('showLeaves').checked = prefs.leaves
   document.getElementById('showPlayers').checked = prefs.players
   document.getElementById('showTiles').checked = prefs.tiles
   document.getElementById('showMusic').checked = prefs.music
@@ -47,6 +51,8 @@ function savePrefs () {
   prefs.preset = document.getElementById('hudPreset').value
   prefs.limit = Number(document.getElementById('noticeLimit').value)
   prefs.fade = Math.max(0, Math.min(120, Number(document.getElementById('noticeFade').value) || 0))
+  prefs.joins = document.getElementById('showJoins').checked
+  prefs.leaves = document.getElementById('showLeaves').checked
   prefs.players = document.getElementById('showPlayers').checked
   prefs.tiles = document.getElementById('showTiles').checked
   prefs.music = document.getElementById('showMusic').checked
@@ -56,7 +62,7 @@ function savePrefs () {
   renderPrefs()
   renderNotices()
 }
-for (const id of ['noticeLimit', 'noticeFade', 'showPlayers', 'showTiles', 'showMusic', 'showHeart', 'quickLanguage']) {
+for (const id of ['noticeLimit', 'noticeFade', 'showJoins', 'showLeaves', 'showPlayers', 'showTiles', 'showMusic', 'showHeart', 'quickLanguage']) {
   document.getElementById(id).addEventListener('change', () => {
     if (['showPlayers', 'showTiles', 'showMusic', 'showHeart'].includes(id)) document.getElementById('hudPreset').value = 'custom'
     savePrefs()
@@ -100,8 +106,8 @@ window.kitsunexusHud.onData(state => {
     if (previousPlayers !== null) {
       const joined = incoming.filter(p => !previousPlayers.has(p))
       const left = [...previousPlayers].filter(p => !names.has(p))
-      for (const name of joined.slice(0, 20)) addNotice(name + ' joined')
-      for (const name of left.slice(0, 20)) addNotice(name + ' left')
+      for (const name of (prefs.joins ? joined : []).slice(0, 20)) addNotice(name + ' joined')
+      for (const name of (prefs.leaves ? left : []).slice(0, 20)) addNotice(name + ' left')
     }
     previousPlayers = names
     document.getElementById('players').textContent = incoming.length ? 'Players (' + incoming.length + '): ' + incoming.join(' • ') : 'No players detected'
