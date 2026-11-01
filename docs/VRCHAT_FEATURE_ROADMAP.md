@@ -12,6 +12,8 @@ This is an original KitsuNexus implementation plan. All integrations should use 
 - [x] Now-playing and heart-rate HUD feeds
 - [x] Persist desktop HUD window position and size
 - [x] HUD click-through controls
+- [x] Persist click-through and other window options between sessions
+- [x] Export current local world and player snapshot in JSON/CSV with formula-safe CSV cells
 - [ ] Physically validate OpenVR display/capture in SteamVR
 - [ ] Run packaged Electron smoke tests on Windows
 
@@ -65,7 +67,7 @@ This is an original KitsuNexus implementation plan. All integrations should use 
 
 ## Data portability
 - [ ] Full local settings/history/collections backup and restore with schema version
-- [ ] JSON and CSV exports, safe ID list imports, avatar collection exports
+- [~] JSON and CSV exports (current world snapshot implemented); safe ID list imports and avatar collection exports pending
 - [ ] User-selected VRCX input migration and old-version migration
 - [ ] Signed share packs with manifest validation; reject executable scripts by default
 - [ ] Restore dry-run and rollback in case of invalid or incompatible data
