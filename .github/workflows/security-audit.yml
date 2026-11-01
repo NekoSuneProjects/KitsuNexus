@@ -132,7 +132,7 @@ jobs:
             gitleaks-results.json
             security-comment.md
           if-no-files-found: ignore
-      - name: Post or update PR security result
+      - name: Post a new PR security result for each scan
         if: ${{ always() }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -147,7 +147,7 @@ jobs:
           **Security checks are clear. This PR is ready for other required reviews, tests and build checks before merging.**
           EOF
           fi
-          gh pr comment "$PR_NUMBER" --edit-last --body-file security-comment.md || gh pr comment "$PR_NUMBER" --body-file security-comment.md
+          gh pr comment "$PR_NUMBER" --body-file security-comment.md
       - name: Fail for scan findings or errors
         if: ${{ always() && (steps.remediate.outcome != 'success' || steps.osv.outcome != 'success' || steps.install_gitleaks.outcome != 'success' || steps.gitleaks.outcome != 'success') }}
         run: exit 1
