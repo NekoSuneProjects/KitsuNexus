@@ -3,7 +3,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 jobs:
   scan:
@@ -13,8 +13,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          persist-credentials: true
           fetch-depth: 0
+      - name: Set up Node.js for dependency remediation
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Refresh lockfiles and apply compatible npm security fixes
+        id: remediate
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --ignore-scripts --no-audit
+          npm audit fix --package-lock-only --ignore-scripts || true
+          (
+            cd updater
+            npm install --package-lock-only --ignore-scripts --no-audit
+            npm audit fix --package-lock-only --ignore-scripts || true
+          )
+          git diff --check
+          git add package-lock.json updater/package-lock.json
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "fix(deps): automatically refresh audited npm lockfiles"
+            git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+          fi
       - name: Scan dependency lockfiles with OSV
         id: osv
         continue-on-error: true
@@ -44,10 +69,12 @@ jobs:
           OSV_OUTCOME: ${{ steps.osv.outcome }}
           GITLEAKS_OUTCOME: ${{ steps.gitleaks.outcome }}
           INSTALL_OUTCOME: ${{ steps.install_gitleaks.outcome }}
+          REMEDIATE_OUTCOME: ${{ steps.remediate.outcome }}
         run: |
           python3 - <<'PY'
           import json, os, pathlib
           lines = ['## Security audit — needs attention', '', 'Dependency scan: **%s**; secret scan: **%s**.' % (os.environ['OSV_OUTCOME'], os.environ['GITLEAKS_OUTCOME']), '']
+          if os.environ.get('REMEDIATE_OUTCOME') != 'success': lines.append('Automatic lockfile refresh failed. Review workflow logs before merging.')
           path = pathlib.Path('osv-results.json')
           count = 0
           if path.exists():
@@ -111,7 +138,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          if [ "${{ steps.osv.outcome }}" = "success" ] && [ "${{ steps.install_gitleaks.outcome }}" = "success" ] && [ "${{ steps.gitleaks.outcome }}" = "success" ]; then
+          if [ "${{ steps.remediate.outcome }}" = "success" ] && [ "${{ steps.osv.outcome }}" = "success" ] && [ "${{ steps.install_gitleaks.outcome }}" = "success" ] && [ "${{ steps.gitleaks.outcome }}" = "success" ]; then
             cat > security-comment.md <<'EOF'
           ## Security audit — passed
           
@@ -122,5 +149,5 @@ jobs:
           fi
           gh pr comment "$PR_NUMBER" --edit-last --body-file security-comment.md || gh pr comment "$PR_NUMBER" --body-file security-comment.md
       - name: Fail for scan findings or errors
-        if: ${{ always() && (steps.osv.outcome != 'success' || steps.install_gitleaks.outcome != 'success' || steps.gitleaks.outcome == 'failure') }}
+        if: ${{ always() && (steps.remediate.outcome != 'success' || steps.osv.outcome != 'success' || steps.install_gitleaks.outcome != 'success' || steps.gitleaks.outcome != 'success') }}
         run: exit 1
