@@ -70,10 +70,12 @@ jobs:
           GITLEAKS_OUTCOME: ${{ steps.gitleaks.outcome }}
           INSTALL_OUTCOME: ${{ steps.install_gitleaks.outcome }}
           REMEDIATE_OUTCOME: ${{ steps.remediate.outcome }}
+          AUDIT_BRANCH: ${{ github.event.pull_request.head.ref }}
+          AUDIT_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           python3 - <<'PY'
           import json, os, pathlib
-          lines = ['## Security audit — needs attention', '', 'Dependency scan: **%s**; secret scan: **%s**.' % (os.environ['OSV_OUTCOME'], os.environ['GITLEAKS_OUTCOME']), '']
+          lines = ['## Security audit — needs attention', '', '**Branch:** `%s`  |  **Commit:** `%s`  |  **Workflow run:** `%s`' % (os.environ['AUDIT_BRANCH'], os.environ['AUDIT_SHA'][:12], os.environ['GITHUB_RUN_ID']), '', 'Dependency scan: **%s**; secret scan: **%s**.' % (os.environ['OSV_OUTCOME'], os.environ['GITLEAKS_OUTCOME']), '']
           if os.environ.get('REMEDIATE_OUTCOME') != 'success': lines.append('Automatic lockfile refresh failed. Review workflow logs before merging.')
           path = pathlib.Path('osv-results.json')
           count = 0
@@ -141,6 +143,8 @@ jobs:
           if [ "${{ steps.remediate.outcome }}" = "success" ] && [ "${{ steps.osv.outcome }}" = "success" ] && [ "${{ steps.install_gitleaks.outcome }}" = "success" ] && [ "${{ steps.gitleaks.outcome }}" = "success" ]; then
             cat > security-comment.md <<'EOF'
           ## Security audit — passed
+          
+          **Branch:** `${{ github.event.pull_request.head.ref }}`  |  **Commit:** `${{ github.event.pull_request.head.sha }}`  |  **Workflow run:** `${{ github.run_id }}`
           
           Both dependency vulnerability scanning and secret scanning completed successfully with no findings.
           
