@@ -34,7 +34,7 @@ This is an original KitsuNexus implementation plan. All integrations should use 
 - [~] Optional renderer-side live HUD, player monitoring, music and heart feed controls; upstream collection must also be disabled when off before this is complete
 - [ ] Direct language selector and multiple translation targets
 - [ ] Push-to-talk / voice translation with microphone consent
-- [~] In-window draggable widget layout with saved positions and reset; independent native windows and full resizing remain pending
+- [~] In-window draggable layout plus independently resizable Electron pop-out windows for players/notices/stats/lyrics; persistence of pop-out geometry across app restarts and packaged testing pending
 - [~] Local player search and pins, notice pause, optional FPS/status tiles and lyrics text surface implemented; real FPS/lyrics providers, syncing and independent windows pending
 - [~] Notification corner selector (inline/four corners), visibility, limits, fade, scroll, pause and text-size control; independent native notification window pending
 - [ ] OS-level hotkeys and user-configurable safety gate
