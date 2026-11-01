@@ -7,6 +7,7 @@ const DEFAULTS = Object.freeze({ width: 430, height: 380, x: null, y: null, opac
 let desktop = null
 let vr = null
 let onBounds = () => {}
+let lastData = {}
 
 function normalise (input = {}) {
   return {
@@ -46,6 +47,9 @@ function create (options, mode) {
   })
   window.setMenuBarVisibility(false)
   window.loadFile(path.join(__dirname, 'hud.html'), { query: { mode } })
+  window.webContents.on('did-finish-load', () => {
+    if (!window.isDestroyed() && !window.webContents.isDestroyed()) window.webContents.send('kitsunexus:hud-data', lastData)
+  })
   if (mode === 'desktop') {
     window.setOpacity(cfg.opacity)
     window.setIgnoreMouseEvents(cfg.clickThrough, { forward: true })
@@ -94,9 +98,11 @@ function closeVrSurface () {
 }
 
 function broadcast (data) {
+  if (!data || typeof data !== 'object') return
+  lastData = { ...lastData, ...data }
   for (const win of [desktop, vr]) {
     if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) {
-      win.webContents.send('kitsunexus:hud-data', data)
+      win.webContents.send('kitsunexus:hud-data', lastData)
     }
   }
 }
