@@ -1,0 +1,127 @@
+name: KitsuNexus Test Builds (Windows + Linux x64)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag, or commit to test'
+        required: true
+        type: string
+        default: fix/desktop-hud-visibility-1.0.82
+      build_target:
+        description: 'Test build target'
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - windows-x64
+          - linux-x64
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kitsunexus-test-build-${{ inputs.ref }}-${{ inputs.build_target }}
+  cancel-in-progress: true
+
+jobs:
+  test-build:
+    name: Test build (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(inputs.build_target == 'all' && '["windows-x64","linux-x64"]' || format('["{0}"]', inputs.build_target)) }}
+
+    runs-on: ${{ matrix.platform == 'windows-x64' && 'windows-latest' || 'ubuntu-24.04' }}
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout selected ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Linux packaging dependencies
+        if: matrix.platform == 'linux-x64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm fakeroot dpkg libudev-dev
+
+      - name: Install application dependencies
+        run: npm install
+        env:
+          ONNXRUNTIME_NODE_INSTALL: skip
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Install updater dependencies
+        working-directory: updater
+        run: npm install
+
+      - name: Build Windows updater helper
+        if: matrix.platform == 'windows-x64'
+        working-directory: updater
+        shell: pwsh
+        run: |
+          npx electron-builder --win --x64 --publish never
+          Copy-Item "dist\updater.exe" "updater.exe" -Force
+
+      - name: Build Linux updater helper
+        if: matrix.platform == 'linux-x64'
+        working-directory: updater
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx electron-builder --linux dir --x64 --publish never
+          BIN_DIR=$(find dist -maxdepth 1 -iname '*-unpacked' | head -1)
+          test -n "$BIN_DIR"
+          rm -rf linux-unpacked
+          cp -R "$BIN_DIR" linux-unpacked
+
+      - name: Build Windows x64 test packages
+        if: matrix.platform == 'windows-x64'
+        shell: pwsh
+        run: npx electron-builder --win --x64 --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Linux x64 test packages
+        if: matrix.platform == 'linux-x64'
+        shell: bash
+        run: npx electron-builder --linux --x64 --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Collect Windows test files
+        if: matrix.platform == 'windows-x64'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path test-artifacts | Out-Null
+          Get-ChildItem dist -File | Where-Object {
+            $_.Extension -in '.exe', '.msi', '.zip'
+          } | Copy-Item -Destination test-artifacts
+
+      - name: Collect Linux test files
+        if: matrix.platform == 'linux-x64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-artifacts
+          find dist -maxdepth 1 -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.tar.gz' \) -exec cp {} test-artifacts/ \;
+
+      - name: Upload test artifacts (1 day only)
+        uses: actions/upload-artifact@v4
+        with:
+          name: KitsuNexus-Test-${{ matrix.platform }}-${{ github.run_number }}
+          path: test-artifacts/*
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
