@@ -68,4 +68,4 @@ function stopVrBattery () {
 function getVrBattery () {
   return { ...last, devices: last.devices.map(d => ({ ...d })) }
 }
-module.exports = { startVrBattery, stopVrBattery, getVrBattery }
+module.exports = { startVrBattery, stopVrBattery, getVrBattery, sanitize }
