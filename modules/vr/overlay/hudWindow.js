@@ -8,6 +8,8 @@ let desktop = null
 let vr = null
 let onBounds = () => {}
 let lastData = {}
+let desktopOptions = { ...DEFAULTS }
+let onOptions = () => {}
 
 function normalise (input = {}) {
   return {
@@ -67,7 +69,8 @@ function showDesktop (options = {}) {
     configureDesktop(options)
     return
   }
-  desktop = create(options, 'desktop')
+  desktopOptions = normalise(options)
+  desktop = create(desktopOptions, 'desktop')
   const saveBounds = () => { if (desktop && !desktop.isDestroyed()) onBounds(desktop.getBounds()) }
   desktop.on('moved', saveBounds)
   desktop.on('resized', saveBounds)
@@ -76,10 +79,12 @@ function showDesktop (options = {}) {
 
 function configureDesktop (options = {}) {
   if (!desktop || desktop.isDestroyed()) return
-  const cfg = normalise(options)
+  desktopOptions = normalise({ ...desktopOptions, ...options })
+  const cfg = desktopOptions
   desktop.setAlwaysOnTop(cfg.alwaysOnTop, 'floating')
   desktop.setOpacity(cfg.opacity)
   desktop.setIgnoreMouseEvents(cfg.clickThrough, { forward: true })
+  onOptions({ opacity: cfg.opacity, clickThrough: cfg.clickThrough, alwaysOnTop: cfg.alwaysOnTop })
 }
 
 function hideDesktop () {
@@ -109,11 +114,14 @@ function broadcast (data) {
 
 function setBoundsCallback (callback) { onBounds = typeof callback === 'function' ? callback : () => {} }
 
+function setOptionsCallback (callback) { onOptions = typeof callback === 'function' ? callback : () => {} }
+
 function state () {
   return {
     running: !!(desktop && !desktop.isDestroyed()),
-    bounds: desktop && !desktop.isDestroyed() ? desktop.getBounds() : null
+    bounds: desktop && !desktop.isDestroyed() ? desktop.getBounds() : null,
+    options: { opacity: desktopOptions.opacity, clickThrough: desktopOptions.clickThrough, alwaysOnTop: desktopOptions.alwaysOnTop }
   }
 }
 
-module.exports = { showDesktop, configureDesktop, hideDesktop, getVrSurface, closeVrSurface, broadcast, state, setBoundsCallback }
+module.exports = { showDesktop, configureDesktop, hideDesktop, getVrSurface, closeVrSurface, broadcast, state, setBoundsCallback, setOptionsCallback }
