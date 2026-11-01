@@ -1,0 +1,38 @@
+name: Server security audit
+
+on:
+  push:
+    branches: [server]
+  pull_request:
+    branches: [server]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Validate lockfile and dependencies
+        run: npm ci --ignore-scripts
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=high
+      - name: Scan dependency lockfile with OSV
+        uses: google/osv-scanner-action/osv-scanner-action@v2.3.1
+        with:
+          scan-args: |-
+            scan
+            --lockfile=package-lock.json
+      - name: Install Gitleaks
+        run: |
+          curl --fail --location --retry 3 --silent --show-error https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz -o /tmp/gitleaks.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+      - name: Scan current server files for secrets
+        run: /tmp/gitleaks dir . --redact --exit-code 1
