@@ -4,6 +4,9 @@ const fs = require('fs')
 const { spawn, execFile } = require('child_process')
 const axios = require('axios')
 app.setName('KitsuNexus')
+// A duplicate launch must exit before initializing collectors or windows.
+const isPrimaryInstance = app.requestSingleInstanceLock()
+if (!isPrimaryInstance) { app.quit(); process.exit(0) }
 const { writeRuntimeError } = require('./modules/diagnostics/runtimeErrors')
 function recordRuntimeError (kind, err) {
   console.error(`[${kind}]`, err)
@@ -90,6 +93,29 @@ const crashGuard = require('./modules/vrchat/tools/crashGuard')
 const quickLaunch = require('./modules/vrchat/launcher/quickLaunch')
 const vrOverlay = require('./modules/vr/overlay/vrOverlayController')
 const hudWindow = require('./modules/vr/overlay/hudWindow')
+app.on('before-quit', () => { hudWindow.hideDesktop(); hudWindow.closeVrSurface() })
+const { LocalHistory } = require('./modules/vrchat/history/localHistory')
+let localHistory = null
+let historyPrevious = { world: '', players: new Set(), portalSeq: null }
+function historyStore () {
+  if (!localHistory) {
+    const loaded = new LocalHistory(path.join(app.getPath('userData'), 'vrc-local-history.json'), { retentionDays: settings.get('hudHistoryRetentionDays', 30), limit: 1000 })
+    loaded.load()
+    localHistory = loaded
+  }
+  return localHistory
+}
+function recordWorldHistory (w) {
+  if (!settings.get('hudHistoryEnabled', false)) { historyPrevious = { world: '', players: new Set(), portalSeq: null }; return }
+  const world = w?.inWorld ? String(w.worldId || w.worldName || '') : ''
+  const players = new Set(Array.isArray(w?.players) ? w.players.filter(x => typeof x === 'string').slice(0, 80) : [])
+  try {
+    if (world && world !== historyPrevious.world) historyStore().add({ kind: 'world', worldId: String(w.worldId || ''), instanceId: String(w.instanceId || ''), name: String(w.worldName || '') })
+    if (world) for (const name of players) if (!historyPrevious.players.has(name)) historyStore().add({ kind: 'encounter', worldId: String(w.worldId || ''), instanceId: String(w.instanceId || ''), name })
+    if (world && w.portalSeq != null && historyPrevious.portalSeq != null && w.portalSeq !== historyPrevious.portalSeq) historyStore().add({ kind: 'portal', worldId: String(w.worldId || ''), name: String(w.lastPortal || '') })
+  } catch (error) { console.warn('[History] Failed to record local event:', error.message) }
+  historyPrevious = { world, players, portalSeq: w?.portalSeq ?? null }
+}
 const worldSnapshotExport = require('./modules/vrchat/world/worldSnapshotExport')
 const { startTon, stopTon, getTonState, getTonRaw } = require('./modules/integrations/ton/tonModule')
 const tonOsc = require('./modules/integrations/ton/tonOsc')
@@ -217,9 +243,7 @@ function appendBleDebug (entry) {
 
 // Only ever allow ONE instance — prevents the process count ballooning if the
 // app (or its installer/shortcut) is launched more than once.
-if (!app.requestSingleInstanceLock()) {
-  app.quit()
-} else {
+if (isPrimaryInstance) {
   app.on('second-instance', () => {
     if (mainWindow) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus() }
   })
@@ -372,6 +396,11 @@ app.whenReady().then(async () => {
   configureModelsDir(app.getPath('userData'))
   setPreferredSource(settings.get('nowPlayingSource', '')) // restore the chosen media source
   createWindow()
+  if (process.argv.includes('--desktop-hud')) {
+    hudWindow.showDesktop({ ...settings.get('hudDesktopBounds', {}), ...settings.get('hudDesktopOptions', {}), clickThrough: false })
+    const widgetArgument = process.argv.find(value => value.startsWith('--hud-widgets='))
+    if (widgetArgument) hudWindow.openWidgets(widgetArgument.slice('--hud-widgets='.length).split(','))
+  }
   // Track the current VRChat world from its log; feed it to the renderer and
   // (when connected) into the Discord presence.
   gamelog.init(app.getPath('userData')).catch(err => console.warn('gamelog init:', err.message))
@@ -425,8 +454,11 @@ app.whenReady().then(async () => {
   if (settings.get('tonAutoManager', false)) tonManager.ensureRunning().then(r => { if (r && r.ok) push('tonmgr:status', { installed: true, running: true }) }).catch(() => {})
   if (settings.get('screenshotMetadata', false)) screenshotMetadata.start()
   startVrcWorld(w => {
+    recordWorldHistory(w)
     push('vrc:world', w)
     hudWindow.broadcast({
+      activityEvents: w.activityEvents || [],
+      activitySequence: w.activitySequence || 0,
       session: w.inWorld ? String(w.worldName || 'In VRChat') : 'Not in world',
       players: Array.isArray(w.players) ? w.players.slice(0, 80).map(name => String(name).slice(0, 64)) : []
     })
@@ -434,19 +466,21 @@ app.whenReady().then(async () => {
     pawprints.setWorld(w.inWorld ? w.worldName : '')
     logWorldDiff(w)
     if (w.lastVideo && w.lastVideo !== lastVideoLogged) { lastVideoLogged = w.lastVideo; gamelog.log('video', '🎬 Video', w.lastVideo, w.worldName) }
-    if (w.portalSeq && w.portalSeq !== lastPortalSeq) { lastPortalSeq = w.portalSeq; gamelog.log('portal', w.lastPortal || 'Someone', 'dropped a portal', w.worldName) }
+    if (w.portalSeq && w.portalSeq !== lastPortalSeq) { lastPortalSeq = w.portalSeq; gamelog.log('portal', w.lastPortal || 'Portal', w.lastPortalDetail || 'Portal activity', w.worldName) }
   })
   crashGuard.start({ enabled: settings.get('autoRejoin', false), getLocation: () => { const w = getVrcWorld(); return (w.inWorld && w.worldId && w.instanceId) ? `${w.worldId}:${w.instanceId}` : '' } })
   setInterval(() => pawprints.tickCommit(), 60000)
   let hudMediaBusy = false
   const updateHudMedia = async () => {
-    if (hudMediaBusy) return
+    const demand = hudWindow.collectionState()
+    if (hudMediaBusy || !demand.music) return
     hudMediaBusy = true
     try {
       const now = await getNowPlaying()
+      if (!hudWindow.collectionState().music || demand.revision !== hudWindow.collectionState().revision) return
       const track = typeof now === 'string' ? now : [now?.artist, now?.title].filter(Boolean).join(' — ')
       hudWindow.broadcast({ music: track || 'No track' })
-    } catch (_) { hudWindow.broadcast({ music: 'No track' }) }
+    } catch (_) { if (hudWindow.collectionState().music && demand.revision === hudWindow.collectionState().revision) hudWindow.broadcast({ music: 'No track' }) }
     finally { hudMediaBusy = false }
   }
   setInterval(updateHudMedia, 15000)
@@ -982,6 +1016,11 @@ ipcMain.handle('hud:show', (_event, options) => {
   setTimeout(sendInitial, 700)
   return hudWindow.state()
 })
+ipcMain.handle('hud:edit', () => {
+  if (!hudWindow.state().running) hudWindow.showDesktop({ ...settings.get('hudDesktopBounds', {}), ...settings.get('hudDesktopOptions', {}) })
+  const ok = hudWindow.openEditor()
+  return { ok, ...hudWindow.state() }
+})
 ipcMain.handle('hud:hide', () => { hudWindow.hideDesktop(); return hudWindow.state() })
 ipcMain.handle('hud:config', (_event, options) => { hudWindow.configureDesktop(options); return hudWindow.state() })
 ipcMain.handle('hud:status', () => hudWindow.state())
@@ -997,6 +1036,34 @@ ipcMain.handle('hud:exportWorld', async (_event, format = 'json') => {
   const output = format === 'csv' ? worldSnapshotExport.toCsv(data) : JSON.stringify(data, null, 2)
   await fs.promises.writeFile(result.filePath, output, { encoding: 'utf8', flag: 'w' })
   return { ok: true, message: 'Saved world snapshot' }
+})
+ipcMain.handle('hud:history', async (event, request = {}) => {
+  if (!hudWindow.ownsSender(event.sender)) return { ok: false, error: 'Untrusted HUD sender' }
+  try {
+    const op = String(request?.op || 'list')
+    if (op === 'enabled') {
+      settings.set('hudHistoryEnabled', request.enabled === true)
+      historyPrevious = { world: '', players: new Set(), portalSeq: null }
+      return { ok: true }
+    }
+    if (op === 'retention') {
+      historyStore().configure({ retentionDays: request.days })
+      settings.set('hudHistoryRetentionDays', Number(request.days))
+      return { ok: true }
+    }
+    if (op === 'list') return { ok: true, retentionDays: settings.get('hudHistoryRetentionDays', 30), enabled: settings.get('hudHistoryEnabled', false), events: historyStore().list() }
+    if (op === 'clear') { historyStore().clear(); return { ok: true, events: [] } }
+    if (op === 'export') {
+      const format = request.format
+      if (!['csv', 'json'].includes(format)) throw new Error('Unsupported export format')
+      const result = await dialog.showSaveDialog({ title: 'Export local encounter history', defaultPath: 'KitsuNexus-history.' + format, filters: [{ name: format.toUpperCase(), extensions: [format] }] })
+      if (result.canceled || !result.filePath) return { ok: false, cancelled: true }
+      const output = format === 'csv' ? historyStore().exportCsv() : JSON.stringify({ schemaVersion: 1, events: historyStore().list() }, null, 2)
+      await fs.promises.writeFile(result.filePath, output, { encoding: 'utf8', mode: 0o600 })
+      return { ok: true }
+    }
+    return { ok: false, error: 'Unsupported history operation' }
+  } catch (error) { return { ok: false, error: error.message } }
 })
 ipcMain.handle('hud:action', async (event, payload = {}) => {
   // Only a HUD surface may call this privileged bridge.

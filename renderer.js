@@ -2694,7 +2694,7 @@ async function refreshDesktopHud () {
     setPill('desktopHudState', !!state.running, 'on')
     if (state.options) $('desktopHudClickThrough').checked = !!state.options.clickThrough
     $('desktopHudToggle').textContent = state.running ? 'Stop desktop HUD' : 'Start desktop HUD'
-    setText('desktopHudOut', state.running ? 'Running — drag to move, resize from window edges.' : 'Stopped')
+    setText('desktopHudOut', state.running ? 'Armed — ' + (state.interactionHotkeys?.length ? state.interactionHotkeys.join(' / ') + ' to edit' : 'No shortcut registered. Use Open HUD controls.') : 'Stopped')
   } catch (err) { setText('desktopHudOut', String(err.message || err)) }
 }
 $('desktopHudToggle').addEventListener('click', async () => {
@@ -6882,3 +6882,10 @@ if ($('qlProfiles')) {
     }
   })
 }
+
+$('desktopHudEdit').addEventListener('click', async () => {
+  try {
+    const result = await api.hudEdit()
+    setText('desktopHudOut', result.ok ? 'HUD editor opened. Escape returns to VRChat.' : result.inputError || 'Could not open HUD editor')
+  } catch (error) { setText('desktopHudOut', String(error.message || error)) }
+})

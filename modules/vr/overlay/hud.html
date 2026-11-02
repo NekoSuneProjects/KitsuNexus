@@ -7,8 +7,8 @@
 <title>KitsuNexus HUD</title>
 <style>
 :root{font-family:system-ui,Segoe UI,sans-serif;color:#faf8ff;color-scheme:dark}
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:transparent}
-.panel{height:100%;padding:14px;border-radius:22px;overflow:hidden;
+*[hidden]{display:none!important}*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:transparent}
+.panel{height:100%;padding:14px;border-radius:22px;overflow:auto;
 background:linear-gradient(145deg,rgba(32,24,58,.93),rgba(13,18,34,.90));
 border:1px solid rgba(188,161,255,.42);box-shadow:0 8px 36px rgba(0,0,0,.28)}
 .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;-webkit-app-region:drag;user-select:none}
@@ -26,28 +26,86 @@ border:1px solid rgba(188,161,255,.42);box-shadow:0 8px 36px rgba(0,0,0,.28)}
 .quick input{-webkit-app-region:no-drag;background:#151126;border:1px solid #73618b;border-radius:8px;color:white;padding:6px;min-width:0;flex:1}
 .quick button{-webkit-app-region:no-drag;background:#7b59bb;color:#fff;border:0;border-radius:8px;padding:6px 10px;cursor:pointer}
 #players{margin-top:8px;max-height:63px;overflow:auto;white-space:normal;line-height:1.5;font-size:11px;color:#ded3ef}
-#alerts{font-size:11px;color:#e3c6ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
-#actionStatus{font-size:11px;margin-top:4px;color:#d5c3f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-body[data-mode="vr"] .interactive{display:none}
+#alerts{font-size:11px;color:#e3c6ff;max-height:52px;overflow:auto;white-space:normal;margin-top:3px}
+#hudPreferences{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:11px}#hudPreferences select,#hudPreferences input{background:#151126;color:#fff;border:1px solid #73618b;border-radius:6px;max-width:65px}#hudPreferences button{background:#45365e;color:white;border:1px solid #8f77b0;border-radius:6px}#actionStatus{font-size:11px;margin-top:4px;color:#d5c3f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.widget{position:relative}#lyricsWidget{margin-top:8px;background:rgba(255,255,255,.06);padding:7px;border-radius:9px}#lyricsText{font-size:12px;white-space:pre-wrap;max-height:75px;overflow:auto}#playerSearch{max-width:130px;background:#151126;color:white;border:1px solid #73618b;border-radius:6px}#players .player{display:inline-block;margin:2px;padding:2px 5px;border-radius:6px;background:rgba(255,255,255,.08);cursor:pointer}#players .player[aria-pressed="true"]{outline:1px solid #bea6ff}#players .player.pinned{color:#f4d58d}body[data-text-size="large"] #players,body[data-text-size="large"] #alerts{font-size:15px}body[data-text-size="small"] #players,body[data-text-size="small"] #alerts{font-size:10px}body[data-corner]:not([data-corner="inline"]) .widget[data-widget="alerts"]{position:absolute;z-index:10;max-width:45%;padding:6px;border-radius:8px;background:rgba(23,17,42,.93)}body[data-corner="top-left"] .widget[data-widget="alerts"]{top:8px;left:8px}body[data-corner="top-right"] .widget[data-widget="alerts"]{top:8px;right:8px}body[data-corner="bottom-left"] .widget[data-widget="alerts"]{bottom:8px;left:8px}body[data-corner="bottom-right"] .widget[data-widget="alerts"]{bottom:8px;right:8px}.grid.widget>.widget-handle{grid-column:1/-1}.layout-edit .widget[data-widget="tiles"]{outline:1px dashed rgba(188,161,255,.4)}.widget.is-dragging{outline:1px dashed #bea6ff}.widget-handle{display:none;font-size:10px;cursor:move;color:#e6d9ff;margin-bottom:3px}.layout-edit .widget-handle{display:block}.layout-edit .widget{cursor:move;touch-action:none}.layout-edit .widget[data-widget="players"],.layout-edit .widget[data-widget="alerts"]{resize:both;overflow:auto;min-height:40px;min-width:120px}body[data-widget] .panel{padding:10px}body[data-widget] .interactive,body[data-widget] .footer{display:none!important}body[data-widget] .widget{display:none!important}body[data-widget] .panel{overflow:auto}body[data-widget="players"] .widget[data-widget="players"],body[data-widget="alerts"] .widget[data-widget="alerts"],body[data-widget="tiles"] .widget[data-widget="tiles"],body[data-widget="lyrics"] .widget[data-widget="lyrics"]{display:block!important}body[data-widget="tiles"] .widget[data-widget="tiles"]{display:grid!important}body[data-mode="vr"] .interactive{display:none}body[data-mode="vr"] .widget-handle{display:none}
+
+/* Desktop game companion */
+body[data-mode="desktop"]{background:#0c111a;color:#eaf2f4;font-size:13px}
+body[data-mode="desktop"] .panel{padding:20px;border-radius:0;background:radial-gradient(ellipse at top left,#17302e 0,transparent 58%),#0c111a;border:1px solid #2c4547;box-shadow:none;scrollbar-width:thin;scrollbar-color:#3c6260 #0c111a}
+body[data-mode="desktop"] .header{padding-bottom:16px;margin-bottom:16px;border-bottom:1px solid #293b40;position:sticky;top:-20px;background:#101c23;z-index:20;padding-top:12px}
+body[data-mode="desktop"] .brand{font-size:16px;letter-spacing:-.4px}.brand .accent{color:#65e4be}
+body[data-mode="desktop"] .tag{border:0;color:#70e5bc;background:#183c34;font-size:10px;letter-spacing:1px;text-transform:uppercase}
+body[data-mode="desktop"] .grid{gap:8px}
+body[data-mode="desktop"] .tile{border:1px solid #283a43;background:#14212b;border-radius:12px;padding:12px}
+body[data-mode="desktop"] .label{font-size:9px;letter-spacing:1.2px;color:#8fa9b4;font-weight:650}
+body[data-mode="desktop"] .value{font-size:15px;letter-spacing:-.3px;margin-top:8px}
+body[data-mode="desktop"] #session{color:#75e8c4}
+body[data-mode="desktop"] #players{font-size:12px;margin:14px 0;max-height:92px}
+body[data-mode="desktop"] #players .player{background:#1c3335;border:1px solid #335653;padding:6px 10px;border-radius:18px;color:#b5efdc;font:inherit}
+body[data-mode="desktop"] button,body[data-mode="desktop"] select,body[data-mode="desktop"] input{font:inherit;border:1px solid #344750;border-radius:8px;background:#1a2933;color:#dce9ec;padding:8px;min-height:32px}
+body[data-mode="desktop"] button{cursor:pointer;transition:background .15s,border-color .15s}
+body[data-mode="desktop"] button:hover{background:#28434a;border-color:#68bca4}
+body[data-mode="desktop"] :focus-visible{outline:2px solid #70e5bc;outline-offset:2px}
+body[data-mode="desktop"] input[type="checkbox"]{accent-color:#65e4be;min-height:0;width:14px;height:14px;vertical-align:middle;margin-right:6px}
+body[data-mode="desktop"] .quick{flex-wrap:wrap;margin-top:12px;gap:8px}
+body[data-mode="desktop"] .quick input{flex:1;min-width:130px;background:#0f1c25}
+body[data-mode="desktop"] #quickSend{background:#6ae2b9;color:#08241d;font-weight:750;border-color:#6ae2b9}
+body[data-mode="desktop"] .actions{gap:6px;margin-top:14px}
+body[data-mode="desktop"] .actions button{flex:1;font-size:11px;white-space:nowrap;padding:8px 6px}
+body[data-mode="desktop"] details{margin-top:16px;border:1px solid #2b4048;border-radius:12px;background:#101c25;padding:12px}
+body[data-mode="desktop"] summary{cursor:pointer;color:#a0bbc5;font-weight:600;font-size:12px;letter-spacing:.2px}
+body[data-mode="desktop"] details[open] summary{padding-bottom:12px;border-bottom:1px solid #263d44;margin-bottom:12px}
+body[data-mode="desktop"] #hudPreferences{gap:10px;display:grid;grid-template-columns:1fr 1fr;align-items:start;font-size:11px}
+body[data-mode="desktop"] #hudPreferences label{display:flex;gap:6px;align-items:center;min-height:30px;flex-wrap:wrap}
+body[data-mode="desktop"] #hudPreferences select,body[data-mode="desktop"] #hudPreferences input{max-width:100%;min-width:0}
+body[data-mode="desktop"] #historyEvents{grid-column:1/-1;padding:10px;border-radius:8px;background:#0b141c;color:#91abb4}
+body[data-mode="desktop"] .player-tools{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+body[data-mode="desktop"] .player-tools label{font-size:11px;color:#91abb4}
+body[data-mode="desktop"] .footer{margin-top:16px;border-top:1px solid #253a40;padding-top:12px;font-size:10px;color:#698992;letter-spacing:.4px}
+body[data-mode="desktop"] #actionStatus{color:#78dfbd;margin-top:10px;white-space:normal}
+
+.activity-heading{display:flex;justify-content:space-between;font-size:10px;letter-spacing:1.3px;font-weight:700;color:#7bbda9;margin:14px 0 8px}.activity-heading span:last-child{font-size:9px;color:#688b92}
+#alerts{max-height:170px!important;overflow:auto!important;display:flex;flex-direction:column;gap:6px;white-space:normal;color:#c2d5d9;font-size:12px}
+.activity-empty{border:1px dashed #30464b;padding:14px;border-radius:10px;color:#79959d;font-size:11px}
+.activity-notice{display:grid;grid-template-columns:26px 1fr auto;gap:8px;align-items:start;background:#13232b;border:1px solid #2a4148;border-left:3px solid var(--event-color,#69dbb1);border-radius:9px;padding:9px;animation:notice-in .2s ease-out}
+.activity-icon{color:var(--event-color,#69dbb1);font-size:16px;text-align:center}.activity-name{font-weight:650;color:#e0ecee;overflow-wrap:anywhere}.activity-detail{font-size:11px;color:#8eacb5;margin-top:3px;overflow-wrap:anywhere}.activity-notice time{color:#76949b;font-size:9px;white-space:nowrap}.activity-notice[data-kind="leave"]{--event-color:#f2b18e}.activity-notice[data-kind="portal"]{--event-color:#b1a0fb}.activity-notice[data-kind="avatar"]{--event-color:#7cbce8}.activity-notice[data-kind="world"]{--event-color:#ead17d}@keyframes notice-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}@media(prefers-reduced-motion:reduce){.activity-notice{animation:none}}
+
+#overlayToolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px;font-size:11px;color:#9db8c1}#inputHint{width:100%;color:#7cddba}.dock-buttons{display:flex;gap:6px;align-items:center}.dock-buttons button{padding:4px 12px!important}.header .tag{-webkit-app-region:no-drag}body[data-input="play"] #returnToGame,body[data-input="play"] .dock-buttons{display:none}body[data-input="edit"] .header{outline:1px dashed #70e5bc;outline-offset:4px}
+body[data-alerts-only="true"][data-input="play"] .panel> :not(.widget[data-widget="alerts"]){display:none!important}
+body[data-alerts-only="true"][data-input="play"] .panel{padding:12px}
+body[data-alerts-only="true"][data-input="play"] .widget[data-widget="alerts"]{display:block!important;position:static!important;max-width:100%!important}
+body[data-alerts-only="true"][data-input="play"] #alerts{max-height:470px!important}
+
+#closeWidget{-webkit-app-region:no-drag;padding:3px 10px!important;min-height:24px!important}body[data-widget] .header{position:sticky;top:0}body[data-widget="music"] .widget[data-widget="music"],body[data-widget="heart"] .widget[data-widget="heart"]{display:block!important}body[data-widget] .widget{transform:none!important;width:auto!important;height:auto!important}body[data-widget="music"] .value,body[data-widget="heart"] .value{font-size:22px;white-space:normal;overflow-wrap:anywhere}body[data-widget] .activity-heading{margin-top:0}
+
+body[data-widget="players"] .popout-tools{display:flex!important;gap:6px;flex-wrap:wrap;margin-top:10px}body[data-widget="players"] #players{max-height:calc(100vh - 175px)!important}body[data-widget="music"] .actions{display:flex!important}body[data-widget="music"] .panel,body[data-widget="heart"] .panel{padding:14px}body:not([data-widget]) .panel>.tile{margin-top:8px}body[data-widget] #alerts{max-height:calc(100vh - 110px)!important}
+.overlay-picker{display:grid;grid-template-columns:1fr 1fr;gap:8px}#overlayToolbar details{width:100%;margin-top:4px}
+body[data-mode="desktop"]:not([data-widget]) .panel .widget[hidden]{display:none!important}
 </style>
 </head>
 <body>
 <div class="panel">
-  <div class="header"><div class="brand"><span class="accent">Kitsu</span>Nexus HUD</div><div class="tag" id="mode">Desktop</div></div>
-  <div class="grid">
+  <div class="header"><div class="brand"><span class="accent">Kitsu</span>Nexus HUD</div><div class="tag" id="mode">Desktop</div><button id="closeWidget" hidden type="button" aria-label="Close overlay">×</button></div>
+  <div id="overlayToolbar" class="interactive"><span id="inputHint">Ctrl + Shift + F9 · interact</span><button id="returnToGame" type="button">Back to game</button><label><input id="alertsOnly" type="checkbox"> Alerts only</label><div class="dock-buttons"><span>Move HUD</span><button data-dock="top-left">↖</button><button data-dock="top-right">↗</button><button data-dock="bottom-left">↙</button><button data-dock="bottom-right">↘</button></div></div>
+<div class="grid widget" data-widget="tiles" id="hudTiles"><div class="widget-handle">Drag stats</div>
     <div class="tile"><div class="label">Local time</div><div class="value" id="clock">--:--</div></div>
     <div class="tile"><div class="label">Session</div><div class="value" id="session">Not connected</div></div>
     <div class="tile"><div class="label">Now playing</div><div class="value" id="music">No track</div></div>
     <div class="tile"><div class="label">Health</div><div class="value" id="heart">Not connected</div></div>
+    <div class="tile" id="fpsTile"><div class="label">FPS (when supplied)</div><div class="value" id="fps">Unavailable</div></div>
+    <div class="tile" id="statusTile"><div class="label">Status</div><div class="value" id="hudStatus">Waiting for data</div></div>
   </div>
-  <div id="players" aria-label="Current instance players">Waiting for player data…</div>
-  <div id="alerts" role="status" aria-live="polite"></div>
+  <div class="widget" data-widget="lyrics" id="lyricsWidget"><div class="widget-handle">Drag lyrics</div><div class="label">Synced lyrics (when supplied)</div><div id="lyricsText">No lyrics source connected</div></div>
+  <div class="widget" data-widget="players"><div class="widget-handle">Drag players</div><div id="players" tabindex="0" aria-label="Current instance players">Waiting for player data…</div></div>
+  <div class="widget" data-widget="alerts"><div class="widget-handle">Drag notifications</div><div class="activity-heading"><span>ACTIVITY</span><span id="activityCount">LIVE</span></div><div id="alerts" role="log" aria-live="polite"><div class="activity-empty">Watching for new activity…</div></div></div><div class="interactive"><label>Player search <input id="playerSearch" maxlength="60" placeholder="Filter players"></label><button id="pinPlayer" type="button">Pin selected player</button><button id="clearPins" type="button">Clear pins</button><label><input id="pauseNotices" type="checkbox"> Pause notices</label><label>Text size <select id="hudTextSize"><option value="small">Small</option><option value="normal">Normal</option><option value="large">Large</option></select></label><button id="clearAlerts" title="Clear join and leave notifications">Clear notices</button></div>
   <div class="interactive">
+  <div id="hudPreferences"><label><input type="checkbox" id="historyEnabled"> Save local encounter history</label><label>Keep history (days) <input id="historyRetention" type="number" min="1" max="365" value="30"></label><input id="historySearch" placeholder="Search local history" aria-label="Search local history"><button id="historyCsv" type="button">Export CSV</button><button id="historyJson" type="button">Export JSON</button><button id="historyRefresh" type="button">History</button><button id="historyClear" type="button">Clear history</button><div id="historyEvents" style="width:100%;max-height:85px;overflow:auto;white-space:pre-wrap" role="log"></div><button type="button" data-detach="music">Pop out music</button><button type="button" data-detach="heart">Pop out heart rate</button><button type="button" data-detach="players">Pop out players</button><button type="button" data-detach="alerts">Pop out notices</button><button type="button" data-detach="tiles">Pop out stats</button><button type="button" data-detach="lyrics">Pop out lyrics</button><label><input id="showFps" type="checkbox" checked> FPS</label><label><input id="showStatus" type="checkbox" checked> Status</label><label><input id="showLyrics" type="checkbox"> Lyrics</label><label><input id="enableHudUpdates" type="checkbox" checked> Live HUD updates</label><label><input id="enablePlayerMonitoring" type="checkbox" checked> Player monitoring</label><label><input id="enableMusicFeed" type="checkbox" checked> Music feed</label><label><input id="enableHeartFeed" type="checkbox" checked> Heart feed</label><label>Notices position <select id="noticeCorner"><option value="inline">Inline</option><option value="top-left">Top left</option><option value="top-right">Top right</option><option value="bottom-left">Bottom left</option><option value="bottom-right">Bottom right</option></select></label><label><input id="showNotices" type="checkbox" checked> Notices</label><label><input id="showClock" type="checkbox" checked> Clock</label><label><input id="showSession" type="checkbox" checked> Session</label><label><input id="editLayout" type="checkbox"> Edit layout</label><button id="resetLayout" type="button">Reset layout</button><label>Notices <select id="noticeLimit"><option>3</option><option>6</option><option selected>12</option><option>20</option></select></label><label>Fade (s) <input id="noticeFade" type="number" min="0" max="120" value="15"></label><label><input id="showPortals" type="checkbox" checked> Portals</label><label><input id="showAvatars" type="checkbox" checked> Avatar changes</label><label><input id="showWorldEvents" type="checkbox" checked> World changes</label><label><input id="showJoins" type="checkbox" checked> Joins</label><label><input id="showLeaves" type="checkbox" checked> Leaves</label><label><input id="showPlayers" type="checkbox" checked> Players</label><label><input id="showTiles" type="checkbox" checked> Stats</label><label><input id="showMusic" type="checkbox" checked> Music</label><label><input id="showHeart" type="checkbox" checked> Heart</label><label>Preset <select id="hudPreset"><option value="custom">Custom</option><option value="full">Full</option><option value="compact">Compact</option><option value="social">Social</option><option value="music">Music</option></select></label><button id="resetHudPrefs">Reset</button></div>
   <div class="actions"><button data-action="playpause">Play / Pause</button><button data-action="previous">Previous</button><button data-action="next">Next</button><button data-action="toggleChatbox">Toggle OSC chat</button></div>
   <div class="quick"><select id="quickLanguage" aria-label="Translate to"><option value="en">English</option><option value="ja">日本語</option><option value="es">Español</option><option value="de">Deutsch</option><option value="fr">Français</option><option value="pt">Português</option><option value="ko">한국어</option><option value="zh">中文</option></select><input id="quickMessage" maxlength="2000" placeholder="Message / translated text" aria-label="Chatbox message"><button id="quickSend">Send</button><button id="quickTranslate">Translate</button></div>
-  <div id="actionStatus" role="status" aria-live="polite"></div>
+  <div class="quick"><select id="quickPreset" aria-label="Saved OSC message"><option value="">Message preset…</option></select><button id="saveQuickPreset">Save</button><button id="deleteQuickPreset">Delete</button><button id="copyQuickMessage">Copy</button></div><div id="actionStatus" role="status" aria-live="polite"></div>
 </div>
-<div class="footer">KitsuNexus • local desktop and VR tools</div>
+<div class="footer">VRChat companion · Ctrl + Shift + F10 to recover</div>
 </div>
 <script src="hud.js"></script>
 </body>

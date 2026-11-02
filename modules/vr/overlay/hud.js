@@ -1,6 +1,19 @@
 'use strict'
 const mode = new URLSearchParams(location.search).get('mode')
 document.body.dataset.mode = mode === 'vr' ? 'vr' : 'desktop'
+const widgetMode = new URLSearchParams(location.search).get('widget')
+if (['players', 'alerts', 'tiles', 'lyrics', 'music', 'heart'].includes(widgetMode)) document.body.dataset.widget = widgetMode
+for (const [id, kind] of [['music', 'music'], ['heart', 'heart']]) {
+  const tile = document.getElementById(id).closest('.tile')
+  tile.classList.add('widget'); tile.dataset.widget = kind
+  document.getElementById('hudTiles').after(tile)
+}
+if (widgetMode === 'music') document.querySelector('.widget[data-widget="music"]').append(document.querySelector('.actions'))
+if (widgetMode) {
+  document.querySelector('.brand').textContent = ({ music: 'Now Playing', heart: 'Heart Rate', alerts: 'Activity', players: 'Players', tiles: 'Stats', lyrics: 'Lyrics' })[widgetMode] || 'Overlay'
+  document.getElementById('closeWidget').hidden = false
+  document.getElementById('closeWidget').addEventListener('click', () => window.kitsunexusHud.toggleWidget(widgetMode))
+}
 document.getElementById('mode').textContent = mode === 'vr' ? 'SteamVR' : 'Desktop'
 function showTime () {
   document.getElementById('clock').textContent = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(new Date())
@@ -10,24 +23,198 @@ setInterval(showTime, 15000)
 function short (value, fallback) {
   return typeof value === 'string' && value.trim() ? value.slice(0, 110) : fallback
 }
-let previousPlayers = null
+const detachedWidgets = new Set()
+let activityCursor = null
+let lastReceivedSequence = 0
+let receivedMusic = false
+const notices = []
+const alerts = document.getElementById('alerts')
+const PREF_KEY = ['kitsunexus', 'hud', 'prefs', 'v1'].join('-')
+const defaults = { limit: 12, fade: 15, players: true, tiles: true, music: true, heart: true, language: 'en', preset: 'full', joins: true, leaves: true, notices: true, clock: true, sessionVisible: true, corner: 'inline', textSize: 'normal', live: true, monitorPlayers: true, musicFeed: true, heartFeed: true, fps: true, status: true, lyrics: false, portals: true, avatars: true, worldEvents: true }
+let prefs = { ...defaults }
+try {
+  const stored = JSON.parse(localStorage.getItem(PREF_KEY) || '{}')
+  if (stored && typeof stored === 'object') {
+    prefs.limit = [3, 6, 12, 20].includes(Number(stored.limit)) ? Number(stored.limit) : 12
+    prefs.fade = Number.isFinite(Number(stored.fade)) ? Math.max(0, Math.min(120, Number(stored.fade))) : 15
+    prefs.portals = stored.portals !== false
+    prefs.avatars = stored.avatars !== false
+    prefs.worldEvents = stored.worldEvents !== false
+    prefs.fps = stored.fps !== false
+    prefs.status = stored.status !== false
+    prefs.lyrics = stored.lyrics === true
+    prefs.live = stored.live !== false
+    prefs.monitorPlayers = stored.monitorPlayers !== false
+    prefs.musicFeed = stored.musicFeed !== false
+    prefs.heartFeed = stored.heartFeed !== false
+    prefs.textSize = ['small', 'normal', 'large'].includes(stored.textSize) ? stored.textSize : 'normal'
+    prefs.notices = stored.notices !== false
+    prefs.clock = stored.clock !== false
+    prefs.sessionVisible = stored.sessionVisible !== false
+    prefs.corner = ['inline', 'top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(stored.corner) ? stored.corner : 'inline'
+    prefs.joins = stored.joins !== false
+    prefs.leaves = stored.leaves !== false
+    prefs.players = stored.players !== false
+    prefs.tiles = stored.tiles !== false
+    prefs.music = stored.music !== false
+    prefs.heart = stored.heart !== false
+    prefs.preset = ['full', 'compact', 'social', 'music', 'custom'].includes(stored.preset) ? stored.preset : 'full'
+    prefs.language = typeof stored.language === 'string' && /^[a-z]{2,3}(-[A-Z]{2})?$/.test(stored.language) ? stored.language : 'en'
+  }
+} catch (_) {}
+function renderPrefs () {
+  for (const [id, key] of [['showPortals', 'portals'], ['showAvatars', 'avatars'], ['showWorldEvents', 'worldEvents']]) document.getElementById(id).checked = prefs[key]
+  document.getElementById('hudPreset').value = prefs.preset
+  document.getElementById('noticeLimit').value = String(prefs.limit)
+  document.getElementById('noticeFade').value = String(prefs.fade)
+  if (!prefs.musicFeed) document.getElementById('music').textContent = 'Music feed paused'
+  if (!prefs.heartFeed) document.getElementById('heart').textContent = 'Heart feed paused'
+  document.getElementById('showFps').checked = prefs.fps
+  document.getElementById('showStatus').checked = prefs.status
+  document.getElementById('showLyrics').checked = prefs.lyrics
+  document.getElementById('fpsTile').hidden = !prefs.fps
+  document.getElementById('statusTile').hidden = !prefs.status
+  document.getElementById('lyricsWidget').hidden = widgetMode === 'lyrics' ? false : !prefs.lyrics
+  document.getElementById('enableHudUpdates').checked = prefs.live
+  document.getElementById('enablePlayerMonitoring').checked = prefs.monitorPlayers
+  document.getElementById('enableMusicFeed').checked = prefs.musicFeed
+  document.getElementById('enableHeartFeed').checked = prefs.heartFeed
+  document.getElementById('hudTextSize').value = prefs.textSize
+  document.body.dataset.textSize = prefs.textSize
+  document.getElementById('showNotices').checked = prefs.notices
+  document.getElementById('showClock').checked = prefs.clock
+  document.getElementById('showSession').checked = prefs.sessionVisible
+  document.getElementById('noticeCorner').value = prefs.corner
+  document.body.dataset.corner = prefs.corner
+  document.querySelector('.widget[data-widget="alerts"]').hidden = widgetMode === 'alerts' ? false : !prefs.notices
+  document.getElementById('clock').closest('.tile').hidden = !prefs.clock
+  document.getElementById('session').closest('.tile').hidden = !prefs.sessionVisible
+  document.getElementById('showJoins').checked = prefs.joins
+  document.getElementById('showLeaves').checked = prefs.leaves
+  document.getElementById('showPlayers').checked = prefs.players
+  document.getElementById('showTiles').checked = prefs.tiles
+  document.getElementById('showMusic').checked = prefs.music
+  document.getElementById('showHeart').checked = prefs.heart
+  document.getElementById('quickLanguage').value = prefs.language
+  document.querySelector('.widget[data-widget="players"]').hidden = widgetMode === 'players' ? false : !prefs.players
+  document.getElementById('hudTiles').hidden = widgetMode === 'tiles' ? false : !prefs.tiles
+  document.getElementById('music').closest('.tile').hidden = widgetMode === 'music' ? false : !prefs.music
+  document.getElementById('heart').closest('.tile').hidden = widgetMode === 'heart' ? false : !prefs.heart
+  if (!widgetMode) for (const widget of detachedWidgets) { const element = document.querySelector('.widget[data-widget="' + widget + '"]'); if (element) element.hidden = true }
+}
+function savePrefs () {
+  for (const [id, key] of [['showPortals', 'portals'], ['showAvatars', 'avatars'], ['showWorldEvents', 'worldEvents']]) prefs[key] = document.getElementById(id).checked
+  prefs.preset = document.getElementById('hudPreset').value
+  prefs.limit = Number(document.getElementById('noticeLimit').value)
+  prefs.fade = Math.max(0, Math.min(120, Number(document.getElementById('noticeFade').value) || 0))
+  prefs.fps = document.getElementById('showFps').checked
+  prefs.status = document.getElementById('showStatus').checked
+  prefs.lyrics = document.getElementById('showLyrics').checked
+  prefs.live = document.getElementById('enableHudUpdates').checked
+  prefs.monitorPlayers = document.getElementById('enablePlayerMonitoring').checked
+  prefs.musicFeed = document.getElementById('enableMusicFeed').checked
+  prefs.heartFeed = document.getElementById('enableHeartFeed').checked
+  prefs.textSize = document.getElementById('hudTextSize').value
+  prefs.notices = document.getElementById('showNotices').checked
+  prefs.clock = document.getElementById('showClock').checked
+  prefs.sessionVisible = document.getElementById('showSession').checked
+  prefs.corner = document.getElementById('noticeCorner').value
+  prefs.joins = document.getElementById('showJoins').checked
+  prefs.leaves = document.getElementById('showLeaves').checked
+  prefs.players = document.getElementById('showPlayers').checked
+  prefs.tiles = document.getElementById('showTiles').checked
+  prefs.music = document.getElementById('showMusic').checked
+  prefs.heart = document.getElementById('showHeart').checked
+  prefs.language = document.getElementById('quickLanguage').value
+  try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)) } catch (_) {}
+  renderPrefs()
+  renderNotices()
+  if (!widgetMode && mode !== 'vr') window.kitsunexusHud.input({ op: 'feeds', live: prefs.live, players: prefs.monitorPlayers, music: prefs.musicFeed, heart: prefs.heartFeed }).catch(() => {})
+}
+for (const id of ['showPortals', 'showAvatars', 'showWorldEvents', 'showFps', 'showStatus', 'showLyrics', 'enableHudUpdates', 'enablePlayerMonitoring', 'enableMusicFeed', 'enableHeartFeed', 'hudTextSize', 'noticeLimit', 'noticeFade', 'showNotices', 'showClock', 'showSession', 'noticeCorner', 'showJoins', 'showLeaves', 'showPlayers', 'showTiles', 'showMusic', 'showHeart', 'quickLanguage']) {
+  document.getElementById(id).addEventListener('change', () => {
+    if (['showPlayers', 'showTiles', 'showMusic', 'showHeart', 'showNotices', 'showClock', 'showSession'].includes(id)) document.getElementById('hudPreset').value = 'custom'
+    savePrefs()
+  })
+}
+document.getElementById('hudPreset').addEventListener('change', () => {
+  const selected = document.getElementById('hudPreset').value
+  const layouts = {
+    full: { players: true, tiles: true, music: true, heart: true },
+    compact: { players: false, tiles: true, music: false, heart: false },
+    social: { players: true, tiles: false, music: false, heart: false },
+    music: { players: false, tiles: true, music: true, heart: false }
+  }
+  if (layouts[selected]) Object.assign(prefs, layouts[selected])
+  prefs.preset = selected
+  renderPrefs()
+  savePrefs()
+})
+document.getElementById('resetHudPrefs').addEventListener('click', () => {
+  prefs = { ...defaults }
+  renderPrefs()
+  savePrefs()
+})
+renderPrefs()
+let renderedActivity = null
+function renderNotices () {
+  const now = Date.now()
+  if (new URLSearchParams(location.search).get('diagnostics') === '1') window.kitsunexusHud.input({ op: 'diagnostics', widget: widgetMode || 'main', live: prefs.live, paused: document.getElementById('pauseNotices').checked, sequence: lastReceivedSequence, notices: notices.length, receivedMusic, musicVisible: document.getElementById('music').getBoundingClientRect().height > 0 }).catch(() => {})
+  const filter = { join: prefs.joins, leave: prefs.leaves, portal: prefs.portals, avatar: prefs.avatars, world: prefs.worldEvents }
+  const active = notices.filter(n => filter[n.kind] !== false && (!prefs.fade || now - n.at < prefs.fade * 1000)).slice(0, prefs.limit)
+  if ((!widgetMode || widgetMode === 'alerts') && mode !== 'vr') window.kitsunexusHud.input({ op: 'presentation', alertsOnly: document.body.dataset.alertsOnly === 'true', hasAlerts: active.length > 0, height: alerts.scrollHeight + 65 }).catch(() => {})
+  const signature = active.map(e => e.id).join(',')
+  if (signature === renderedActivity) return
+  renderedActivity = signature
+  alerts.replaceChildren()
+  document.getElementById('activityCount').textContent = active.length ? String(active.length) + ' RECENT' : 'LIVE'
+  if (!active.length) {
+    const empty = document.createElement('div'); empty.className = 'activity-empty'; empty.textContent = 'Watching for new activity…'; alerts.append(empty)
+  }
+  for (const event of [...active].reverse()) {
+    const card = document.createElement('div'); card.className = 'activity-notice'; card.dataset.kind = event.kind
+    const icon = document.createElement('span'); icon.className = 'activity-icon'; icon.textContent = ({ join: '+', leave: '−', portal: '◇', avatar: '◈', world: '⌂' })[event.kind] || '•'; icon.setAttribute('aria-hidden', 'true')
+    const content = document.createElement('div')
+    const name = document.createElement('div'); name.className = 'activity-name'; name.textContent = event.name
+    const detail = document.createElement('div'); detail.className = 'activity-detail'; detail.textContent = event.detail || ({ join: 'Joined the instance', leave: 'Left the instance' })[event.kind] || 'Activity detected'
+    content.append(name, detail)
+    const time = document.createElement('time'); time.dateTime = new Date(event.at).toISOString(); time.textContent = new Date(event.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    card.append(icon, content, time); alerts.append(card)
+  }
+}
+setInterval(renderNotices, 1000)
+function receiveActivity (state) {
+  if (state && Object.prototype.hasOwnProperty.call(state, 'music')) receivedMusic = true
+  if (Number.isFinite(state?.activitySequence)) lastReceivedSequence = state.activitySequence
+  if (!Number.isFinite(state?.activitySequence)) return
+  if (activityCursor === null) { activityCursor = state.activitySequence; return }
+  const events = Array.isArray(state.activityEvents) ? state.activityEvents : []
+  const fresh = events.filter(e => Number.isFinite(e.id) && e.id > activityCursor && ['join', 'leave', 'portal', 'avatar', 'world'].includes(e.kind) && Number.isFinite(e.at))
+  activityCursor = Math.max(activityCursor, state.activitySequence)
+  if (document.getElementById('pauseNotices').checked) return
+  for (const event of fresh) notices.unshift({ ...event, name: String(event.name || '').slice(0, 160), detail: String(event.detail || '').slice(0, 200) })
+  notices.splice(100)
+  renderNotices()
+}
+document.getElementById('clearAlerts').addEventListener('click', () => { notices.length = 0; renderNotices() })
 window.kitsunexusHud.onData(state => {
-  if (Array.isArray(state?.players)) {
+  receiveActivity(state)
+  if (!prefs.live) return
+  if ((prefs.monitorPlayers || widgetMode === 'players') && Array.isArray(state?.players)) {
     const incoming = state.players.filter(p => typeof p === 'string').slice(0, 80)
-    const names = new Set(incoming)
-    if (previousPlayers !== null) {
-      const joined = incoming.filter(p => !previousPlayers.has(p))
-      const left = [...previousPlayers].filter(p => !names.has(p))
-      const event = joined.length ? joined[0] + ' joined' : left.length ? left[0] + ' left' : ''
-      if (event) document.getElementById('alerts').textContent = event
-    }
-    previousPlayers = names
-    document.getElementById('players').textContent = incoming.length ? 'Players (' + incoming.length + '): ' + incoming.join(' • ') : 'No players detected'
+    currentPlayers = incoming
+    renderPlayers()
   }
   if (!state || typeof state !== 'object') return
+  if ((prefs.fps || widgetMode === 'tiles') && Object.prototype.hasOwnProperty.call(state, 'fps')) {
+    const fps = Number(state.fps)
+    document.getElementById('fps').textContent = Number.isFinite(fps) && fps >= 0 && fps <= 1000 ? Math.round(fps) + ' FPS' : 'Unavailable'
+  }
+  if ((prefs.status || widgetMode === 'tiles') && Object.prototype.hasOwnProperty.call(state, 'status')) document.getElementById('hudStatus').textContent = short(state.status, 'Unknown')
+  if ((prefs.lyrics || widgetMode === 'lyrics') && Object.prototype.hasOwnProperty.call(state, 'lyrics')) document.getElementById('lyricsText').textContent = short(state.lyrics, 'No lyrics source connected')
   if (Object.prototype.hasOwnProperty.call(state, 'session')) document.getElementById('session').textContent = short(state.session, 'Not connected')
-  if (Object.prototype.hasOwnProperty.call(state, 'music')) document.getElementById('music').textContent = short(state.music, 'No track')
-  if (Object.prototype.hasOwnProperty.call(state, 'heart')) document.getElementById('heart').textContent = short(state.heart, 'Not connected')
+  if ((prefs.musicFeed || widgetMode === 'music') && Object.prototype.hasOwnProperty.call(state, 'music')) document.getElementById('music').textContent = short(state.music, 'No track')
+  if ((prefs.heartFeed || widgetMode === 'heart') && Object.prototype.hasOwnProperty.call(state, 'heart')) document.getElementById('heart').textContent = short(state.heart, 'Not connected')
 })
 
 const actionStatus = document.getElementById('actionStatus')
@@ -44,3 +231,300 @@ async function performAction (type) {
 document.querySelectorAll('[data-action]').forEach(button => button.addEventListener('click', () => performAction(button.dataset.action)))
 document.getElementById('quickSend').addEventListener('click', () => performAction('send'))
 document.getElementById('quickTranslate').addEventListener('click', () => performAction('translate'))
+
+quickMessage.addEventListener('keydown', event => {
+  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+    event.preventDefault()
+    performAction('send')
+  }
+})
+
+const MESSAGE_KEY = 'kitsunexus-hud-message-presets-v1'
+let messagePresets = []
+try {
+  const saved = JSON.parse(localStorage.getItem(MESSAGE_KEY) || '[]')
+  if (Array.isArray(saved)) messagePresets = saved.filter(x => typeof x === 'string' && x.length <= 2000).slice(0, 20)
+} catch (_) {}
+function refreshMessagePresets () {
+  const picker = document.getElementById('quickPreset')
+  picker.replaceChildren(new Option('Message preset…', ''))
+  messagePresets.forEach((message, i) => picker.add(new Option(message.slice(0, 50), String(i))))
+}
+function persistMessagePresets () {
+  try { localStorage.setItem(MESSAGE_KEY, JSON.stringify(messagePresets)) } catch (_) {}
+  refreshMessagePresets()
+}
+refreshMessagePresets()
+document.getElementById('quickPreset').addEventListener('change', event => {
+  if (event.target.value !== '') quickMessage.value = messagePresets[Number(event.target.value)] || ''
+})
+document.getElementById('saveQuickPreset').addEventListener('click', () => {
+  const value = quickMessage.value.trim().slice(0, 2000)
+  if (!value || messagePresets.includes(value)) return
+  messagePresets.unshift(value)
+  messagePresets = messagePresets.slice(0, 20)
+  persistMessagePresets()
+  actionStatus.textContent = 'Message preset saved locally'
+})
+document.getElementById('deleteQuickPreset').addEventListener('click', () => {
+  const index = document.getElementById('quickPreset').value
+  if (index === '') return
+  messagePresets.splice(Number(index), 1)
+  persistMessagePresets()
+  actionStatus.textContent = 'Message preset removed'
+})
+document.getElementById('copyQuickMessage').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(quickMessage.value)
+    actionStatus.textContent = 'Message copied'
+  } catch (_) { actionStatus.textContent = 'Clipboard permission unavailable' }
+})
+
+// Desktop-only HUD widget arrangement. Positions remain inside the HUD window.
+const LAYOUT_KEY = 'kitsunexus-hud-widget-layout-v1'
+const widgets = [...document.querySelectorAll('.widget[data-widget]')]
+const editLayout = document.getElementById('editLayout')
+let savedLayout = {}
+try {
+  const parsed = JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}')
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) savedLayout = parsed
+} catch (_) {}
+function applyLayout () {
+  for (const widget of widgets) {
+    const cfg = savedLayout[widget.dataset.widget]
+    if (!cfg || !Number.isFinite(cfg.x) || !Number.isFinite(cfg.y)) continue
+    if (['players', 'alerts'].includes(widget.dataset.widget)) {
+      if (Number.isFinite(cfg.width)) widget.style.width = Math.max(120, Math.min(700, cfg.width)) + 'px'
+      if (Number.isFinite(cfg.height)) widget.style.height = Math.max(40, Math.min(500, cfg.height)) + 'px'
+    }
+    widget.style.transform = 'translate(' + Math.max(-250, Math.min(250, cfg.x)) + 'px,' + Math.max(-250, Math.min(250, cfg.y)) + 'px)'
+  }
+}
+function persistLayout () {
+  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(savedLayout)) } catch (_) {}
+}
+editLayout.addEventListener('change', () => {
+  document.body.classList.toggle('layout-edit', editLayout.checked && mode !== 'vr')
+})
+document.getElementById('resetLayout').addEventListener('click', () => {
+  savedLayout = {}
+  widgets.forEach(widget => { widget.style.transform = ''; widget.style.width = ''; widget.style.height = '' })
+  persistLayout()
+})
+for (const widget of widgets) {
+  if (['players', 'alerts'].includes(widget.dataset.widget) && typeof ResizeObserver !== 'undefined') {
+    let initialized = false
+    new ResizeObserver(() => {
+      if (!initialized) { initialized = true; return }
+      if (!editLayout.checked || mode === 'vr') return
+      const cfg = savedLayout[widget.dataset.widget] || { x: 0, y: 0 }
+      savedLayout[widget.dataset.widget] = { ...cfg, width: widget.offsetWidth, height: widget.offsetHeight }
+      persistLayout()
+    }).observe(widget)
+  }
+  const handle = widget.querySelector('.widget-handle')
+  if (!handle) continue
+  handle.addEventListener('pointerdown', event => {
+    if (!editLayout.checked || mode === 'vr' || event.button !== 0) return
+    event.preventDefault()
+    const key = widget.dataset.widget
+    const start = { x: event.clientX, y: event.clientY }
+    const old = savedLayout[key] || { x: 0, y: 0 }
+    handle.setPointerCapture(event.pointerId)
+    const move = e => {
+      const x = Math.max(-250, Math.min(250, old.x + e.clientX - start.x))
+      const y = Math.max(-250, Math.min(250, old.y + e.clientY - start.y))
+      widget.style.transform = 'translate(' + x + 'px,' + y + 'px)'
+      savedLayout[key] = { x, y }
+    }
+    const end = () => { handle.removeEventListener('pointermove', move); persistLayout() }
+    handle.addEventListener('pointermove', move)
+    handle.addEventListener('pointerup', end, { once: true })
+    handle.addEventListener('pointercancel', end, { once: true })
+  })
+}
+applyLayout()
+
+// Locally pinned player names are visual preferences, not VRChat account identifiers.
+const PIN_KEY = 'kitsunexus-hud-pinned-players-v1'
+let pinnedPlayers = []
+try { const stored = JSON.parse(localStorage.getItem(PIN_KEY) || '[]'); if (Array.isArray(stored)) pinnedPlayers = stored.filter(v => typeof v === 'string' && v.length <= 110).slice(0, 30) } catch (_) {}
+let currentPlayers = []
+let selectedPlayer = ''
+function renderPlayers () {
+  const holder = document.getElementById('players')
+  const query = document.getElementById('playerSearch').value.trim().toLocaleLowerCase()
+  const filtered = currentPlayers.filter(name => name.toLocaleLowerCase().includes(query)).sort((a, b) => Number(pinnedPlayers.includes(b)) - Number(pinnedPlayers.includes(a)))
+  holder.replaceChildren()
+  const heading = document.createElement('span')
+  heading.textContent = 'Players (' + currentPlayers.length + '): '
+  holder.append(heading)
+  if (!filtered.length) holder.append(document.createTextNode(query ? 'No matches' : 'No players detected'))
+  for (const name of filtered) {
+    const button = document.createElement('button')
+    button.className = 'player' + (pinnedPlayers.includes(name) ? ' pinned' : '')
+    button.type = 'button'
+    button.textContent = (pinnedPlayers.includes(name) ? '★ ' : '') + name
+    button.setAttribute('aria-pressed', String(selectedPlayer === name))
+    button.addEventListener('click', () => { selectedPlayer = name; renderPlayers() })
+    holder.append(button)
+  }
+}
+document.getElementById('playerSearch').addEventListener('input', renderPlayers)
+document.getElementById('pinPlayer').addEventListener('click', () => {
+  if (!selectedPlayer || !currentPlayers.includes(selectedPlayer)) return
+  pinnedPlayers = pinnedPlayers.includes(selectedPlayer) ? pinnedPlayers.filter(x => x !== selectedPlayer) : [...pinnedPlayers, selectedPlayer].slice(-30)
+  try { localStorage.setItem(PIN_KEY, JSON.stringify(pinnedPlayers)) } catch (_) {}
+  renderPlayers()
+})
+document.getElementById('clearPins').addEventListener('click', () => {
+  pinnedPlayers = []
+  try { localStorage.removeItem(PIN_KEY) } catch (_) {}
+  renderPlayers()
+})
+
+// Pop-out windows are separate Electron windows, not simulated in-panel transforms.
+if (!widgetMode) {
+  document.querySelectorAll('[data-detach]').forEach(button => button.addEventListener('click', async () => {
+    button.disabled = true
+    try {
+      const result = await window.kitsunexusHud.toggleWidget(button.dataset.detach)
+      if (!result?.ok) actionStatus.textContent = 'Could not open pop-out window'
+      else {
+        if (result.detached) detachedWidgets.add(button.dataset.detach); else detachedWidgets.delete(button.dataset.detach)
+        button.textContent = (result.detached ? 'Close ' : 'Pop out ') + button.dataset.detach
+        renderPrefs()
+      }
+    } catch (error) { actionStatus.textContent = String(error.message || error) }
+    finally { button.disabled = false }
+  }))
+  window.kitsunexusHud.onWidgetState(state => {
+    if (state.detached) detachedWidgets.add(state.widget); else detachedWidgets.delete(state.widget)
+    renderPrefs()
+    const button = [...document.querySelectorAll('[data-detach]')].find(item => item.dataset.detach === state.widget)
+    if (button) button.textContent = (state.detached ? 'Close ' : 'Pop out ') + state.widget
+  })
+}
+
+if (!widgetMode) {
+  const historyView = document.getElementById('historyEvents')
+  const historyEnabled = document.getElementById('historyEnabled')
+  let historyEvents = []
+  const search = document.getElementById('historySearch')
+  function renderHistory () {
+    const query = search.value.trim().toLowerCase()
+    historyView.textContent = historyEvents.filter(e => [e.kind, e.name, e.worldId, e.instanceId, e.playerId, e.note].join(' ').toLowerCase().includes(query)).map(e => new Date(e.at).toLocaleString() + ' / ' + e.kind + ' / ' + (e.name || e.worldId || '')).join('\n') || 'No matching saved history'
+  }
+  search.addEventListener('input', renderHistory)
+  async function historyRequest (request) {
+    const result = await window.kitsunexusHud.history(request)
+    if (!result?.ok && !result?.cancelled) throw new Error(result?.error || 'History unavailable')
+    return result
+  }
+  document.getElementById('historyRetention').addEventListener('change', async event => {
+    if (!window.confirm('Apply retention? Older history will be permanently deleted.')) { refreshHistory(); return }
+    try { await historyRequest({ op: 'retention', days: Number(event.target.value) }); await refreshHistory() } catch (error) { historyView.textContent = error.message }
+  })
+  for (const format of ['csv', 'json']) document.getElementById(format === 'csv' ? 'historyCsv' : 'historyJson').addEventListener('click', async () => {
+    try { const result = await historyRequest({ op: 'export', format }); if (result.ok) actionStatus.textContent = 'History exported' } catch (error) { actionStatus.textContent = error.message }
+  })
+  async function refreshHistory () {
+    try {
+      const result = await historyRequest({ op: 'list' })
+      document.getElementById('historyRetention').value = result.retentionDays
+      historyEnabled.checked = result.enabled === true
+      historyEvents = result.events || []
+      renderHistory()
+    } catch (error) { historyView.textContent = 'History unavailable: ' + String(error.message || error) }
+  }
+  historyEnabled.addEventListener('change', async () => {
+    try { await historyRequest({ op: 'enabled', enabled: historyEnabled.checked }); await refreshHistory() }
+    catch (error) { historyView.textContent = error.message }
+  })
+  document.getElementById('historyRefresh').addEventListener('click', refreshHistory)
+  document.getElementById('historyClear').addEventListener('click', async () => {
+    if (!window.confirm('Delete all locally saved encounter history?')) return
+    try { await historyRequest({ op: 'clear' }); await refreshHistory() }
+    catch (error) { historyView.textContent = error.message }
+  })
+  refreshHistory()
+}
+
+// Keep the game view clean; advanced controls remain accessible on demand.
+if (mode !== 'vr' && !widgetMode) {
+  document.getElementById('mode').textContent = 'IN GAME'
+  const panel = document.querySelector('.panel')
+  const footer = document.querySelector('.footer')
+  for (const [element, title] of [[document.getElementById('playerSearch').closest('.interactive'), 'Players & notifications'], [document.getElementById('hudPreferences'), 'Layout, history & feeds']]) {
+    const section = document.createElement('details')
+    const summary = document.createElement('summary')
+    summary.textContent = title
+    section.append(summary)
+    if (title.startsWith('Players')) element.classList.add('player-tools')
+    section.append(element)
+    panel.insertBefore(section, footer)
+  }
+}
+
+renderNotices()
+
+if (mode !== 'vr') {
+  let alertsOnly = localStorage.getItem('hud-alerts-only') === 'true'
+  const applyAlertsOnly = () => {
+    document.body.dataset.alertsOnly = String(!widgetMode && alertsOnly)
+    document.getElementById('alertsOnly').checked = alertsOnly
+    renderNotices()
+  }
+  document.body.dataset.input = 'play'
+  if (!localStorage.getItem('hud-notice-ten-seconds')) {
+    prefs.fade = 10; localStorage.setItem('hud-notice-ten-seconds', 'true'); renderPrefs(); savePrefs()
+  }
+  window.kitsunexusHud.onInteraction(state => {
+    document.body.dataset.input = state.enabled ? 'edit' : 'play'
+    document.getElementById('inputHint').textContent = state.enabled ? 'EDIT MODE · drag header · Ctrl + Shift + F9 to play' : 'Ctrl+Shift+F9 / Ctrl+Alt+F9 · interact'
+    document.getElementById('mode').textContent = state.enabled ? 'EDIT HUD' : 'IN GAME'
+    applyAlertsOnly()
+  })
+  document.getElementById('returnToGame').addEventListener('click', () => window.kitsunexusHud.input({ op: 'play' }))
+  document.getElementById('alertsOnly').addEventListener('change', event => {
+    alertsOnly = event.target.checked
+    localStorage.setItem('hud-alerts-only', String(alertsOnly))
+    if (alertsOnly) { prefs.notices = true; prefs.fade = 10; renderPrefs(); savePrefs() }
+    applyAlertsOnly()
+  })
+  document.querySelectorAll('[data-dock]').forEach(button => button.addEventListener('click', () => window.kitsunexusHud.input({ op: 'dock', corner: button.dataset.dock })))
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && document.body.dataset.input === 'edit') { event.preventDefault(); window.kitsunexusHud.input({ op: 'play' }) } })
+  applyAlertsOnly()
+}
+
+window.addEventListener('storage', event => {
+  if (event.key === PIN_KEY) { try { const incoming = JSON.parse(event.newValue || '[]'); if (Array.isArray(incoming)) { pinnedPlayers = incoming.filter(x => typeof x === 'string').slice(0, 30); renderPlayers() } } catch (_) {} }
+  if (event.key === 'hud-notices-paused') document.getElementById('pauseNotices').checked = event.newValue === 'true'
+  if (event.key !== PREF_KEY || !event.newValue) return
+  try {
+    const incoming = JSON.parse(event.newValue)
+    for (const key of Object.keys(defaults)) if (typeof incoming[key] === typeof defaults[key]) prefs[key] = incoming[key]
+    renderPrefs(); renderNotices()
+  } catch (_) {}
+})
+if (!widgetMode && mode !== 'vr') window.kitsunexusHud.input({ op: 'feeds', live: prefs.live, players: prefs.monitorPlayers, music: prefs.musicFeed, heart: prefs.heartFeed }).catch(() => {})
+
+try { document.getElementById('pauseNotices').checked = localStorage.getItem('hud-notices-paused') === 'true' } catch (_) {}
+document.getElementById('pauseNotices').addEventListener('change', event => localStorage.setItem('hud-notices-paused', String(event.target.checked)))
+if (widgetMode === 'players') {
+  const tools = document.getElementById('playerSearch').closest('.interactive')
+  tools.classList.add('popout-tools')
+  document.querySelector('.widget[data-widget="players"]').after(tools)
+}
+
+if (!widgetMode && mode !== 'vr') {
+  const picker = document.createElement('details')
+  const summary = document.createElement('summary'); summary.textContent = 'Separate overlays'
+  picker.append(summary)
+  const buttons = document.createElement('div'); buttons.className = 'overlay-picker'
+  for (const button of document.querySelectorAll('[data-detach]')) buttons.append(button)
+  const reset = document.createElement('button'); reset.textContent = 'Reset overlay positions'; reset.type = 'button'
+  reset.addEventListener('click', () => window.kitsunexusHud.input({ op: 'resetPositions' }))
+  buttons.append(reset); picker.append(buttons)
+  document.getElementById('overlayToolbar').append(picker)
+}
