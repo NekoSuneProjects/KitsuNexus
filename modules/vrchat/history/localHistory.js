@@ -49,7 +49,18 @@ class LocalHistory {
     this.save()
     return normalized
   }
-  list () { return this.items.map(x => ({ ...x })) }
+  list () {
+    const retained = prune(this.items, this.options)
+    if (retained.length !== this.items.length) { this.items = retained; this.save() }
+    return this.items.map(x => ({ ...x }))
+  }
+  configure (options) {
+    const days = Number(options.retentionDays)
+    if (!Number.isInteger(days) || days < 1 || days > MAX_AGE_DAYS) throw new TypeError('Retention must be 1-365 days')
+    this.options = { ...this.options, retentionDays: days }
+    this.items = prune(this.items, this.options)
+    this.save()
+  }
   clear () { this.items = []; this.save() }
   save () {
     fs.mkdirSync(path.dirname(this.file), { recursive: true, mode: 0o700 })
@@ -59,6 +70,7 @@ class LocalHistory {
   }
   exportCsv () {
     const fields = ['kind', 'at', 'worldId', 'instanceId', 'playerId', 'name', 'note']
+    this.list()
     return fields.join(',') + '\r\n' + this.items.map(row => fields.map(k => safeCsv(row[k])).join(',')).join('\r\n')
   }
 }

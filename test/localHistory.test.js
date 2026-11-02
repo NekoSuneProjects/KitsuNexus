@@ -32,3 +32,21 @@ test('history persists with a schema and supports clearing', () => {
     assert.equal(new LocalHistory(file).load().length, 0)
   } finally { fs.rmSync(dir, { recursive: true, force: true }) }
 })
+
+test('retention changes delete expired data persistently and reject invalid policies', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kitsunexus-retention-'))
+  try {
+    const file = path.join(dir, 'history.json')
+    const history = new LocalHistory(file)
+    history.add({ kind: 'encounter', name: 'Old', at: Date.now() - 10 * 86400000 })
+    history.add({ kind: 'world', name: 'Current' })
+    for (const retentionDays of [0, 366, 1.5, Infinity, 'invalid']) assert.throws(() => history.configure({ retentionDays }))
+    assert.equal(history.list().length, 2)
+    history.configure({ retentionDays: 7 })
+    assert.deepEqual(new LocalHistory(file).load().map(e => e.name), ['Current'])
+    assert.doesNotMatch(history.exportCsv(), /Old/)
+    history.items.push({ kind: 'encounter', name: 'Expired', at: Date.now() - 400 * 86400000 })
+    assert.equal(history.list().length, 1)
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).events.length, 1)
+  } finally { fs.rmSync(dir, { recursive: true, force: true }) }
+})

@@ -1052,3 +1052,32 @@ e.g. the TTS engine fields, which already save correctly through `TTS_ALL_FIELD_
   global-hotkey approach was switched from a third-party key-listener package (flagged by
   antivirus) to a PowerShell-based `WH_KEYBOARD_LL` hook (`modules/vrchat/osc/keyHook.ps1` +
   `keyHookPs.js`), matching the existing shell-out pattern already used by `mediaKeys.js`.
+
+- [x] Enforce local-history expiry on reads and CSV exports; add validated retention configuration method.
+- [ ] Wire retention configuration into HUD and complete remaining VRChat roadmap.
+
+- [x] Wire HUD history retention, local search, CSV/JSON export, and trusted-window access checks.
+
+- [ ] Investigate HUD that loads its accessibility tree but is absent from fallback desktop capture during local runtime validation.
+
+- [x] Use solid desktop/pop-out HUD surfaces with software compositing and allow panel scrolling.
+
+- [x] Add --desktop-hud launch option for direct desktop testing.
+
+- [x] Visually confirm solid desktop HUD over live VRChat, current world/player feed, keyboard panel scrolling and CSV save dialog.
+
+- [x] Redesign desktop HUD with compact game controls and expandable settings; attach visibility and bounds to focused VRChat.
+
+- [ ] Validate attached HUD on mixed-DPI monitors, game resizing/minimization and restored relative positions; test independent pop-out placement.
+
+- [x] Add desktop activity cards for log-based joins, leaves, portals, avatar loads/changes and world transitions, with filters and startup replay suppression.
+
+- [x] Add Ctrl+Shift+F9 HUD interaction mode, Escape/back-to-game, click-through play mode, corner docking and persistent independent panel positions.
+- [x] Add alerts-only mode with ten-second independently expiring cards, downward stacking and automatic idle hiding.
+
+- [x] Recognize current PortalManager request-fulfilled log format in HUD activity and local portal history; avoid attributing a creator or claiming confirmed placement.
+
+- [ ] Other-player portal placement alerts: live partner test logs inventory lookups and portal-destroy events only, with no explicit placement message. Do not infer creation from generic inventory requests or claim reliable detection.
+
+- [x] Harden HUD focus transitions, restore full editor size, report shortcut-registration failures, add Ctrl+Alt+F9 fallback and main-window Open HUD controls button.
+- [x] Keep activity notifications independent of HUD live/player snapshot toggles; support observed portal removal/expiry log events without claiming placement.

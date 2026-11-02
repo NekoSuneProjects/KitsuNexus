@@ -102,3 +102,63 @@ This is an original KitsuNexus implementation plan. All integrations should use 
 - [ ] Confirm `npm test` and Windows Electron packaging succeed; existing manual Build KitsuNexus workflow must be run with `runner_type=github-hosted`, `build_target=windows`, `upload_artifacts=true`, `publish_release=false` for a private test artifact.
 - [ ] Verify desktop HUD windows, saved geometry, history and opt-out behavior on Windows; no SteamVR hardware required for desktop testing.
 - [ ] Native OpenVR helper, device readings, FPS/lyrics providers and physical SteamVR validation remain deferred.
+
+## Local implementation progress (2 November 2026)
+- [x] HUD history retention controls (1–365 days), local search, and JSON/CSV save-dialog exports.
+- [x] Retention regression test for persistent deletion, invalid policies, and expiry while reading.
+- [ ] Interactive Windows validation and remaining roadmap integrations.
+
+### Local history test steps
+1. Start the app with `npm start`, then Stats → Start desktop HUD.
+2. Use History to browse saved entries; search by player, world, instance or event type.
+3. Export CSV and JSON, choose a destination, and inspect the saved file. Canceling must not write a file.
+4. Change Keep history (days) within 1–365. Confirming permanently deletes older entries; canceling retains the current policy.
+5. Restart the app and confirm the retention value persists.
+6. Turning recording off must stop new entries while leaving saved records available for browsing/export.
+
+Automated verification on 2 November: 72 tests pass. App and HUD accessibility trees load with the new controls. Native screenshot capture timed out; fallback desktop screenshots did not show the HUD, so visual HUD verification remains unresolved. Windows directory packaging was started locally; do not treat an unfinished output folder as a release build.
+
+### Desktop HUD runtime check (2 November 2026)
+- Visually confirmed the HUD over the running desktop VRChat client after replacing layered transparency with a solid desktop window background.
+- Current local world and player feed showed Avatar Testing Chamber and one player.
+- Keyboard navigation scrolled the panel to history/settings; CSV export opened the expected native save dialog. Canceled that dialog with Escape.
+- 72 automated tests passed after the window/scroll changes. Native window capture still times out; visual checks used the documented desktop_inspect fallback and inspected its exact PNG output.
+- SteamVR, chatbox sending, translation providers, live joins/leaves, retention deletion and pop-out interaction were not exercised in this desktop check.
+- Start directly with `npm start -- --desktop-hud`.
+
+### Game-attached desktop redesign (2 November 2026)
+- [x] Restyled HUD with teal/mint cards, consistent inputs and expandable advanced controls.
+- [x] Read-only Win32 client-area tracking, VRChat executable matching, foreground/minimized visibility gating and game-relative saved desktop position.
+- [x] Visually verified the redesigned HUD over live VRChat and its disappearance after switching to KitsuNexus. 72 automated tests pass.
+- [ ] Exclusive fullscreen, mixed-DPI monitor movement and restart persistence need further runtime coverage. Use windowed/borderless VRChat for this desktop overlay.
+
+### Desktop activity alerts (2 November 2026)
+- [x] Timestamped join/leave, explicit portal, avatar load/switch and world-transition cards with category filters, pause, clear, fade and bounded in-memory history.
+- [x] Suppress startup/rotated-log replay; preserve joins/leaves within a polling interval; safely render event text.
+- [x] 75 automated tests pass, including explicit log-format parser fixtures and bounded snapshots. Visually confirmed the empty activity box in the running HUD over VRChat.
+- [ ] Validate new live portal drops, another player's join/leave, avatar changes and instance travel during user testing. Portal/avatar events require recognized local log messages; no remote or private-avatar data is fetched.
+
+### HUD interaction and transient alerts (2 November 2026)
+- [x] Ctrl+Shift+F9 toggles focused HUD interaction; Escape/Back to game returns native focus to VRChat. Normal play uses click-through, non-focusable HUD windows.
+- [x] Corner docking and game-relative movable detached-panel offsets.
+- [x] Alerts-only preference hides HUD controls in play, displays stacked activity cards with individual ten-second expiry, and hides the idle window. Hotkey restores the editing interface.
+- [x] 77 automated tests pass, including interaction input routing and alerts-only visibility regression checks.
+- [x] Visually verified edit mode over VRChat, top-right docking, and idle hiding with game focus restored.
+- [ ] Live simultaneous alert expiry/stacking, detached-panel dragging and Discord overlay ordering need user testing; repositioning avoids overlap rather than controlling Discord's injected overlay.
+
+### Current portal-log format fix (2 November 2026)
+- [x] Recognize `[PortalManager] Pending portal request fulfilled.` observed in the user's current output log at 15:14:36.
+- [x] Share portal parsing between HUD activity and world/history state; preserve explicit named drop messages.
+- [x] Actual log scan matches the portal event. 78 tests pass with `node --test --test-concurrency=1`; default parallel run had an unrelated OSC subprocess timeout, which passed on isolated rerun.
+- [ ] Confirm the next newly placed portal produces an alert in the running HUD. Request completion is reported honestly without asserting creator, destination or confirmed placement. Past events remain suppressed on startup.
+
+### Partner portal runtime limitation (2 November 2026)
+Two partner portal tests produced `[PortalManager] Received portal destroy event.` at 15:25:31 and 15:26:04, with nearby generic inventory lookups but no explicit creation/placement message. The local request-completed parser does not establish reliable other-player placement detection. Keep this unverified; generic inventory fetches must not be treated as portal creation or attributed to a creator.
+HUD interaction shortcut: Ctrl+Shift+F9, with Escape to return to the game.
+
+### HUD shortcut recovery (2 November 2026)
+- Added Ctrl+Alt+F9 fallback, visible registered-shortcut status, registration-failure logging, and Stats → Open HUD controls.
+- Explicit open requests locate the VRChat window and tolerate a one-second focus transition; small alert windows restore a usable editor height.
+- Activity alerts remain active independently of HUD live/player snapshot toggles.
+- Observed portal destruction now reports removal/expiry. Other-player placement is still unavailable from observed logs; no inventory-based inference is made.
+- Focus transition and portal-removal regression tests pass. Live desktop automation became unavailable (window listing times out even after reconnect), so these changes need user verification.

@@ -95,8 +95,9 @@ let localHistory = null
 let historyPrevious = { world: '', players: new Set(), portalSeq: null }
 function historyStore () {
   if (!localHistory) {
-    localHistory = new LocalHistory(path.join(app.getPath('userData'), 'vrc-local-history.json'), { retentionDays: 30, limit: 1000 })
-    localHistory.load()
+    const loaded = new LocalHistory(path.join(app.getPath('userData'), 'vrc-local-history.json'), { retentionDays: settings.get('hudHistoryRetentionDays', 30), limit: 1000 })
+    loaded.load()
+    localHistory = loaded
   }
   return localHistory
 }
@@ -393,6 +394,7 @@ app.whenReady().then(async () => {
   configureModelsDir(app.getPath('userData'))
   setPreferredSource(settings.get('nowPlayingSource', '')) // restore the chosen media source
   createWindow()
+  if (process.argv.includes('--desktop-hud')) hudWindow.showDesktop({ ...settings.get('hudDesktopBounds', {}), ...settings.get('hudDesktopOptions', {}), clickThrough: false })
   // Track the current VRChat world from its log; feed it to the renderer and
   // (when connected) into the Discord presence.
   gamelog.init(app.getPath('userData')).catch(err => console.warn('gamelog init:', err.message))
@@ -449,6 +451,8 @@ app.whenReady().then(async () => {
     recordWorldHistory(w)
     push('vrc:world', w)
     hudWindow.broadcast({
+      activityEvents: w.activityEvents || [],
+      activitySequence: w.activitySequence || 0,
       session: w.inWorld ? String(w.worldName || 'In VRChat') : 'Not in world',
       players: Array.isArray(w.players) ? w.players.slice(0, 80).map(name => String(name).slice(0, 64)) : []
     })
@@ -456,7 +460,7 @@ app.whenReady().then(async () => {
     pawprints.setWorld(w.inWorld ? w.worldName : '')
     logWorldDiff(w)
     if (w.lastVideo && w.lastVideo !== lastVideoLogged) { lastVideoLogged = w.lastVideo; gamelog.log('video', '🎬 Video', w.lastVideo, w.worldName) }
-    if (w.portalSeq && w.portalSeq !== lastPortalSeq) { lastPortalSeq = w.portalSeq; gamelog.log('portal', w.lastPortal || 'Someone', 'dropped a portal', w.worldName) }
+    if (w.portalSeq && w.portalSeq !== lastPortalSeq) { lastPortalSeq = w.portalSeq; gamelog.log('portal', w.lastPortal || 'Portal', w.lastPortalDetail || 'Portal activity', w.worldName) }
   })
   crashGuard.start({ enabled: settings.get('autoRejoin', false), getLocation: () => { const w = getVrcWorld(); return (w.inWorld && w.worldId && w.instanceId) ? `${w.worldId}:${w.instanceId}` : '' } })
   setInterval(() => pawprints.tickCommit(), 60000)
@@ -1004,6 +1008,11 @@ ipcMain.handle('hud:show', (_event, options) => {
   setTimeout(sendInitial, 700)
   return hudWindow.state()
 })
+ipcMain.handle('hud:edit', () => {
+  if (!hudWindow.state().running) hudWindow.showDesktop({ ...settings.get('hudDesktopBounds', {}), ...settings.get('hudDesktopOptions', {}) })
+  const ok = hudWindow.openEditor()
+  return { ok, ...hudWindow.state() }
+})
 ipcMain.handle('hud:hide', () => { hudWindow.hideDesktop(); return hudWindow.state() })
 ipcMain.handle('hud:config', (_event, options) => { hudWindow.configureDesktop(options); return hudWindow.state() })
 ipcMain.handle('hud:status', () => hudWindow.state())
@@ -1020,12 +1029,33 @@ ipcMain.handle('hud:exportWorld', async (_event, format = 'json') => {
   await fs.promises.writeFile(result.filePath, output, { encoding: 'utf8', flag: 'w' })
   return { ok: true, message: 'Saved world snapshot' }
 })
-ipcMain.handle('hud:history', (_event, request = {}) => {
-  const op = String(request.op || 'list')
-  if (op === 'enabled') { settings.set('hudHistoryEnabled', request.enabled === true); return { ok: true, enabled: settings.get('hudHistoryEnabled', false) } }
-  if (op === 'list') return { ok: true, enabled: settings.get('hudHistoryEnabled', false), events: settings.get('hudHistoryEnabled', false) ? historyStore().list().slice(0, 100) : [] }
-  if (op === 'clear') { historyStore().clear(); return { ok: true, events: [] } }
-  return { ok: false, error: 'Unsupported history operation' }
+ipcMain.handle('hud:history', async (event, request = {}) => {
+  if (!hudWindow.ownsSender(event.sender)) return { ok: false, error: 'Untrusted HUD sender' }
+  try {
+    const op = String(request?.op || 'list')
+    if (op === 'enabled') {
+      settings.set('hudHistoryEnabled', request.enabled === true)
+      historyPrevious = { world: '', players: new Set(), portalSeq: null }
+      return { ok: true }
+    }
+    if (op === 'retention') {
+      historyStore().configure({ retentionDays: request.days })
+      settings.set('hudHistoryRetentionDays', Number(request.days))
+      return { ok: true }
+    }
+    if (op === 'list') return { ok: true, retentionDays: settings.get('hudHistoryRetentionDays', 30), enabled: settings.get('hudHistoryEnabled', false), events: historyStore().list() }
+    if (op === 'clear') { historyStore().clear(); return { ok: true, events: [] } }
+    if (op === 'export') {
+      const format = request.format
+      if (!['csv', 'json'].includes(format)) throw new Error('Unsupported export format')
+      const result = await dialog.showSaveDialog({ title: 'Export local encounter history', defaultPath: 'KitsuNexus-history.' + format, filters: [{ name: format.toUpperCase(), extensions: [format] }] })
+      if (result.canceled || !result.filePath) return { ok: false, cancelled: true }
+      const output = format === 'csv' ? historyStore().exportCsv() : JSON.stringify({ schemaVersion: 1, events: historyStore().list() }, null, 2)
+      await fs.promises.writeFile(result.filePath, output, { encoding: 'utf8', mode: 0o600 })
+      return { ok: true }
+    }
+    return { ok: false, error: 'Unsupported history operation' }
+  } catch (error) { return { ok: false, error: error.message } }
 })
 ipcMain.handle('hud:action', async (event, payload = {}) => {
   // Only a HUD surface may call this privileged bridge.

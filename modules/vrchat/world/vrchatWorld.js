@@ -13,7 +13,10 @@ const os = require('os')
 const path = require('path')
 
 const LOG_DIR = path.join(os.homedir(), 'AppData', 'LocalLow', 'VRChat', 'VRChat')
-const POLL_MS = 5000
+const POLL_MS = 2000
+const { ActivityEvents, parsePortalEvent } = require('./activityEvents')
+const activity = new ActivityEvents()
+let primingActivity = true
 
 let timer = null
 let onUpdate = null
@@ -69,12 +72,13 @@ function buildUrls () {
 
 function emit () {
   buildUrls()
-  if (typeof onUpdate === 'function') onUpdate({ ...state, at: Date.now() })
+  if (typeof onUpdate === 'function') onUpdate({ ...state, activityEvents: activity.snapshot(), activitySequence: activity.sequence, at: Date.now() })
 }
 
 // Parse a single log line and fold any world/user info into state.
 // Returns true if something relevant changed.
 function processLine (line) {
+  activity.process(line)
   // "[Behaviour] Joining wrld_xxxx-...:12345~region(use)~nonce(...)" — a Group instance's id
   // additionally carries a "~group(grp_xxxx)" tag (VRChat's own instance-type marker).
   let m = line.match(/Joining (wrld_[^\s:]+):(\S+)/)
@@ -124,10 +128,11 @@ function processLine (line) {
   // Video player URLs (for media-link history).
   m = line.match(/\[Video Playback\][^']*resolve URL '([^']+)'/) || line.match(/added URL '([^']+)'/)
   if (m) { state.lastVideo = m[1]; return true }
-  // Portal drops (best-effort — log wording varies between VRChat builds).
-  if (/dropped a portal/i.test(line)) {
-    const nm = (line.match(/([\w .\-]{2,40}?) (?:has )?dropped a portal/i) || [])[1]
-    state.lastPortal = (nm ? nm.trim() : 'Someone'); state.portalSeq++
+  const portal = parsePortalEvent(line)
+  if (portal) {
+    state.lastPortal = portal.name
+    state.lastPortalDetail = portal.detail
+    state.portalSeq++
     return true
   }
   // "User Authenticated: DisplayName (usr_xxxx-...)"
@@ -176,6 +181,8 @@ function poll () {
 
   // A new VRChat session started -> switch to the fresh log, read it whole.
   if (newest !== currentFile) {
+    primingActivity = true
+    activity.players.clear(); activity.avatars.clear(); activity.events = []
     currentFile = newest
     readPos = 0
     tail = ''
@@ -183,7 +190,7 @@ function poll () {
 
   let size
   try { size = fs.statSync(currentFile).size } catch (_) { return }
-  if (size < readPos) { readPos = 0; tail = '' } // log truncated/rotated
+  if (size < readPos) { readPos = 0; tail = ''; primingActivity = true; activity.events = []; activity.players.clear(); activity.avatars.clear() } // log truncated/rotated
   if (size === readPos) return // nothing new
 
   let fd
@@ -193,7 +200,9 @@ function poll () {
     const buf = Buffer.alloc(len)
     fs.readSync(fd, buf, 0, len, readPos)
     readPos = size
-    if (consume(buf.toString('utf8'))) emit()
+    const changed = consume(buf.toString('utf8'))
+    if (primingActivity) { activity.events = []; primingActivity = false }
+    if (changed || activity.events.length) emit()
   } catch (_) {
     /* ignore transient read errors */
   } finally {
@@ -215,6 +224,6 @@ function stopVrcWorld () {
   if (timer) { clearInterval(timer); timer = null }
 }
 
-function getVrcWorld () { return { ...state } }
+function getVrcWorld () { return { ...state, activityEvents: activity.snapshot(), activitySequence: activity.sequence } }
 
 module.exports = { startVrcWorld, stopVrcWorld, getVrcWorld }

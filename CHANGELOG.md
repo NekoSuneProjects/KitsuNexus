@@ -5,6 +5,45 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Fixed
+- **HUD controls recovery.** Explicit editor requests locate the VRChat window even during an app switch, tolerate a brief focus transition, and restore usable editor height. Shortcut failures are logged; Ctrl+Alt+F9 and a Stats-page Open HUD controls button provide alternatives.
+- **Activity alerts survive disabled HUD snapshots.** Live/player-monitoring toggles no longer suppress activity notifications. Portal removal/expiry messages from the local log now create honest portal activity alerts; other-player creation remains unconfirmed.
+
+
+### Fixed
+- **Portal alerts recognize current VRChat logs.** The live log emits `PortalManager: Pending portal request fulfilled` rather than a named portal-drop message. HUD activity and portal history now share detection, reporting request completion without inventing a creator or placement confirmation. Inventory requests and portal settings do not trigger alerts.
+
+
+### Added
+- **HUD interaction shortcut and positioning.** Ctrl+Shift+F9 focuses the HUD while VRChat stays visible; Escape or Back to game returns focus. Play mode passes clicks through. Drag headers or use corner docking; detached panels retain game-relative positions.
+- **Alerts-only overlay.** Hide the main HUD while keeping transient activity cards. Notifications stack downward, expire individually after ten seconds, and the window hides when empty. The interaction shortcut restores controls.
+
+
+### Added
+- **Desktop HUD activity feed.** Timestamped cards show joins, leaves, explicit portal drops, avatar loads/switches and world transitions from local logs. Category filters, pause, clear, fade and bounded history are supported. Startup log replay is suppressed and join/leave events within one poll are preserved. Avatar/portal reporting depends on VRChat emitting a recognized log line.
+
+
+### Added
+- **Game-attached desktop HUD.** The HUD follows the VRChat client area and hides on app switching or minimization. Read-only Win32 inspection uses the existing Koffi dependency. Windowed/borderless mode is supported; exclusive fullscreen is not guaranteed.
+- **Redesigned desktop HUD.** Dark teal cards, mint accents, consistent controls, and expandable player/layout/history panels keep the game view uncluttered.
+
+
+### Added
+- **Direct desktop HUD startup.** Launch with `npm start -- --desktop-hud` to open an interactive desktop HUD alongside the main window.
+
+
+### Fixed
+- **Desktop HUD rendering and reachable controls.** Desktop and pop-out surfaces use a solid window background to avoid invisible layered windows with software compositing. The HUD panel scrolls so quick actions and settings remain reachable at smaller sizes.
+
+
+### Added
+- **HUD history privacy controls and export.** Search saved encounters, retain 1–365 days, and export JSON or formula-safe CSV through a save dialog. Recording opt-out keeps existing records browsable. History requests require a live HUD window.
+
+
+### Fixed
+- **Local history expiry on reads.** Expired encounters are now pruned when browsing or exporting, even when recording is off. Added validated retention configuration for future HUD controls.
+
+
 ## [1.0.81] - 2026-11-01
 
 ### Added

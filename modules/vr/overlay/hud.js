@@ -12,17 +12,20 @@ setInterval(showTime, 15000)
 function short (value, fallback) {
   return typeof value === 'string' && value.trim() ? value.slice(0, 110) : fallback
 }
-let previousPlayers = null
+let activityCursor = null
 const notices = []
 const alerts = document.getElementById('alerts')
 const PREF_KEY = ['kitsunexus', 'hud', 'prefs', 'v1'].join('-')
-const defaults = { limit: 12, fade: 15, players: true, tiles: true, music: true, heart: true, language: 'en', preset: 'full', joins: true, leaves: true, notices: true, clock: true, sessionVisible: true, corner: 'inline', textSize: 'normal', live: true, monitorPlayers: true, musicFeed: true, heartFeed: true, fps: true, status: true, lyrics: false }
+const defaults = { limit: 12, fade: 15, players: true, tiles: true, music: true, heart: true, language: 'en', preset: 'full', joins: true, leaves: true, notices: true, clock: true, sessionVisible: true, corner: 'inline', textSize: 'normal', live: true, monitorPlayers: true, musicFeed: true, heartFeed: true, fps: true, status: true, lyrics: false, portals: true, avatars: true, worldEvents: true }
 let prefs = { ...defaults }
 try {
   const stored = JSON.parse(localStorage.getItem(PREF_KEY) || '{}')
   if (stored && typeof stored === 'object') {
     prefs.limit = [3, 6, 12, 20].includes(Number(stored.limit)) ? Number(stored.limit) : 12
     prefs.fade = Number.isFinite(Number(stored.fade)) ? Math.max(0, Math.min(120, Number(stored.fade))) : 15
+    prefs.portals = stored.portals !== false
+    prefs.avatars = stored.avatars !== false
+    prefs.worldEvents = stored.worldEvents !== false
     prefs.fps = stored.fps !== false
     prefs.status = stored.status !== false
     prefs.lyrics = stored.lyrics === true
@@ -46,6 +49,7 @@ try {
   }
 } catch (_) {}
 function renderPrefs () {
+  for (const [id, key] of [['showPortals', 'portals'], ['showAvatars', 'avatars'], ['showWorldEvents', 'worldEvents']]) document.getElementById(id).checked = prefs[key]
   document.getElementById('hudPreset').value = prefs.preset
   document.getElementById('noticeLimit').value = String(prefs.limit)
   document.getElementById('noticeFade').value = String(prefs.fade)
@@ -82,6 +86,7 @@ function renderPrefs () {
   document.getElementById('heart').closest('.tile').hidden = !prefs.heart
 }
 function savePrefs () {
+  for (const [id, key] of [['showPortals', 'portals'], ['showAvatars', 'avatars'], ['showWorldEvents', 'worldEvents']]) prefs[key] = document.getElementById(id).checked
   prefs.preset = document.getElementById('hudPreset').value
   prefs.limit = Number(document.getElementById('noticeLimit').value)
   prefs.fade = Math.max(0, Math.min(120, Number(document.getElementById('noticeFade').value) || 0))
@@ -108,7 +113,7 @@ function savePrefs () {
   renderPrefs()
   renderNotices()
 }
-for (const id of ['showFps', 'showStatus', 'showLyrics', 'enableHudUpdates', 'enablePlayerMonitoring', 'enableMusicFeed', 'enableHeartFeed', 'hudTextSize', 'noticeLimit', 'noticeFade', 'showNotices', 'showClock', 'showSession', 'noticeCorner', 'showJoins', 'showLeaves', 'showPlayers', 'showTiles', 'showMusic', 'showHeart', 'quickLanguage']) {
+for (const id of ['showPortals', 'showAvatars', 'showWorldEvents', 'showFps', 'showStatus', 'showLyrics', 'enableHudUpdates', 'enablePlayerMonitoring', 'enableMusicFeed', 'enableHeartFeed', 'hudTextSize', 'noticeLimit', 'noticeFade', 'showNotices', 'showClock', 'showSession', 'noticeCorner', 'showJoins', 'showLeaves', 'showPlayers', 'showTiles', 'showMusic', 'showHeart', 'quickLanguage']) {
   document.getElementById(id).addEventListener('change', () => {
     if (['showPlayers', 'showTiles', 'showMusic', 'showHeart', 'showNotices', 'showClock', 'showSession'].includes(id)) document.getElementById('hudPreset').value = 'custom'
     savePrefs()
@@ -133,31 +138,49 @@ document.getElementById('resetHudPrefs').addEventListener('click', () => {
   savePrefs()
 })
 renderPrefs()
+let renderedActivity = null
 function renderNotices () {
   const now = Date.now()
-  const active = prefs.fade ? notices.filter(n => now - n.at < prefs.fade * 1000) : notices
-  alerts.textContent = active.slice(0, prefs.limit).map(n => n.text).join(' | ')
+  const filter = { join: prefs.joins, leave: prefs.leaves, portal: prefs.portals, avatar: prefs.avatars, world: prefs.worldEvents }
+  const active = notices.filter(n => filter[n.kind] !== false && (!prefs.fade || now - n.at < prefs.fade * 1000)).slice(0, prefs.limit)
+  if (!widgetMode && mode !== 'vr') window.kitsunexusHud.input({ op: 'presentation', alertsOnly: document.body.dataset.alertsOnly === 'true', hasAlerts: active.length > 0, height: alerts.scrollHeight + 65 }).catch(() => {})
+  const signature = active.map(e => e.id).join(',')
+  if (signature === renderedActivity) return
+  renderedActivity = signature
+  alerts.replaceChildren()
+  document.getElementById('activityCount').textContent = active.length ? String(active.length) + ' RECENT' : 'LIVE'
+  if (!active.length) {
+    const empty = document.createElement('div'); empty.className = 'activity-empty'; empty.textContent = 'Watching for new activity…'; alerts.append(empty)
+  }
+  for (const event of [...active].reverse()) {
+    const card = document.createElement('div'); card.className = 'activity-notice'; card.dataset.kind = event.kind
+    const icon = document.createElement('span'); icon.className = 'activity-icon'; icon.textContent = ({ join: '+', leave: '−', portal: '◇', avatar: '◈', world: '⌂' })[event.kind] || '•'; icon.setAttribute('aria-hidden', 'true')
+    const content = document.createElement('div')
+    const name = document.createElement('div'); name.className = 'activity-name'; name.textContent = event.name
+    const detail = document.createElement('div'); detail.className = 'activity-detail'; detail.textContent = event.detail || ({ join: 'Joined the instance', leave: 'Left the instance' })[event.kind] || 'Activity detected'
+    content.append(name, detail)
+    const time = document.createElement('time'); time.dateTime = new Date(event.at).toISOString(); time.textContent = new Date(event.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    card.append(icon, content, time); alerts.append(card)
+  }
 }
 setInterval(renderNotices, 1000)
-function addNotice (message) {
+function receiveActivity (state) {
+  if (!Number.isFinite(state?.activitySequence)) return
+  if (activityCursor === null) { activityCursor = state.activitySequence; return }
+  const events = Array.isArray(state.activityEvents) ? state.activityEvents : []
+  const fresh = events.filter(e => Number.isFinite(e.id) && e.id > activityCursor && ['join', 'leave', 'portal', 'avatar', 'world'].includes(e.kind) && Number.isFinite(e.at))
+  activityCursor = Math.max(activityCursor, state.activitySequence)
   if (document.getElementById('pauseNotices').checked) return
-  notices.unshift({ at: Date.now(), text: new Date().toLocaleTimeString() + ' · ' + message })
-  if (notices.length > 20) notices.length = 20
+  for (const event of fresh) notices.unshift({ ...event, name: String(event.name || '').slice(0, 160), detail: String(event.detail || '').slice(0, 200) })
+  notices.splice(100)
   renderNotices()
 }
-document.getElementById('clearAlerts').addEventListener('click', () => { notices.length = 0; alerts.textContent = '' })
+document.getElementById('clearAlerts').addEventListener('click', () => { notices.length = 0; renderNotices() })
 window.kitsunexusHud.onData(state => {
+  receiveActivity(state)
   if (!prefs.live) return
   if ((prefs.monitorPlayers || widgetMode === 'players') && Array.isArray(state?.players)) {
     const incoming = state.players.filter(p => typeof p === 'string').slice(0, 80)
-    const names = new Set(incoming)
-    if (previousPlayers !== null) {
-      const joined = incoming.filter(p => !previousPlayers.has(p))
-      const left = [...previousPlayers].filter(p => !names.has(p))
-      for (const name of (prefs.joins ? joined : []).slice(0, 20)) addNotice(name + ' joined')
-      for (const name of (prefs.leaves ? left : []).slice(0, 20)) addNotice(name + ' left')
-    }
-    previousPlayers = names
     currentPlayers = incoming
     renderPlayers()
   }
@@ -359,19 +382,90 @@ if (!widgetMode) {
 if (!widgetMode) {
   const historyView = document.getElementById('historyEvents')
   const historyEnabled = document.getElementById('historyEnabled')
+  let historyEvents = []
+  const search = document.getElementById('historySearch')
+  function renderHistory () {
+    const query = search.value.trim().toLowerCase()
+    historyView.textContent = historyEvents.filter(e => [e.kind, e.name, e.worldId, e.instanceId, e.playerId, e.note].join(' ').toLowerCase().includes(query)).map(e => new Date(e.at).toLocaleString() + ' / ' + e.kind + ' / ' + (e.name || e.worldId || '')).join('\n') || 'No matching saved history'
+  }
+  search.addEventListener('input', renderHistory)
+  async function historyRequest (request) {
+    const result = await window.kitsunexusHud.history(request)
+    if (!result?.ok && !result?.cancelled) throw new Error(result?.error || 'History unavailable')
+    return result
+  }
+  document.getElementById('historyRetention').addEventListener('change', async event => {
+    if (!window.confirm('Apply retention? Older history will be permanently deleted.')) { refreshHistory(); return }
+    try { await historyRequest({ op: 'retention', days: Number(event.target.value) }); await refreshHistory() } catch (error) { historyView.textContent = error.message }
+  })
+  for (const format of ['csv', 'json']) document.getElementById(format === 'csv' ? 'historyCsv' : 'historyJson').addEventListener('click', async () => {
+    try { const result = await historyRequest({ op: 'export', format }); if (result.ok) actionStatus.textContent = 'History exported' } catch (error) { actionStatus.textContent = error.message }
+  })
   async function refreshHistory () {
     try {
-      const result = await window.kitsunexusHud.history({ op: 'list' })
+      const result = await historyRequest({ op: 'list' })
+      document.getElementById('historyRetention').value = result.retentionDays
       historyEnabled.checked = result.enabled === true
-      historyView.textContent = (result.events || []).map(e => new Date(e.at).toLocaleString() + ' / ' + e.kind + ' / ' + (e.name || e.worldId || '')).join('\n') || 'No saved history'
+      historyEvents = result.events || []
+      renderHistory()
     } catch (error) { historyView.textContent = 'History unavailable: ' + String(error.message || error) }
   }
-  historyEnabled.addEventListener('change', async () => { await window.kitsunexusHud.history({ op: 'enabled', enabled: historyEnabled.checked }); refreshHistory() })
+  historyEnabled.addEventListener('change', async () => {
+    try { await historyRequest({ op: 'enabled', enabled: historyEnabled.checked }); await refreshHistory() }
+    catch (error) { historyView.textContent = error.message }
+  })
   document.getElementById('historyRefresh').addEventListener('click', refreshHistory)
   document.getElementById('historyClear').addEventListener('click', async () => {
     if (!window.confirm('Delete all locally saved encounter history?')) return
-    await window.kitsunexusHud.history({ op: 'clear' })
-    refreshHistory()
+    try { await historyRequest({ op: 'clear' }); await refreshHistory() }
+    catch (error) { historyView.textContent = error.message }
   })
   refreshHistory()
+}
+
+// Keep the game view clean; advanced controls remain accessible on demand.
+if (mode !== 'vr' && !widgetMode) {
+  document.getElementById('mode').textContent = 'IN GAME'
+  const panel = document.querySelector('.panel')
+  const footer = document.querySelector('.footer')
+  for (const [element, title] of [[document.getElementById('playerSearch').closest('.interactive'), 'Players & notifications'], [document.getElementById('hudPreferences'), 'Layout, history & feeds']]) {
+    const section = document.createElement('details')
+    const summary = document.createElement('summary')
+    summary.textContent = title
+    section.append(summary)
+    if (title.startsWith('Players')) element.classList.add('player-tools')
+    section.append(element)
+    panel.insertBefore(section, footer)
+  }
+}
+
+renderNotices()
+
+if (mode !== 'vr') {
+  let alertsOnly = localStorage.getItem('hud-alerts-only') === 'true'
+  const applyAlertsOnly = () => {
+    document.body.dataset.alertsOnly = String(alertsOnly)
+    document.getElementById('alertsOnly').checked = alertsOnly
+    renderNotices()
+  }
+  document.body.dataset.input = 'play'
+  if (!localStorage.getItem('hud-notice-ten-seconds')) {
+    prefs.fade = 10; localStorage.setItem('hud-notice-ten-seconds', 'true'); renderPrefs(); savePrefs()
+  }
+  window.kitsunexusHud.onInteraction(state => {
+    document.body.dataset.input = state.enabled ? 'edit' : 'play'
+    document.getElementById('inputHint').textContent = state.enabled ? 'EDIT MODE · drag header · Ctrl + Shift + F9 to play' : 'Ctrl+Shift+F9 / Ctrl+Alt+F9 · interact'
+    document.getElementById('mode').textContent = state.enabled ? 'EDIT HUD' : 'IN GAME'
+    applyAlertsOnly()
+  })
+  document.getElementById('returnToGame').addEventListener('click', () => window.kitsunexusHud.input({ op: 'play' }))
+  document.getElementById('alertsOnly').addEventListener('change', event => {
+    alertsOnly = event.target.checked
+    localStorage.setItem('hud-alerts-only', String(alertsOnly))
+    if (alertsOnly) { prefs.notices = true; prefs.fade = 10; renderPrefs(); savePrefs() }
+    applyAlertsOnly()
+  })
+  document.querySelectorAll('[data-dock]').forEach(button => button.addEventListener('click', () => window.kitsunexusHud.input({ op: 'dock', corner: button.dataset.dock })))
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && document.body.dataset.input === 'edit') { event.preventDefault(); window.kitsunexusHud.input({ op: 'play' }) } })
+  applyAlertsOnly()
 }
