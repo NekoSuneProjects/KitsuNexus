@@ -7,6 +7,8 @@ const { BrowserWindow, screen, globalShortcut, ipcMain, app } = require('electro
 const DEFAULTS = Object.freeze({ width: 420, height: 540, x: null, y: null, opacity: 0.94, clickThrough: false, alwaysOnTop: true })
 let desktop = null
 let gamePoll = null
+const rendererDiagnostics = new Map()
+let diagnosticTimer = null
 let gameReader = null
 let gameBounds = null
 let attaching = false
@@ -20,6 +22,11 @@ let interactionRegistered = false
 const registeredInputHotkeys = new Set()
 let focusTransitionUntil = 0
 let lastInputError = ''
+let attachmentError = ''
+function windowHandle (window) {
+  const handle = window.getNativeWindowHandle()
+  return handle.length >= 8 ? handle.readBigUInt64LE() : BigInt(handle.readUInt32LE())
+}
 const INTERACTION_HOTKEY = 'CommandOrControl+Shift+F9'
 const widgetAnchors = new Map()
 function inputMode (enabled, returnToGame = true) {
@@ -52,10 +59,13 @@ function syncGame (explicitOpen = false) {
   try {
     if (process.platform === 'win32') {
       if (!gameReader) gameReader = require('./gameWindow').createReader()
-      const physical = gameReader(windows.map(w => w.getNativeWindowHandle().readBigUInt64LE()), explicitOpen)
+      const physical = gameReader(windows.map(windowHandle), explicitOpen)
       if (physical) area = screen.screenToDipRect(null, physical)
     }
-  } catch (error) { if (!gameReader) console.warn('[HUD] Attachment unavailable:', error.message) }
+  } catch (error) {
+    if (attachmentError !== error.message) console.warn('[HUD] Attachment unavailable:', error.message)
+    attachmentError = error.message
+  }
   if (!area && interacting && Date.now() < focusTransitionUntil) area = gameBounds
   if (!area && interacting) inputMode(false, false)
   gameBounds = area
@@ -72,21 +82,31 @@ function syncGame (explicitOpen = false) {
     const y = area.y + Math.max(0, Math.min(offset.y, area.height - height))
     attaching = true
     try { if (size.x !== x || size.y !== y || size.width !== width || size.height !== height) win.setBounds({ x, y, width, height }) } finally { attaching = false }
-    const shouldShow = win !== desktop || interacting || !alertsOnly || hasAlerts
+    const isNotices = detached.get('alerts') === win
+    const shouldShow = isNotices ? interacting || widgetAlertActive : win !== desktop || interacting || !alertsOnly || (hasAlerts && !detached.has('alerts'))
     if (shouldShow && !win.isVisible()) win.showInactive()
     if (!shouldShow && win.isVisible()) win.hide()
   }
 }
 function startGameTracking () {
+  if (process.argv?.includes('--hud-diagnostics') && !diagnosticTimer) {
+    diagnosticTimer = setInterval(() => {
+      try { fs.writeFileSync(path.join(app.getPath('userData'), 'hud-diagnostics.json'), JSON.stringify({ at: Date.now(), feeds: feedOptions, collection: collectionState(), musicPresent: !!lastData.music && lastData.music !== 'No track', activitySequence: lastData.activitySequence, windows: [...detached].map(([widget, win]) => ({ widget, visible: win.isVisible(), bounds: win.getBounds() })), renderers: [...rendererDiagnostics.values()] }, null, 2)) } catch (_) {}
+    }, 2000)
+    diagnosticTimer.unref?.()
+  }
   if (!gamePoll) gamePoll = setInterval(syncGame, 150)
   gamePoll.unref?.()
   syncGame()
 }
-function stopGameTracking () { if (gamePoll) clearInterval(gamePoll); gamePoll = null; gameReader = null; gameBounds = null }
+function stopGameTracking () { if (diagnosticTimer) clearInterval(diagnosticTimer); diagnosticTimer = null; if (gamePoll) clearInterval(gamePoll); gamePoll = null; gameReader = null; gameBounds = null }
 
 let vr = null
 const detached = new Map()
-const detachable = new Set(['players', 'alerts', 'tiles', 'lyrics'])
+const detachable = new Set(['players', 'alerts', 'tiles', 'lyrics', 'music', 'heart'])
+let widgetAlertActive = false
+let feedRevision = 0
+let feedOptions = { live: true, players: true, music: true, heart: true }
 const detachedBounds = new Map()
 const detachedOpen = new Set()
 let restored = false
@@ -94,7 +114,7 @@ function geometryPath () { return path.join(app.getPath('userData'), 'desktop-hu
 function persistWidgets () {
   try {
     fs.mkdirSync(path.dirname(geometryPath()), { recursive: true })
-    fs.writeFileSync(geometryPath(), JSON.stringify({ version: 1, bounds: Object.fromEntries(detachedBounds), open: [...detachedOpen], anchor, widgetAnchors: Object.fromEntries(widgetAnchors) }))
+    fs.writeFileSync(geometryPath(), JSON.stringify({ version: 1, bounds: Object.fromEntries(detachedBounds), open: [...detachedOpen], anchor, widgetAnchors: Object.fromEntries(widgetAnchors), feedOptions }))
   } catch (error) { console.warn('[Desktop HUD] Widget settings could not be saved:', error.message) }
 }
 function restoreWidgets () {
@@ -103,6 +123,7 @@ function restoreWidgets () {
   try {
     const saved = JSON.parse(fs.readFileSync(geometryPath(), 'utf8'))
     if (saved.version !== 1) return
+    for (const key of Object.keys(feedOptions)) if (typeof saved.feedOptions?.[key] === 'boolean') feedOptions[key] = saved.feedOptions[key]
     if (Number.isFinite(saved.anchor?.x) && Number.isFinite(saved.anchor?.y)) anchor = { x: saved.anchor.x, y: saved.anchor.y }
     for (const widget of detachable) {
       const offset = saved.widgetAnchors?.[widget]
@@ -214,10 +235,13 @@ function create (options, mode) {
     }
   })
   window.setMenuBarVisibility(false)
-  window.loadFile(path.join(__dirname, 'hud.html'), { query: { mode } })
+  window.loadFile(path.join(__dirname, 'hud.html'), { query: { mode, diagnostics: process.argv?.includes('--hud-diagnostics') ? '1' : '0' } })
   window.webContents.on('did-finish-load', () => {
     if (!window.isDestroyed() && !window.webContents.isDestroyed()) window.webContents.send('kitsunexus:hud-data', lastData)
-    if (mode === 'desktop') window.webContents.send('kitsunexus:interaction', { enabled: interacting, hotkey: INTERACTION_HOTKEY })
+    if (mode === 'desktop') {
+      window.webContents.send('kitsunexus:interaction', { enabled: interacting, hotkey: INTERACTION_HOTKEY })
+      for (const widget of detached.keys()) window.webContents.send('kitsunexus:widget-state', { widget, detached: true })
+    }
   })
   if (mode === 'desktop') {
     window.setOpacity(cfg.opacity)
@@ -247,17 +271,18 @@ function create (options, mode) {
 }
 
 function toggleDetached (event, widget) {
-  if (!desktop || desktop.isDestroyed() || event.sender !== desktop.webContents || !detachable.has(widget)) return { ok: false }
+  if (!desktop || desktop.isDestroyed() || !detachable.has(widget) || (event.sender !== desktop.webContents && detached.get(widget)?.webContents !== event.sender)) return { ok: false }
   const existing = detached.get(widget)
   if (existing && !existing.isDestroyed()) { detachedOpen.delete(widget); persistWidgets(); existing.close(); return { ok: true, detached: false } }
   const area = screen.getPrimaryDisplay().workArea
   const saved = detachedBounds.get(widget)
+  if (!widgetAnchors.has(widget)) { const index = [...detachable].indexOf(widget); widgetAnchors.set(widget, { x: 60 + index * 36, y: 80 + index * 36 }) }
   const cfg = { width: 340, height: widget === 'tiles' ? 260 : 180, x: saved?.x ?? area.x + 80, y: saved?.y ?? area.y + 80 }
   const bounds = visibleBounds({ ...cfg, width: saved?.width || cfg.width, height: saved?.height || cfg.height })
-  const win = new BrowserWindow({ width: saved?.width || cfg.width, height: saved?.height || cfg.height, x: bounds.x, y: bounds.y, frame: false, transparent: false, resizable: true, alwaysOnTop: true, skipTaskbar: true, show: false, backgroundColor: '#151126', webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: false, preload: path.join(__dirname, 'hudPreload.js') } })
+  const win = new BrowserWindow({ width: saved?.width || cfg.width, height: saved?.height || cfg.height, x: bounds.x, y: bounds.y, frame: false, transparent: false, resizable: true, alwaysOnTop: true, skipTaskbar: true, show: false, backgroundColor: '#151126', webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: false, preload: path.join(__dirname, 'hudPreload.js'), backgroundThrottling: false } })
   win.setMenuBarVisibility(false)
-  win.loadFile(path.join(__dirname, 'hud.html'), { query: { mode: 'desktop', widget } })
-  win.webContents.on('did-finish-load', () => { if (!win.isDestroyed()) { win.webContents.send('kitsunexus:hud-data', lastData); syncGame() } })
+  win.loadFile(path.join(__dirname, 'hud.html'), { query: { mode: 'desktop', widget, diagnostics: process.argv?.includes('--hud-diagnostics') ? '1' : '0' } })
+  win.webContents.on('did-finish-load', () => { if (!win.isDestroyed()) { win.webContents.send('kitsunexus:hud-data', lastData); win.webContents.send('kitsunexus:interaction', { enabled: interacting, hotkey: INTERACTION_HOTKEY }); syncGame() } })
   win.webContents.on('did-fail-load', (_event, code, reason) => console.error('[Desktop HUD] Pop-out failed:', widget, code, reason))
   win.setIgnoreMouseEvents(!interacting, { forward: true }); win.setFocusable(interacting)
   win.on('will-move', (_event, bounds) => { if (gameBounds && interacting) widgetAnchors.set(widget, { x: bounds.x - gameBounds.x, y: bounds.y - gameBounds.y }) })
@@ -273,10 +298,29 @@ function toggleDetached (event, widget) {
 ipcMain.handle('kitsunexus:detach-widget', toggleDetached)
 ipcMain.handle('kitsunexus:hud-input', (event, request = {}) => {
   if (!ownsSender(event.sender)) return { ok: false }
-  if (request.op === 'presentation') {
+  if (request.op === 'diagnostics') {
+    rendererDiagnostics.set(event.sender.id || request.widget, { widget: String(request.widget).slice(0, 20), live: request.live === true, paused: request.paused === true, sequence: Number(request.sequence) || 0, notices: Number(request.notices) || 0, receivedMusic: request.receivedMusic === true, musicVisible: request.musicVisible === true })
+    return { ok: true }
+  }
+  if (request.op === 'presentation' && detached.get('alerts')?.webContents === event.sender) { widgetAlertActive = request.hasAlerts === true; syncGame(); return { ok: true } }
+  if (request.op === 'presentation' && desktop?.webContents === event.sender) {
     alertsOnly = request.alertsOnly === true; hasAlerts = request.hasAlerts === true
     alertHeight = Math.max(80, Math.min(500, Number(request.height) || 120))
     syncGame(); return { ok: true }
+  }
+  if (request.op === 'resetPositions' && desktop?.webContents === event.sender && interacting) {
+    anchor = { x: 20, y: 20 }
+    for (const [index, widget] of [...detachable].entries()) widgetAnchors.set(widget, { x: 60 + index * 36, y: 80 + index * 36 })
+    persistWidgets(); syncGame(); return { ok: true }
+  }
+  if (request.op === 'feeds' && desktop?.webContents === event.sender) {
+    let changed = false
+    for (const key of Object.keys(feedOptions)) if (typeof request[key] === 'boolean' && feedOptions[key] !== request[key]) { feedOptions[key] = request[key]; changed = true }
+    if (changed) feedRevision++
+    if (!feedOptions.live || !feedOptions.music) lastData.music = 'Music feed paused'
+    if (!feedOptions.live || !feedOptions.heart) lastData.heart = 'Heart feed paused'
+    if (!feedOptions.live || !feedOptions.players) lastData.players = []
+    persistWidgets(); broadcast({}); return { ok: true }
   }
   if (request.op === 'play') return { ok: inputMode(false) }
   if (request.op === 'dock' && gameBounds && interacting) {
@@ -373,6 +417,10 @@ function closeVrSurface () {
 
 function broadcast (data) {
   if (!data || typeof data !== 'object') return
+  data = { ...data }
+  if (!feedOptions.live || !feedOptions.music) delete data.music
+  if (!feedOptions.live || !feedOptions.heart) delete data.heart
+  if (!feedOptions.live || !feedOptions.players) delete data.players
   lastData = { ...lastData, ...data }
   for (const win of [desktop, vr, ...detached.values()]) {
     if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) {
@@ -391,7 +439,7 @@ function state () {
     visible: !!(desktop && !desktop.isDestroyed() && desktop.isVisible()),
     interactionHotkey: interactionRegistered ? INTERACTION_HOTKEY : null,
     interactionHotkeys: [...registeredInputHotkeys],
-    inputError: lastInputError,
+    inputError: lastInputError || attachmentError,
     interacting,
     recoveryHotkey: recoveryRegistered ? RECOVERY_HOTKEY : null,
     bounds: desktop && !desktop.isDestroyed() ? desktop.getBounds() : null,
@@ -402,4 +450,9 @@ function state () {
 function ownsSender (sender) {
   return !!sender && [desktop, vr, ...detached.values()].some(window => window && !window.isDestroyed() && window.webContents === sender)
 }
-module.exports = { openEditor: () => inputMode(true), ownsSender, showDesktop, configureDesktop, hideDesktop, getVrSurface, closeVrSurface, broadcast, state, setBoundsCallback, setOptionsCallback }
+function openWidgets (names) {
+  if (!desktop || desktop.isDestroyed() || !Array.isArray(names)) return
+  for (const name of new Set(names.slice(0, 6))) if (detachable.has(name) && !detached.has(name)) toggleDetached({ sender: desktop.webContents }, name)
+}
+function collectionState () { return { music: !!desktop && feedOptions.live && feedOptions.music, revision: feedRevision } }
+module.exports = { openWidgets, collectionState, openEditor: () => inputMode(true), ownsSender, showDesktop, configureDesktop, hideDesktop, getVrSurface, closeVrSurface, broadcast, state, setBoundsCallback, setOptionsCallback }

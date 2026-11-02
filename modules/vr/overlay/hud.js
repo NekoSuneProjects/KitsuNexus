@@ -2,7 +2,18 @@
 const mode = new URLSearchParams(location.search).get('mode')
 document.body.dataset.mode = mode === 'vr' ? 'vr' : 'desktop'
 const widgetMode = new URLSearchParams(location.search).get('widget')
-if (['players', 'alerts', 'tiles', 'lyrics'].includes(widgetMode)) document.body.dataset.widget = widgetMode
+if (['players', 'alerts', 'tiles', 'lyrics', 'music', 'heart'].includes(widgetMode)) document.body.dataset.widget = widgetMode
+for (const [id, kind] of [['music', 'music'], ['heart', 'heart']]) {
+  const tile = document.getElementById(id).closest('.tile')
+  tile.classList.add('widget'); tile.dataset.widget = kind
+  document.getElementById('hudTiles').after(tile)
+}
+if (widgetMode === 'music') document.querySelector('.widget[data-widget="music"]').append(document.querySelector('.actions'))
+if (widgetMode) {
+  document.querySelector('.brand').textContent = ({ music: 'Now Playing', heart: 'Heart Rate', alerts: 'Activity', players: 'Players', tiles: 'Stats', lyrics: 'Lyrics' })[widgetMode] || 'Overlay'
+  document.getElementById('closeWidget').hidden = false
+  document.getElementById('closeWidget').addEventListener('click', () => window.kitsunexusHud.toggleWidget(widgetMode))
+}
 document.getElementById('mode').textContent = mode === 'vr' ? 'SteamVR' : 'Desktop'
 function showTime () {
   document.getElementById('clock').textContent = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(new Date())
@@ -12,7 +23,10 @@ setInterval(showTime, 15000)
 function short (value, fallback) {
   return typeof value === 'string' && value.trim() ? value.slice(0, 110) : fallback
 }
+const detachedWidgets = new Set()
 let activityCursor = null
+let lastReceivedSequence = 0
+let receivedMusic = false
 const notices = []
 const alerts = document.getElementById('alerts')
 const PREF_KEY = ['kitsunexus', 'hud', 'prefs', 'v1'].join('-')
@@ -53,6 +67,8 @@ function renderPrefs () {
   document.getElementById('hudPreset').value = prefs.preset
   document.getElementById('noticeLimit').value = String(prefs.limit)
   document.getElementById('noticeFade').value = String(prefs.fade)
+  if (!prefs.musicFeed) document.getElementById('music').textContent = 'Music feed paused'
+  if (!prefs.heartFeed) document.getElementById('heart').textContent = 'Heart feed paused'
   document.getElementById('showFps').checked = prefs.fps
   document.getElementById('showStatus').checked = prefs.status
   document.getElementById('showLyrics').checked = prefs.lyrics
@@ -70,7 +86,7 @@ function renderPrefs () {
   document.getElementById('showSession').checked = prefs.sessionVisible
   document.getElementById('noticeCorner').value = prefs.corner
   document.body.dataset.corner = prefs.corner
-  document.querySelector('[data-widget="alerts"]').hidden = widgetMode === 'alerts' ? false : !prefs.notices
+  document.querySelector('.widget[data-widget="alerts"]').hidden = widgetMode === 'alerts' ? false : !prefs.notices
   document.getElementById('clock').closest('.tile').hidden = !prefs.clock
   document.getElementById('session').closest('.tile').hidden = !prefs.sessionVisible
   document.getElementById('showJoins').checked = prefs.joins
@@ -80,10 +96,11 @@ function renderPrefs () {
   document.getElementById('showMusic').checked = prefs.music
   document.getElementById('showHeart').checked = prefs.heart
   document.getElementById('quickLanguage').value = prefs.language
-  document.querySelector('[data-widget="players"]').hidden = widgetMode === 'players' ? false : !prefs.players
+  document.querySelector('.widget[data-widget="players"]').hidden = widgetMode === 'players' ? false : !prefs.players
   document.getElementById('hudTiles').hidden = widgetMode === 'tiles' ? false : !prefs.tiles
-  document.getElementById('music').closest('.tile').hidden = !prefs.music
-  document.getElementById('heart').closest('.tile').hidden = !prefs.heart
+  document.getElementById('music').closest('.tile').hidden = widgetMode === 'music' ? false : !prefs.music
+  document.getElementById('heart').closest('.tile').hidden = widgetMode === 'heart' ? false : !prefs.heart
+  if (!widgetMode) for (const widget of detachedWidgets) { const element = document.querySelector('.widget[data-widget="' + widget + '"]'); if (element) element.hidden = true }
 }
 function savePrefs () {
   for (const [id, key] of [['showPortals', 'portals'], ['showAvatars', 'avatars'], ['showWorldEvents', 'worldEvents']]) prefs[key] = document.getElementById(id).checked
@@ -112,6 +129,7 @@ function savePrefs () {
   try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)) } catch (_) {}
   renderPrefs()
   renderNotices()
+  if (!widgetMode && mode !== 'vr') window.kitsunexusHud.input({ op: 'feeds', live: prefs.live, players: prefs.monitorPlayers, music: prefs.musicFeed, heart: prefs.heartFeed }).catch(() => {})
 }
 for (const id of ['showPortals', 'showAvatars', 'showWorldEvents', 'showFps', 'showStatus', 'showLyrics', 'enableHudUpdates', 'enablePlayerMonitoring', 'enableMusicFeed', 'enableHeartFeed', 'hudTextSize', 'noticeLimit', 'noticeFade', 'showNotices', 'showClock', 'showSession', 'noticeCorner', 'showJoins', 'showLeaves', 'showPlayers', 'showTiles', 'showMusic', 'showHeart', 'quickLanguage']) {
   document.getElementById(id).addEventListener('change', () => {
@@ -141,9 +159,10 @@ renderPrefs()
 let renderedActivity = null
 function renderNotices () {
   const now = Date.now()
+  if (new URLSearchParams(location.search).get('diagnostics') === '1') window.kitsunexusHud.input({ op: 'diagnostics', widget: widgetMode || 'main', live: prefs.live, paused: document.getElementById('pauseNotices').checked, sequence: lastReceivedSequence, notices: notices.length, receivedMusic, musicVisible: document.getElementById('music').getBoundingClientRect().height > 0 }).catch(() => {})
   const filter = { join: prefs.joins, leave: prefs.leaves, portal: prefs.portals, avatar: prefs.avatars, world: prefs.worldEvents }
   const active = notices.filter(n => filter[n.kind] !== false && (!prefs.fade || now - n.at < prefs.fade * 1000)).slice(0, prefs.limit)
-  if (!widgetMode && mode !== 'vr') window.kitsunexusHud.input({ op: 'presentation', alertsOnly: document.body.dataset.alertsOnly === 'true', hasAlerts: active.length > 0, height: alerts.scrollHeight + 65 }).catch(() => {})
+  if ((!widgetMode || widgetMode === 'alerts') && mode !== 'vr') window.kitsunexusHud.input({ op: 'presentation', alertsOnly: document.body.dataset.alertsOnly === 'true', hasAlerts: active.length > 0, height: alerts.scrollHeight + 65 }).catch(() => {})
   const signature = active.map(e => e.id).join(',')
   if (signature === renderedActivity) return
   renderedActivity = signature
@@ -165,6 +184,8 @@ function renderNotices () {
 }
 setInterval(renderNotices, 1000)
 function receiveActivity (state) {
+  if (state && Object.prototype.hasOwnProperty.call(state, 'music')) receivedMusic = true
+  if (Number.isFinite(state?.activitySequence)) lastReceivedSequence = state.activitySequence
   if (!Number.isFinite(state?.activitySequence)) return
   if (activityCursor === null) { activityCursor = state.activitySequence; return }
   const events = Array.isArray(state.activityEvents) ? state.activityEvents : []
@@ -192,8 +213,8 @@ window.kitsunexusHud.onData(state => {
   if ((prefs.status || widgetMode === 'tiles') && Object.prototype.hasOwnProperty.call(state, 'status')) document.getElementById('hudStatus').textContent = short(state.status, 'Unknown')
   if ((prefs.lyrics || widgetMode === 'lyrics') && Object.prototype.hasOwnProperty.call(state, 'lyrics')) document.getElementById('lyricsText').textContent = short(state.lyrics, 'No lyrics source connected')
   if (Object.prototype.hasOwnProperty.call(state, 'session')) document.getElementById('session').textContent = short(state.session, 'Not connected')
-  if ((prefs.musicFeed || widgetMode === 'tiles') && Object.prototype.hasOwnProperty.call(state, 'music')) document.getElementById('music').textContent = short(state.music, 'No track')
-  if ((prefs.heartFeed || widgetMode === 'tiles') && Object.prototype.hasOwnProperty.call(state, 'heart')) document.getElementById('heart').textContent = short(state.heart, 'Not connected')
+  if ((prefs.musicFeed || widgetMode === 'music') && Object.prototype.hasOwnProperty.call(state, 'music')) document.getElementById('music').textContent = short(state.music, 'No track')
+  if ((prefs.heartFeed || widgetMode === 'heart') && Object.prototype.hasOwnProperty.call(state, 'heart')) document.getElementById('heart').textContent = short(state.heart, 'Not connected')
 })
 
 const actionStatus = document.getElementById('actionStatus')
@@ -369,11 +390,17 @@ if (!widgetMode) {
     try {
       const result = await window.kitsunexusHud.toggleWidget(button.dataset.detach)
       if (!result?.ok) actionStatus.textContent = 'Could not open pop-out window'
-      else button.textContent = (result.detached ? 'Close ' : 'Pop out ') + button.dataset.detach
+      else {
+        if (result.detached) detachedWidgets.add(button.dataset.detach); else detachedWidgets.delete(button.dataset.detach)
+        button.textContent = (result.detached ? 'Close ' : 'Pop out ') + button.dataset.detach
+        renderPrefs()
+      }
     } catch (error) { actionStatus.textContent = String(error.message || error) }
     finally { button.disabled = false }
   }))
   window.kitsunexusHud.onWidgetState(state => {
+    if (state.detached) detachedWidgets.add(state.widget); else detachedWidgets.delete(state.widget)
+    renderPrefs()
     const button = [...document.querySelectorAll('[data-detach]')].find(item => item.dataset.detach === state.widget)
     if (button) button.textContent = (state.detached ? 'Close ' : 'Pop out ') + state.widget
   })
@@ -444,7 +471,7 @@ renderNotices()
 if (mode !== 'vr') {
   let alertsOnly = localStorage.getItem('hud-alerts-only') === 'true'
   const applyAlertsOnly = () => {
-    document.body.dataset.alertsOnly = String(alertsOnly)
+    document.body.dataset.alertsOnly = String(!widgetMode && alertsOnly)
     document.getElementById('alertsOnly').checked = alertsOnly
     renderNotices()
   }
@@ -468,4 +495,36 @@ if (mode !== 'vr') {
   document.querySelectorAll('[data-dock]').forEach(button => button.addEventListener('click', () => window.kitsunexusHud.input({ op: 'dock', corner: button.dataset.dock })))
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && document.body.dataset.input === 'edit') { event.preventDefault(); window.kitsunexusHud.input({ op: 'play' }) } })
   applyAlertsOnly()
+}
+
+window.addEventListener('storage', event => {
+  if (event.key === PIN_KEY) { try { const incoming = JSON.parse(event.newValue || '[]'); if (Array.isArray(incoming)) { pinnedPlayers = incoming.filter(x => typeof x === 'string').slice(0, 30); renderPlayers() } } catch (_) {} }
+  if (event.key === 'hud-notices-paused') document.getElementById('pauseNotices').checked = event.newValue === 'true'
+  if (event.key !== PREF_KEY || !event.newValue) return
+  try {
+    const incoming = JSON.parse(event.newValue)
+    for (const key of Object.keys(defaults)) if (typeof incoming[key] === typeof defaults[key]) prefs[key] = incoming[key]
+    renderPrefs(); renderNotices()
+  } catch (_) {}
+})
+if (!widgetMode && mode !== 'vr') window.kitsunexusHud.input({ op: 'feeds', live: prefs.live, players: prefs.monitorPlayers, music: prefs.musicFeed, heart: prefs.heartFeed }).catch(() => {})
+
+try { document.getElementById('pauseNotices').checked = localStorage.getItem('hud-notices-paused') === 'true' } catch (_) {}
+document.getElementById('pauseNotices').addEventListener('change', event => localStorage.setItem('hud-notices-paused', String(event.target.checked)))
+if (widgetMode === 'players') {
+  const tools = document.getElementById('playerSearch').closest('.interactive')
+  tools.classList.add('popout-tools')
+  document.querySelector('.widget[data-widget="players"]').after(tools)
+}
+
+if (!widgetMode && mode !== 'vr') {
+  const picker = document.createElement('details')
+  const summary = document.createElement('summary'); summary.textContent = 'Separate overlays'
+  picker.append(summary)
+  const buttons = document.createElement('div'); buttons.className = 'overlay-picker'
+  for (const button of document.querySelectorAll('[data-detach]')) buttons.append(button)
+  const reset = document.createElement('button'); reset.textContent = 'Reset overlay positions'; reset.type = 'button'
+  reset.addEventListener('click', () => window.kitsunexusHud.input({ op: 'resetPositions' }))
+  buttons.append(reset); picker.append(buttons)
+  document.getElementById('overlayToolbar').append(picker)
 }

@@ -48,3 +48,13 @@ test('explicit editor opening survives transient focus loss and restores full-si
   assert.equal(win.passthrough, false)
   assert.ok(win.bounds.height >= 420)
 })
+
+test('HUD attachment accepts four-byte native window handles', () => {
+  const { api, win } = setup()
+  win.getNativeWindowHandle = () => Buffer.from([1, 0, 0, 0])
+  let handles
+  api.testSetReader(value => { handles = value; return { x: 0, y: 0, width: 1920, height: 1080 } })
+  api.testSync()
+  assert.equal(handles[0], 1n)
+  assert.equal(win.visible, true)
+})

@@ -1081,3 +1081,14 @@ e.g. the TTS engine fields, which already save correctly through `TTS_ALL_FIELD_
 
 - [x] Harden HUD focus transitions, restore full editor size, report shortcut-registration failures, add Ctrl+Alt+F9 fallback and main-window Open HUD controls button.
 - [x] Keep activity notifications independent of HUD live/player snapshot toggles; support observed portal removal/expiry log events without claiming placement.
+
+- [x] Add independent music and heart overlays with draggable headers, resizing, restored game-relative geometry, media controls, and close buttons.
+- [x] Add independently idle-hiding native notices window, synchronize HUD preferences/pins/notice pause, and stop HUD-specific music queries when disabled.
+- [ ] Finish shared collector ownership before stopping world/player or heart providers from HUD toggles; add verified FPS/lyrics providers, explicit monitor choice and packaged tests.
+
+- [x] Stop local test app/child processes on user report; prevent duplicate launches from continuing initialization and explicitly close HUD/VR surfaces on quit.
+- [ ] Verify duplicate launch/quit cleanup and final independent overlays in a single live instance when user resumes testing; leave app stopped after cleanup.
+
+- [x] Add actual Electron renderer smoke coverage for visible music/heart text and join/leave/avatar card rendering, expiration and reappearance.
+- [x] Prevent blank duplicate alerts-only main HUD when notices are detached; keep pop-outs unthrottled and scope widget selectors to actual panels.
+- [x] Add log-tail integration coverage and opt-in HUD diagnostics to distinguish collector delivery from rendering.

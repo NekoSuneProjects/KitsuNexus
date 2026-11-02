@@ -6,6 +6,22 @@ This project follows [Semantic Versioning](https://semver.org/).
 ## Unreleased
 
 ### Fixed
+- **Blank and stale overlay content.** Detached notices no longer leave an empty main alerts-only box; pop-out renderers keep processing while hidden. Widget selectors target panel elements rather than the document body, keeping media controls inside their overlay. Identical feed settings no longer invalidate in-flight music detection.
+### Added
+- **Renderer and event delivery checks.** An isolated Electron smoke check exercises actual music/heart content, activity cards, expiry and reappearance. A log-tail integration test verifies startup suppression and subsequent joins/avatar changes/leaves. Optional `--hud-diagnostics` records local delivery/visibility metadata for troubleshooting.
+
+
+### Fixed
+- **Duplicate launch and overlay cleanup.** Single-instance rejection now exits before loading collectors or creating windows. Quit explicitly closes HUD, pop-outs and VR surfaces. Local test processes were stopped following the user’s resource-pressure report; live validation remains pending.
+
+
+### Added
+- **Independent music and heart overlays.** Each has a draggable header, resizable native window, saved position/size and close control; music retains media buttons. Player search/pins work in the player overlay. Native notices hide between alerts.
+### Fixed
+- **Overlay feed synchronization.** Preferences, pins and notice pause synchronize between windows. Dedicated HUD music collection skips queries while disabled or the HUD is closed and discards results from older preference revisions. Shared log/heart collectors remain active for their other app consumers.
+
+
+### Fixed
 - **HUD controls recovery.** Explicit editor requests locate the VRChat window even during an app switch, tolerate a brief focus transition, and restore usable editor height. Shortcut failures are logged; Ctrl+Alt+F9 and a Stats-page Open HUD controls button provide alternatives.
 - **Activity alerts survive disabled HUD snapshots.** Live/player-monitoring toggles no longer suppress activity notifications. Portal removal/expiry messages from the local log now create honest portal activity alerts; other-player creation remains unconfirmed.
 

@@ -4,6 +4,9 @@ const fs = require('fs')
 const { spawn, execFile } = require('child_process')
 const axios = require('axios')
 app.setName('KitsuNexus')
+// A duplicate launch must exit before initializing collectors or windows.
+const isPrimaryInstance = app.requestSingleInstanceLock()
+if (!isPrimaryInstance) { app.quit(); process.exit(0) }
 const { writeRuntimeError } = require('./modules/diagnostics/runtimeErrors')
 function recordRuntimeError (kind, err) {
   console.error(`[${kind}]`, err)
@@ -90,6 +93,7 @@ const crashGuard = require('./modules/vrchat/tools/crashGuard')
 const quickLaunch = require('./modules/vrchat/launcher/quickLaunch')
 const vrOverlay = require('./modules/vr/overlay/vrOverlayController')
 const hudWindow = require('./modules/vr/overlay/hudWindow')
+app.on('before-quit', () => { hudWindow.hideDesktop(); hudWindow.closeVrSurface() })
 const { LocalHistory } = require('./modules/vrchat/history/localHistory')
 let localHistory = null
 let historyPrevious = { world: '', players: new Set(), portalSeq: null }
@@ -239,9 +243,7 @@ function appendBleDebug (entry) {
 
 // Only ever allow ONE instance — prevents the process count ballooning if the
 // app (or its installer/shortcut) is launched more than once.
-if (!app.requestSingleInstanceLock()) {
-  app.quit()
-} else {
+if (isPrimaryInstance) {
   app.on('second-instance', () => {
     if (mainWindow) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus() }
   })
@@ -394,7 +396,11 @@ app.whenReady().then(async () => {
   configureModelsDir(app.getPath('userData'))
   setPreferredSource(settings.get('nowPlayingSource', '')) // restore the chosen media source
   createWindow()
-  if (process.argv.includes('--desktop-hud')) hudWindow.showDesktop({ ...settings.get('hudDesktopBounds', {}), ...settings.get('hudDesktopOptions', {}), clickThrough: false })
+  if (process.argv.includes('--desktop-hud')) {
+    hudWindow.showDesktop({ ...settings.get('hudDesktopBounds', {}), ...settings.get('hudDesktopOptions', {}), clickThrough: false })
+    const widgetArgument = process.argv.find(value => value.startsWith('--hud-widgets='))
+    if (widgetArgument) hudWindow.openWidgets(widgetArgument.slice('--hud-widgets='.length).split(','))
+  }
   // Track the current VRChat world from its log; feed it to the renderer and
   // (when connected) into the Discord presence.
   gamelog.init(app.getPath('userData')).catch(err => console.warn('gamelog init:', err.message))
@@ -466,13 +472,15 @@ app.whenReady().then(async () => {
   setInterval(() => pawprints.tickCommit(), 60000)
   let hudMediaBusy = false
   const updateHudMedia = async () => {
-    if (hudMediaBusy) return
+    const demand = hudWindow.collectionState()
+    if (hudMediaBusy || !demand.music) return
     hudMediaBusy = true
     try {
       const now = await getNowPlaying()
+      if (!hudWindow.collectionState().music || demand.revision !== hudWindow.collectionState().revision) return
       const track = typeof now === 'string' ? now : [now?.artist, now?.title].filter(Boolean).join(' — ')
       hudWindow.broadcast({ music: track || 'No track' })
-    } catch (_) { hudWindow.broadcast({ music: 'No track' }) }
+    } catch (_) { if (hudWindow.collectionState().music && demand.revision === hudWindow.collectionState().revision) hudWindow.broadcast({ music: 'No track' }) }
     finally { hudMediaBusy = false }
   }
   setInterval(updateHudMedia, 15000)

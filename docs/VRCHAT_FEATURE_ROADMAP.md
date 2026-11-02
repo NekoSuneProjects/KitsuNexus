@@ -34,9 +34,9 @@ This is an original KitsuNexus implementation plan. All integrations should use 
 - [~] Optional renderer-side live HUD, player monitoring, music and heart feed controls; upstream collection must also be disabled when off before this is complete
 - [ ] Direct language selector and multiple translation targets
 - [ ] Push-to-talk / voice translation with microphone consent
-- [~] In-window draggable layout plus independently resizable Electron pop-out windows for players/notices/stats/lyrics; persistence of pop-out geometry across app restarts and packaged testing pending
+- [~] In-window draggable layout plus independently resizable Electron pop-out windows for players/notices/stats/lyrics; saved game-relative pop-out geometry restored across restarts (automated coverage); packaged testing pending
 - [~] Local player search and pins, notice pause, optional FPS/status tiles and lyrics text surface implemented; real FPS/lyrics providers, syncing and independent windows pending
-- [~] Notification corner selector (inline/four corners), visibility, limits, fade, scroll, pause and text-size control; independent native notification window pending
+- [~] Notification corner selector (inline/four corners), visibility, limits, fade, scroll, pause and text-size control; independent native notification window with idle hiding implemented; live/packaged acceptance still pending
 - [ ] OS-level hotkeys and user-configurable safety gate
 - [ ] Script-created windows in an isolated, permission-controlled sandbox
 - [ ] In-headset input only after proper native OpenVR interaction testing
@@ -162,3 +162,23 @@ HUD interaction shortcut: Ctrl+Shift+F9, with Escape to return to the game.
 - Activity alerts remain active independently of HUD live/player snapshot toggles.
 - Observed portal destruction now reports removal/expiry. Other-player placement is still unavailable from observed logs; no inventory-based inference is made.
 - Focus transition and portal-removal regression tests pass. Live desktop automation became unavailable (window listing times out even after reconnect), so these changes need user verification.
+
+### Separate desktop overlays (2 November 2026)
+- [x] Added music and heart native windows to players/notices/stats/lyrics; draggable headers, native resizing, close buttons, distinct default offsets and saved game-relative position/size.
+- [x] Separate overlays picker near the editor toolbar and reset-overlay-positions action.
+- [x] Player overlay search/pins, synchronized preferences/pins/pause across windows, independent native notice idle hiding, and reduced duplicate content in the main HUD.
+- [x] Disabled HUD-specific music queries when off/closed, with stale-result suppression. Shared world/player/heart collectors remain needed by other app features; complete upstream opt-out requires consumer ownership tracking.
+- [x] 82 automated tests pass, including simulated close/reopen restoration of music/heart geometry, persisted feed-disable state and independent notification visibility.
+- [ ] Packaged Windows and physical drag/resize/restart tests remain required. Real FPS/lyrics providers, full shared-collector shutdown, and explicit monitor selection remain pending; do not mark these roadmap items complete.
+
+Direct separate-overlay startup: `npm start -- --desktop-hud --hud-widgets=music,heart,alerts` (optional list: music,heart,players,alerts,tiles,lyrics).
+
+User reported multiple/ghost processes during local testing. Stopped project Electron processes and launcher, confirmed no matching app/launcher remained, and did not relaunch. Added early duplicate-instance exit and before-quit overlay cleanup. Latest automated run: 83 tests pass before this lifecycle change; lifecycle change syntax-checked only. Final visual/pop-out testing remains pending.
+
+### Overlay event/music regression checks (2 November 2026)
+- Fixed a blank duplicate main notification box when alerts are detached; pop-outs disable background throttling to keep hidden-window updates active.
+- Scoped panel selectors to `.widget` so a body widget attribute cannot capture panel operations/media controls.
+- Identical preference submissions no longer invalidate pending music detection.
+- Actual isolated Electron renderer test passes for visible music/heart text, three join/leave/avatar cards, expiry and fresh-alert reappearance. PNGs inspected locally. These are explicit synthetic fixtures, not a claim of new live VRChat events.
+- Log-tail integration verifies historical suppression and subsequent live-appended join/avatar/leave delivery. Full Node suite: 84 passed.
+- Single live-instance diagnostics before final restart confirmed nonempty music data reached the music renderer and its music element had visible layout. Current log event sequence matched collector/renderer sequence. New live user events still require confirmation.
