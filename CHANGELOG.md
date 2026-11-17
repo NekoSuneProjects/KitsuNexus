@@ -5,6 +5,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+- **Popcorn Palace in Discord Rich Presence, with the movie poster as the big icon.** The VRChat log tracker now reads the `[VRCX] VideoPlay(PopcornPalace) {json}` line the Popcorn Palace worlds write (the same source VRCX uses) and keeps the current movie name, poster URL, position, length and paused state. While you're watching, the presence shows `🍿 <movie>` on the top line, "Watching in <world>" (or "⏸ Paused in") underneath, the poster as the large image (KitsuNexus logo moves to the small image; falls back to the logo when the world gives no poster), and a movie elapsed/remaining bar instead of app uptime. It follows the existing privacy rule (hidden on Ask Me / Do Not Disturb), clears on leaving or switching instance, ignores stale log lines from finished movies, and re-pushes once after the movie ends so the presence drops back to normal.
+
 ## [1.0.81] - 2026-11-01
 
 ### Added

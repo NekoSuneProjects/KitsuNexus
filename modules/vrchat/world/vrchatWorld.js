@@ -4,6 +4,7 @@
 //   - current world id + instance id  -> a clickable "launch/join" URL
 //   - the world's display name
 //   - your own user id (usr_...)       -> your VRChat profile URL
+//   - Popcorn Palace "now watching"    -> movie name / thumbnail / position
 // Used to enrich the Discord Rich Presence. Runs in the MAIN process.
 //
 // Log location:  %USERPROFILE%\AppData\LocalLow\VRChat\VRChat\output_log_*.txt
@@ -39,6 +40,11 @@ const state = {
   playersDetailed: [], // same players, as {id, displayName} - for screenshot metadata
   lastVideo: '', // last video URL played in the instance (from the log)
   lastPortal: '', // who dropped the last portal
+  // Popcorn Palace movie currently playing in this instance (null when none).
+  // The Popcorn Palace worlds write a VRCX-compatible log line:
+  //   [VRCX] VideoPlay(PopcornPalace) {"videoName": "...", "videoPos": 37.2, "videoLength": 11474.0,
+  //     "thumbnailUrl": "", "displayName": "...", "isPaused": false, "is3D": false, "looping": false}
+  popcornPalace: null,
   portalSeq: 0 // increments each portal drop (so repeats are logged)
 }
 
@@ -59,6 +65,43 @@ function splitNameAndId (raw) {
   return m ? { displayName: m[1].trim(), id: m[2] } : { displayName: raw.trim(), id: '' }
 }
 
+// VRChat log lines start with a local timestamp "YYYY.MM.DD HH:MM:SS". Used to
+// anchor the movie position so stale lines read on startup aren't shown as live.
+function lineTime (line) {
+  const m = line.match(/^(\d{4})\.(\d{2})\.(\d{2}) (\d{2}):(\d{2}):(\d{2})/)
+  if (!m) return Date.now()
+  const t = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime()
+  return Number.isFinite(t) ? t : Date.now()
+}
+
+// "[VRCX] VideoPlay(PopcornPalace) {json}" -> state.popcornPalace. Returns true if handled.
+function parsePopcornPalace (line) {
+  const idx = line.indexOf('[VRCX] VideoPlay(PopcornPalace)')
+  if (idx === -1) return false
+  const j = line.indexOf('{', idx)
+  if (j === -1) return false
+  let data
+  try { data = JSON.parse(line.slice(j)) } catch (_) { return false }
+  const videoName = String(data.videoName || '').trim()
+  if (!videoName) { state.popcornPalace = null; return true } // nothing playing
+  const at = lineTime(line)
+  const pos = Math.max(0, Number(data.videoPos) || 0)
+  const len = Math.max(0, Number(data.videoLength) || 0)
+  const thumb = String(data.thumbnailUrl || '').trim()
+  state.popcornPalace = {
+    videoName,
+    thumbnailUrl: /^https:\/\//i.test(thumb) ? thumb : '',
+    displayName: String(data.displayName || ''),
+    isPaused: !!data.isPaused,
+    videoPos: pos,
+    videoLength: len,
+    startedAt: at - pos * 1000, // wall-clock time the movie would have started
+    endsAt: len > 0 ? at + Math.max(0, len - pos) * 1000 : 0,
+    updatedAt: at
+  }
+  return true
+}
+
 function buildUrls () {
   state.worldUrl = state.worldId ? `https://vrchat.com/home/world/${state.worldId}` : ''
   state.joinUrl = (state.worldId && state.instanceId)
@@ -69,7 +112,7 @@ function buildUrls () {
 
 function emit () {
   buildUrls()
-  if (typeof onUpdate === 'function') onUpdate({ ...state, at: Date.now() })
+  if (typeof onUpdate === 'function') onUpdate({ ...getVrcWorld(), at: Date.now() })
 }
 
 // Parse a single log line and fold any world/user info into state.
@@ -83,6 +126,7 @@ function processLine (line) {
     state.instanceId = m[2]
     state.groupId = (m[2].match(/~group\(([^)]+)\)/) || [])[1] || ''
     state.inWorld = true
+    state.popcornPalace = null
     playerSet.clear(); playerMap.clear(); syncPlayers() // new instance — radar resets
     return true
   }
@@ -118,9 +162,12 @@ function processLine (line) {
     state.instanceId = ''
     state.groupId = ''
     state.worldName = ''
+    state.popcornPalace = null
     playerSet.clear(); playerMap.clear(); syncPlayers()
     return true
   }
+  // Popcorn Palace now-watching (checked before the generic video regexes).
+  if (parsePopcornPalace(line)) return true
   // Video player URLs (for media-link history).
   m = line.match(/\[Video Playback\][^']*resolve URL '([^']+)'/) || line.match(/added URL '([^']+)'/)
   if (m) { state.lastVideo = m[1]; return true }
@@ -215,6 +262,6 @@ function stopVrcWorld () {
   if (timer) { clearInterval(timer); timer = null }
 }
 
-function getVrcWorld () { return { ...state } }
+function getVrcWorld () { return { ...state, popcornPalace: state.popcornPalace ? { ...state.popcornPalace } : null } }
 
-module.exports = { startVrcWorld, stopVrcWorld, getVrcWorld }
+module.exports = { startVrcWorld, stopVrcWorld, getVrcWorld, _processLine: processLine }
