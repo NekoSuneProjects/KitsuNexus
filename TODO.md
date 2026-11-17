@@ -151,6 +151,7 @@ category's section below.
 - [x] **Body tracking** (VRChat OSC trackers for VR + `BT/…` desktop body parameters, same camera) — `bodyTracking.js`. **Pose and hand models never ran for real** (Google's model storage is blocked in the dev sandbox and the legacy networks from PyPI are rejected by the web runtime); maths, OSC wire format and UI are tested. Needs a Windows test: stand in view, check trackers in VR (Calibrate FBT) and BT params on desktop.
 - [ ] Body tracking: example avatar animator / prefab for the `BT/…` desktop parameters (leg/spine/arm muscle blend trees) so users don't have to build one.
 - [ ] Body tracking: VRChat may add desktop OSC full-body later (feedback.vrchat.com "Fullbody tracking in desktop mode with osc") — if it does, the trackers already work there.
+- [x] Face, Hands & Body: camera resolution / FPS detected from the camera (4K/1080p/720p…, up to 120 fps) with Auto + manual choice (`cameraModes.js`).
 - [ ] Face & Hands: tongue tracking (FoxyFace has an extra ONNX tongue model), per-shape calibration UI, and an avatar setup guide / example animator for the `HT/` hand parameters.
 - [ ] Face & Hands: MediaPipe 1.x sends usage metrics to Google — stay on 0.10.x (pinned 0.10.35) or keep the tracker session's network block if upgrading.
 - [ ] `modules/integrations/discord/discordRpc.js` looks like an unused older Rich Presence module (nothing requires it; `discord.js` is the live one) — confirm and remove.

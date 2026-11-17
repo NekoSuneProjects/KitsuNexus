@@ -1694,7 +1694,8 @@ ipcMain.handle('vrcServerStatus:get', () => vrcServerStatus.current())
 /* hidden, network-blocked window; results become VRCFT v2 + HT/       */
 /* avatar parameters and native VRChat eye tracking.                    */
 /* ------------------------------------------------------------------ */
-const CAMERA_DEFAULTS = { deviceId: '', width: 640, height: 480, fps: 30, gpu: true, handsEveryN: 1, poseEveryN: 1, autoStart: false }
+// width/height/fps 0 = Auto (720p @ 30, or the closest mode the camera has)
+const CAMERA_DEFAULTS = { deviceId: '', width: 0, height: 0, fps: 0, gpu: true, handsEveryN: 1, poseEveryN: 1, autoStart: false }
 const trackingEngine = createTrackingEngine({
   send: msgs => osc.sendMessages(msgs),
   loadSettings: k => settings.get(`faceTracking.${k}`),
@@ -1773,12 +1774,17 @@ ipcMain.handle('tracking:config', async (e, patch = {}) => {
   return trackingStatus()
 })
 // Camera settings (device, resolution, fps, GPU, hands every N frames, auto-start).
-ipcMain.handle('tracking:camera', (e, patch = {}) => {
+ipcMain.handle('tracking:camera', async (e, patch = {}) => {
   const cur = getCameraSettings(); const n = { ...cur }
   if (typeof patch.deviceId === 'string') n.deviceId = patch.deviceId.slice(0, 200)
-  for (const [k, lo, hi] of [['width', 160, 1920], ['height', 120, 1080], ['fps', 5, 60], ['handsEveryN', 1, 4], ['poseEveryN', 1, 4]]) if (Number.isFinite(patch[k])) n[k] = Math.round(Math.min(hi, Math.max(lo, patch[k])))
+  // 0 = Auto; otherwise up to 4K / 120 fps (whatever the camera reports)
+  for (const [k, lo, hi] of [['width', 160, 7680], ['height', 120, 4320], ['fps', 1, 240]]) if (Number.isFinite(patch[k])) n[k] = patch[k] === 0 ? 0 : Math.round(Math.min(hi, Math.max(lo, patch[k])))
+  for (const [k, lo, hi] of [['handsEveryN', 1, 4], ['poseEveryN', 1, 4]]) if (Number.isFinite(patch[k])) n[k] = Math.round(Math.min(hi, Math.max(lo, patch[k])))
+  if ((n.width === 0) !== (n.height === 0)) { n.width = 0; n.height = 0 } // resolution is Auto as a pair
   for (const k of ['gpu', 'autoStart']) if (typeof patch[k] === 'boolean') n[k] = patch[k]
   settings.set('faceTracking.camera', n)
+  // new camera / resolution / fps while running: reopen the camera with it
+  if (trackingRunning && ['deviceId', 'width', 'height', 'fps'].some(k => n[k] !== cur[k])) startTracking().catch(() => {})
   return trackingStatus()
 })
 ipcMain.handle('tracking:preview', (e, on) => { trackingPreview = !!on; trackerWin.update({ preview: trackingPreview }); return true })

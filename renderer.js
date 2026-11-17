@@ -7051,6 +7051,67 @@ async function ftLoadCameras () {
   const cur = (ftLast && ftLast.camera && ftLast.camera.deviceId) || ''
   sel.innerHTML = '<option value="">Default camera</option>' + devs.map((d, i) => `<option value="${esc(d.deviceId)}">${esc(d.label || 'Camera ' + (i + 1))}</option>`).join('')
   sel.value = devs.some(d => d.deviceId === cur) ? cur : ''
+  ftProbeCamera(sel.value)
+}
+// What the selected camera supports (MediaStreamTrack.getCapabilities()).
+// While tracking runs, the tracker window reports it (no second camera open).
+const ftCamCaps = new Map() // deviceId ('' = default) -> { caps, label }
+let ftProbing = null
+async function ftProbeCamera (deviceId) {
+  const t = ftLast && ftLast.tracker
+  if (ftLast && ftLast.running && t && t.caps && (!deviceId || deviceId === t.deviceId)) { ftCamCaps.set(deviceId, { caps: t.caps, label: t.camera }); ftFillModes(); return }
+  if (ftCamCaps.has(deviceId)) { ftFillModes(); return }
+  if (ftProbing === deviceId) return
+  ftProbing = deviceId
+  setText('ftCamInfo', 'Reading camera…')
+  let stream = null
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: deviceId ? { deviceId: { exact: deviceId } } : true })
+    const track = stream.getVideoTracks()[0]
+    const k = track && track.getCapabilities ? track.getCapabilities() : {}
+    ftCamCaps.set(deviceId, { caps: { width: k.width, height: k.height, frameRate: k.frameRate }, label: track ? track.label : '' })
+  } catch (err) {
+    ftCamCaps.set(deviceId, { caps: null, label: '', error: (err && err.name === 'NotReadableError') ? 'camera is busy in another app' : (err && err.message) || 'camera unavailable' })
+  } finally {
+    if (stream) stream.getTracks().forEach(tr => tr.stop())
+    ftProbing = null
+  }
+  ftFillModes()
+}
+// Fill Resolution / FPS with only the modes this camera has, plus Auto.
+function ftFillModes () {
+  const M = window.KnCameraModes; if (!M) return
+  const cam = (ftLast && ftLast.camera) || {}
+  const deviceId = $('ftCamera').value || ''
+  const info = ftCamCaps.get(deviceId) || { caps: null }
+  const caps = info.caps
+  const auto = M.autoMode(caps)
+  const resList = M.resolutionsFor(caps)
+  const fpsList = M.fpsFor(caps)
+  const curRes = cam.width ? `${cam.width}x${cam.height}` : 'auto'
+  let resHtml = `<option value="auto">Auto — ${auto.width}×${auto.height} (recommended)</option>` + resList.map(r => `<option value="${r.width}x${r.height}">${esc(M.label(r))}</option>`).join('')
+  if (curRes !== 'auto' && !resList.some(r => `${r.width}x${r.height}` === curRes)) resHtml += `<option value="${esc(curRes)}">${esc(curRes.replace('x', '×'))} (not reported by this camera)</option>`
+  let fpsHtml = `<option value="0">Auto — ${auto.fps} fps</option>` + fpsList.map(f => `<option value="${f}">${f} fps</option>`).join('')
+  if (cam.fps && !fpsList.includes(cam.fps)) fpsHtml += `<option value="${cam.fps}">${cam.fps} fps (not reported by this camera)</option>`
+  if (document.activeElement !== $('ftRes')) { $('ftRes').innerHTML = resHtml; $('ftRes').value = curRes }
+  if (document.activeElement !== $('ftFps')) { $('ftFps').innerHTML = fpsHtml; $('ftFps').value = String(cam.fps || 0) }
+  ftCamInfoText()
+}
+function ftCamInfoText () {
+  const cam = (ftLast && ftLast.camera) || {}
+  const t = (ftLast && ftLast.tracker) || {}
+  const info = ftCamCaps.get($('ftCamera').value || '') || {}
+  const caps = info.caps
+  const max = caps && caps.width && caps.width.max ? `up to ${caps.width.max}×${caps.height.max}${caps.frameRate && caps.frameRate.max ? ` @ ${Math.round(caps.frameRate.max)} fps` : ''}` : ''
+  let text = info.error ? `⚠️ Couldn't read this camera's modes (${info.error}) — showing common ones.` : max ? `This camera supports ${max}.` : ''
+  if (ftLast && ftLast.running && t.width) {
+    const want = cam.width ? `${cam.width}×${cam.height}` : 'Auto'
+    const got = `${t.width}×${t.height}${t.frameRate ? ' @ ' + t.frameRate + ' fps' : ''}`
+    const differs = cam.width && (cam.width !== t.width || cam.height !== t.height)
+    text += ` Now running at ${got}${differs ? ` (asked for ${want}; the camera picked its closest mode)` : ''}.`
+  }
+  if (cam.width && cam.width > 1280) text += ' Higher than 720p doesn\'t improve tracking much — it mainly costs CPU.'
+  setText('ftCamInfo', text.trim() || '—')
 }
 function ftBar (label, v, signed) {
   const n = Math.max(signed ? -1 : 0, Math.min(1, Number(v) || 0))
@@ -7087,8 +7148,10 @@ function ftRender (s) {
   const smooth = FT_SMOOTH.findIndex(p => p.minCutoff === c.minCutoff && p.beta === c.beta)
   if (smooth >= 0 && document.activeElement !== $('ftSmooth')) { $('ftSmooth').value = smooth; setText('ftSmoothV', FT_SMOOTH[smooth].label) }
   const cam = s.camera || {}
-  if (document.activeElement !== $('ftRes')) $('ftRes').value = `${cam.width}x${cam.height}`
-  if (document.activeElement !== $('ftFps')) $('ftFps').value = String(cam.fps)
+  // tracker reported this camera's capabilities: use them for the lists
+  const tr = s.tracker || {}
+  if (s.running && tr.caps) ftCamCaps.set($('ftCamera').value || '', { caps: tr.caps, label: tr.camera })
+  ftFillModes()
   $('ftGpu').checked = cam.gpu !== false; $('ftAutoStart').checked = !!cam.autoStart
   $('ftHandsN').value = cam.handsEveryN || 1; setText('ftHandsNV', cam.handsEveryN || 1)
   $('ftPoseN').value = cam.poseEveryN || 1; setText('ftPoseNV', cam.poseEveryN || 1)
@@ -7126,14 +7189,14 @@ $('ftIntensity').addEventListener('change', e => ftCfg({ intensity: Number(e.tar
 $('ftSmooth').addEventListener('input', e => setText('ftSmoothV', FT_SMOOTH[e.target.value].label))
 $('ftSmooth').addEventListener('change', e => { const p = FT_SMOOTH[e.target.value]; ftCfg({ minCutoff: p.minCutoff, beta: p.beta }) })
 const ftCam = patch => api.trackingCamera(patch).then(ftRender)
-$('ftCamera').addEventListener('change', e => ftCam({ deviceId: e.target.value }))
-$('ftRes').addEventListener('change', e => { const [w, h] = e.target.value.split('x').map(Number); ftCam({ width: w, height: h }) })
+$('ftCamera').addEventListener('change', async e => { await ftCam({ deviceId: e.target.value }); ftProbeCamera(e.target.value) })
+$('ftRes').addEventListener('change', e => { const v = e.target.value; if (v === 'auto') ftCam({ width: 0, height: 0 }); else { const [w, h] = v.split('x').map(Number); ftCam({ width: w, height: h }) } })
 $('ftFps').addEventListener('change', e => ftCam({ fps: Number(e.target.value) }))
 $('ftGpu').addEventListener('change', e => ftCam({ gpu: e.target.checked }))
 $('ftAutoStart').addEventListener('change', e => ftCam({ autoStart: e.target.checked }))
 $('ftHandsN').addEventListener('input', e => setText('ftHandsNV', e.target.value))
 $('ftHandsN').addEventListener('change', e => ftCam({ handsEveryN: Number(e.target.value) }))
-$('ftCamRefresh').addEventListener('click', ftLoadCameras)
+$('ftCamRefresh').addEventListener('click', () => { ftCamCaps.clear(); ftLoadCameras() })
 $('ftStart').addEventListener('click', async () => {
   setText('ftOut', 'Starting…')
   const r = await api.trackingStart()

@@ -1524,10 +1524,11 @@
           <div class="section-note">Webcam face + hand tracking sent to VRChat over OSC — built in, no VRCFaceTracking needed. One camera drives both. Face uses the VRCFaceTracking <code>FT/v2/…</code> parameters, so avatars made for VRCFT just work; avatars without them get VRChat's native eye tracking. Hands drive <code>HT/…</code> avatar parameters. Everything is processed on your PC — this window has no network access.</div>
           <div class="row" style="flex-wrap:wrap;gap:8px;margin-top:10px">
             <div style="flex:1;min-width:220px"><label>Camera</label><select id="ftCamera"><option value="">Default camera</option></select></div>
-            <div><label>Resolution</label><select id="ftRes"><option value="640x480">640×480</option><option value="1280x720">1280×720</option><option value="320x240">320×240</option></select></div>
-            <div><label>FPS</label><select id="ftFps"><option>30</option><option>60</option><option>24</option><option>15</option></select></div>
+            <div><label>Resolution</label><select id="ftRes"><option value="auto">Auto</option></select></div>
+            <div><label>FPS</label><select id="ftFps"><option value="0">Auto</option></select></div>
             <button class="btn ghost" id="ftCamRefresh" style="margin-top:20px" title="Re-scan cameras">↻</button>
           </div>
+          <div class="muted" id="ftCamInfo" style="margin-top:4px;font-size:.76rem">Reading camera…</div>
           <div class="row" style="margin-top:10px;gap:8px">
             <button class="btn" id="ftStart">▶ Start tracking</button>
             <button class="btn ghost" id="ftStop">■ Stop</button>
@@ -2736,6 +2737,7 @@
     </div>
   </div>
 
+  <script src="modules/vrchat/tracking/cameraModes.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

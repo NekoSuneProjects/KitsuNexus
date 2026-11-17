@@ -62,7 +62,8 @@ async function start (c) {
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
-      video: { deviceId: c.deviceId ? { exact: c.deviceId } : undefined, width: { ideal: c.width || 640 }, height: { ideal: c.height || 480 }, frameRate: { ideal: c.fps || 30 } }
+      // width/fps 0 = Auto (720p @ 30); otherwise the mode picked in the tab
+      video: { deviceId: c.deviceId ? { exact: c.deviceId } : undefined, ...window.KnCameraModes.constraintsFor(c, null) }
     })
   } catch (e) { status({ state: 'error', error: 'Camera: ' + (e && e.message ? e.message : e) }); return }
   video.srcObject = stream
@@ -73,7 +74,10 @@ async function start (c) {
   } catch (e) { status({ state: 'error', error: 'Model: ' + (e && e.message ? e.message : e) }); await stop(); return }
   const track = stream.getVideoTracks()[0]
   const st = track ? track.getSettings() : {}
-  status({ state: 'running', camera: track ? track.label : '', width: st.width, height: st.height, face: !!face, hands: !!hands, pose: !!pose, gpu: usingGpu })
+  let caps = null
+  try { const k = track && track.getCapabilities ? track.getCapabilities() : null; if (k) caps = { width: k.width, height: k.height, frameRate: k.frameRate } } catch (_) {}
+  // what the camera actually gave us (it may not match what was asked for)
+  status({ state: 'running', camera: track ? track.label : '', deviceId: st.deviceId || '', width: st.width, height: st.height, frameRate: st.frameRate ? Math.round(st.frameRate) : 0, caps, face: !!face, hands: !!hands, pose: !!pose, gpu: usingGpu })
   tick()
 }
 

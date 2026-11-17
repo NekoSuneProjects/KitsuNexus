@@ -6,6 +6,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 ## Unreleased
 
 ### Fixed
+- **Face, Hands & Body tracking: camera resolution / FPS now come from the camera.** The tab used to offer a fixed 320×240 / 640×480 / 1280×720 and 15–60 fps list and capped everything at 1080p/60, whatever the webcam could actually do. It now reads the selected camera's real capabilities (`MediaStreamTrack.getCapabilities()`, or from the tracker while it's running) and lists only the modes it supports — 4K, 1440p, 1080p, 720p … down to 240p, plus the camera's own maximum if it's an unusual size — and only the frame rates it reports (up to 120 fps). New **Auto** (default) picks 720p @ 30 or the closest the camera has, which is plenty for tracking. The tab shows what the camera supports and what it's actually running at, and says so when the camera picked a different mode than asked. Changing camera, resolution or FPS while tracking reopens the camera straight away.
 - **Blank and stale overlay content.** Detached notices no longer leave an empty main alerts-only box; pop-out renderers keep processing while hidden. Widget selectors target panel elements rather than the document body, keeping media controls inside their overlay. Identical feed settings no longer invalidate in-flight music detection.
 ### Added
 - **Body tracking (full body) from the same webcam — VRChat OSC trackers + desktop body parameters.** The Face & Hands tab is now *Face, Hands & Body*: a third MediaPipe model (Pose, 33 landmarks) runs on the same single camera stream as face and hands.
