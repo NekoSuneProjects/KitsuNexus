@@ -27,6 +27,14 @@ const MODELS = {
     minBytes: 3_000_000,
     maxBytes: 20_000_000,
     entries: ['hand_landmarks_detector.tflite', 'hand_detector.tflite']
+  },
+  pose: {
+    file: 'pose_landmarker_full.task',
+    url: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
+    sha256: null, // no pinned hash available; checked by size + bundle contents
+    minBytes: 3_000_000,
+    maxBytes: 30_000_000,
+    entries: ['pose_landmarks_detector.tflite', 'pose_detector.tflite']
   }
 }
 

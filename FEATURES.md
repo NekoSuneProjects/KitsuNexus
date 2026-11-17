@@ -41,6 +41,9 @@ program.**
   without them get VRChat's native eye tracking. Hands drive `HT/…` finger-curl, spread,
   gesture and position parameters. Calibration, smoothing, strength, GPU/CPU, live preview.
   Processing is local, in a window with no network access.
+  **Body:** the same camera also tracks your full body — VRChat OSC trackers (hip, chest,
+  feet, knees, elbows) for full-body IK in VR, and `BT/…` leg/spine/arm parameters for
+  desktop avatars (VRChat only enables OSC full-body in VR mode).
 - **OSC Apps** — SpotiOSC media controls and DiscordOSC voice controls, native Rusk
   Laserdome log-to-OSC compatibility, and Twitch command/reward mapping for Fooma's
   Twitch to VRChat Interaction System.

@@ -27,7 +27,13 @@ Apache License 2.0; the KitsuNexus licence applies to everything else.
   camera stream.
 
 ## MediaPipe
-- `@mediapipe/tasks-vision` (npm) and the `face_landmarker.task` /
-  `hand_landmarker.task` models — Copyright Google LLC, Apache License 2.0.
+- `@mediapipe/tasks-vision` (npm) and the `face_landmarker.task`,
+  `hand_landmarker.task` and `pose_landmarker_full.task` models — Copyright Google LLC, Apache License 2.0.
   The models are not shipped in this repository; they are downloaded from
   Google's MediaPipe model storage on first use.
+
+## Not used: XR Animator
+XR Animator / System Animator Online (ButzYung/SystemAnimatorOnline) was looked
+at for camera body tracking but none of its code is used here: it is licensed
+CC BY-NC-SA 4.0. `bodyTracking.js` is an independent implementation on top of
+MediaPipe Pose and VRChat's published OSC tracker format.

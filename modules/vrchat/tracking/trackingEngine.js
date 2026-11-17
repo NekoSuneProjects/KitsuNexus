@@ -13,6 +13,7 @@ const path = require('path')
 const UE = require('./unifiedExpressions')
 const FT = require('./ftParams')
 const HT = require('./handParams')
+const BT = require('./bodyTracking')
 const { OneEuroBank } = require('./oneEuro')
 const { findAvatarConfig, parseConfig, OSC_DIR } = require('./avatarConfig')
 
@@ -23,15 +24,25 @@ const DEFAULTS = {
   minCutoff: 1.5, beta: 0.3, // One Euro (FoxyFace-like defaults)
   sendAll: false, // ignore the avatar config and send every v2 / HT param
   nativeEyes: true, // VRChat native eye tracking when the avatar has no FT eye params
-  faceLostMs: 600
+  faceLostMs: 600,
+  // Body (pose) tracking
+  body: false,
+  bodyTrackers: true, // VRChat OSC trackers (full-body IK; VR mode only)
+  bodyParams: true, // BT/… avatar parameters (works on desktop)
+  height: 1.7, // metres, used for tracker floor height when feet aren't visible
+  trackerParts: { hip: true, chest: true, feet: true, knees: true, elbows: false, head: true }
 }
 const FLOAT_EPS = 0.002
 
 function createTrackingEngine ({ send, onStatus, loadSettings, saveSettings, now = () => Date.now() } = {}) {
-  let cfg = { ...DEFAULTS, ...((loadSettings && loadSettings('config')) || {}) }
+  const saved = (loadSettings && loadSettings('config')) || {}
+  let cfg = { ...DEFAULTS, ...saved, trackerParts: { ...DEFAULTS.trackerParts, ...(saved.trackerParts || {}) } }
   let calibration = (loadSettings && loadSettings('calibration')) || {}
   const faceFilter = new OneEuroBank({ minCutoff: cfg.minCutoff, beta: cfg.beta, dCutoff: 1 })
   const handFilter = new OneEuroBank({ minCutoff: cfg.minCutoff, beta: cfg.beta, dCutoff: 1 })
+  const poseFilter = new OneEuroBank({ minCutoff: cfg.minCutoff, beta: cfg.beta, dCutoff: 1 })
+  const bodyState = {}
+  let bodyPlan = []
   let avatar = null // { id, name, fullFaceTracking, parameters }
   let facePlan = FT.planForAvatar([], { nativeEyes: cfg.nativeEyes })
   let handPlan = []
@@ -39,13 +50,14 @@ function createTrackingEngine ({ send, onStatus, loadSettings, saveSettings, now
   let lastFaceAt = 0
   let faceActive = false
   let calibrating = null // { until, sums, n }
-  const stats = { frames: 0, fps: 0, face: false, hands: { Left: false, Right: false }, sent: 0, lastValues: {}, curls: {} }
+  const stats = { frames: 0, fps: 0, face: false, hands: { Left: false, Right: false }, sent: 0, lastValues: {}, curls: {}, body: null }
   let fpsWindow = []
 
   function replan () {
     const params = avatar ? avatar.parameters : []
     facePlan = FT.planForAvatar(params, { sendAll: cfg.sendAll, nativeEyes: cfg.nativeEyes, fullFaceTracking: !!(avatar && avatar.fullFaceTracking) })
     handPlan = HT.planHands(params, { sendAll: cfg.sendAll })
+    bodyPlan = BT.planBody(params, { sendAll: cfg.sendAll })
     lastSent.clear() // resend everything for the new avatar
   }
 
@@ -119,6 +131,29 @@ function createTrackingEngine ({ send, onStatus, loadSettings, saveSettings, now
       stats.hands = { Left: !!hands.Left, Right: !!hands.Right }
       stats.curls = { Left: hands.Left && { ...hands.Left.curls, gesture: hands.Left.gesture }, Right: hands.Right && { ...hands.Right.curls, gesture: hands.Right.gesture } }
     }
+    if (cfg.body && frame.pose) {
+      // smooth all 33 world points (x, y, z) before deriving anything
+      const flat = {}
+      frame.pose.world.forEach((p, i) => { flat[i + 'x'] = p[0]; flat[i + 'y'] = p[1]; flat[i + 'z'] = p[2] })
+      const f = poseFilter.apply(flat, t)
+      const pose = { world: frame.pose.world.map((p, i) => [f[i + 'x'], f[i + 'y'], f[i + 'z'], p[3]]), image: frame.pose.image }
+      const body = BT.readPose(pose, { mirrored: cfg.mirror })
+      let trackers = {}
+      if (cfg.bodyTrackers) {
+        const r = BT.computeTrackers(body, { height: cfg.height, enabled: cfg.trackerParts }, bodyState)
+        trackers = r.trackers
+        // Trackers stream every frame (VRChat expects a continuous feed) — not de-duplicated.
+        const tm = BT.trackerMessages(trackers)
+        if (tm.length && typeof send === 'function') { send(tm); stats.sent += tm.length }
+      }
+      const bp = cfg.bodyParams ? BT.computeBodyParams(body, bodyState) : {}
+      if (cfg.bodyParams) msgs.push(...BT.evaluateBody(bodyPlan, bp))
+      stats.body = { detected: !!body, legsVisible: !!bp['BT/LegsVisible'], trackers: Object.keys(trackers), values: bp }
+    } else if (cfg.body && frame.pose === null && stats.body && stats.body.detected) {
+      // pose ran this frame but nobody was found
+      msgs.push(...BT.evaluateBody(bodyPlan, { 'BT/Detected': false, 'BT/LegsVisible': false }))
+      stats.body = { detected: false, legsVisible: false, trackers: [], values: {} }
+    }
     sendChanged(msgs)
   }
 
@@ -154,12 +189,17 @@ function createTrackingEngine ({ send, onStatus, loadSettings, saveSettings, now
 
   function setConfig (patch = {}) {
     const next = { ...cfg }
-    for (const k of ['face', 'eyes', 'head', 'hands', 'mirror', 'sendAll', 'nativeEyes']) if (typeof patch[k] === 'boolean') next[k] = patch[k]
+    for (const k of ['face', 'eyes', 'head', 'hands', 'mirror', 'sendAll', 'nativeEyes', 'body', 'bodyTrackers', 'bodyParams']) if (typeof patch[k] === 'boolean') next[k] = patch[k]
+    if (Number.isFinite(patch.height)) next.height = Math.min(2.5, Math.max(1, patch.height))
+    if (patch.trackerParts && typeof patch.trackerParts === 'object') {
+      next.trackerParts = { ...cfg.trackerParts }
+      for (const k of Object.keys(DEFAULTS.trackerParts)) if (typeof patch.trackerParts[k] === 'boolean') next.trackerParts[k] = patch.trackerParts[k]
+    }
     for (const [k, lo, hi] of [['intensity', 0.2, 3], ['minCutoff', 0.05, 10], ['beta', 0, 5]]) if (Number.isFinite(patch[k])) next[k] = Math.min(hi, Math.max(lo, patch[k]))
     const filterChanged = next.minCutoff !== cfg.minCutoff || next.beta !== cfg.beta
     const planChanged = next.sendAll !== cfg.sendAll || next.nativeEyes !== cfg.nativeEyes
     cfg = next
-    if (filterChanged) { faceFilter.setOptions({ minCutoff: cfg.minCutoff, beta: cfg.beta, dCutoff: 1 }); handFilter.setOptions({ minCutoff: cfg.minCutoff, beta: cfg.beta, dCutoff: 1 }) }
+    if (filterChanged) for (const f of [faceFilter, handFilter, poseFilter]) f.setOptions({ minCutoff: cfg.minCutoff, beta: cfg.beta, dCutoff: 1 })
     if (planChanged) replan()
     if (saveSettings) saveSettings('config', cfg)
     return { ...cfg }
@@ -168,9 +208,9 @@ function createTrackingEngine ({ send, onStatus, loadSettings, saveSettings, now
   // Called when tracking stops: tell the avatar tracking is off.
   function stop () {
     const off = facePlan.status.map(s => ({ address: s.address, type: 'bool', value: false }))
-    for (const p of handPlan) if (p.type === 'Bool') off.push({ address: p.address, type: 'bool', value: false })
+    for (const p of [...handPlan, ...bodyPlan]) if (p.type === 'Bool') off.push({ address: p.address, type: 'bool', value: false })
     if (off.length && typeof send === 'function') send(off)
-    faceActive = false; lastSent.clear(); faceFilter.reset(); handFilter.reset()
+    faceActive = false; lastSent.clear(); faceFilter.reset(); handFilter.reset(); poseFilter.reset(); stats.body = null
   }
 
   function status (extra = {}) {
@@ -179,7 +219,7 @@ function createTrackingEngine ({ send, onStatus, loadSettings, saveSettings, now
       fps: stats.fps, face: stats.face, hands: stats.hands, values: stats.lastValues, curls: stats.curls, sent: stats.sent,
       calibrating: !!calibrating, calibrated: Object.keys(calibration).length > 0,
       avatar: avatar ? { id: avatar.id, name: avatar.name, fullFaceTracking: avatar.fullFaceTracking } : null,
-      faceParams: facePlan.count, nativeEyes: facePlan.native, handParams: handPlan.length,
+      faceParams: facePlan.count, nativeEyes: facePlan.native, handParams: handPlan.length, bodyParams: bodyPlan.length, body: stats.body,
       config: { ...cfg }
     }
   }

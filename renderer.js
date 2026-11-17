@@ -7079,9 +7079,10 @@ function ftRender (s) {
     ? `<b>${esc(a.name || a.id)}</b><br>${a.fullFaceTracking ? 'Avatar uses its own face tracking — no FT parameters sent.<br>' : ''}${Number(s.faceParams) || 0} face parameters · ${Number(s.handParams) || 0} hand parameters${s.nativeEyes && (s.nativeEyes.gaze || s.nativeEyes.lid) ? ' · VRChat native eye tracking' : ''}`
     : 'No avatar yet — change or reset your avatar in VRChat (with OSC on).'
   const m = s.models || {}
-  $('ftModels').innerHTML = ['face', 'hand'].map(k => `<div class="row" style="gap:6px;align-items:center;margin-top:4px"><span style="min-width:90px">${k === 'face' ? '🙂 Face' : '✋ Hands'}</span><span class="muted">${m[k] && m[k].ready ? `✅ ready (${(m[k].size / 1048576).toFixed(1)} MB)` : 'not downloaded'}</span><button class="btn ghost ft-dl" data-kind="${k}" style="margin-left:auto;padding:3px 8px;font-size:.75rem">${m[k] && m[k].ready ? 'Re-download' : 'Download'}</button><button class="btn ghost ft-import" data-kind="${k}" style="padding:3px 8px;font-size:.75rem">From file…</button></div>`).join('')
+  $('ftModels').innerHTML = ['face', 'hand', 'pose'].map(k => `<div class="row" style="gap:6px;align-items:center;margin-top:4px"><span style="min-width:90px">${{ face: '🙂 Face', hand: '✋ Hands', pose: '🧍 Body' }[k]}</span><span class="muted">${m[k] && m[k].ready ? `✅ ready (${(m[k].size / 1048576).toFixed(1)} MB)` : 'not downloaded'}</span><button class="btn ghost ft-dl" data-kind="${k}" style="margin-left:auto;padding:3px 8px;font-size:.75rem">${m[k] && m[k].ready ? 'Re-download' : 'Download'}</button><button class="btn ghost ft-import" data-kind="${k}" style="padding:3px 8px;font-size:.75rem">From file…</button></div>`).join('')
   const c = s.config || {}
-  for (const [id, key] of [['ftFace', 'face'], ['ftEyes', 'eyes'], ['ftHead', 'head'], ['ftHands', 'hands'], ['ftNativeEyes', 'nativeEyes'], ['ftMirror', 'mirror'], ['ftSendAll', 'sendAll']]) if ($(id) && document.activeElement !== $(id)) $(id).checked = !!c[key]
+  ftRenderBody(s)
+  for (const [id, key] of [['ftBody', 'body'], ['ftBodyTrackers', 'bodyTrackers'], ['ftBodyParams', 'bodyParams'], ['ftFace', 'face'], ['ftEyes', 'eyes'], ['ftHead', 'head'], ['ftHands', 'hands'], ['ftNativeEyes', 'nativeEyes'], ['ftMirror', 'mirror'], ['ftSendAll', 'sendAll']]) if ($(id) && document.activeElement !== $(id)) $(id).checked = !!c[key]
   if (document.activeElement !== $('ftIntensity')) { $('ftIntensity').value = c.intensity || 1; setText('ftIntensityV', Number(c.intensity || 1).toFixed(1)) }
   const smooth = FT_SMOOTH.findIndex(p => p.minCutoff === c.minCutoff && p.beta === c.beta)
   if (smooth >= 0 && document.activeElement !== $('ftSmooth')) { $('ftSmooth').value = smooth; setText('ftSmoothV', FT_SMOOTH[smooth].label) }
@@ -7090,10 +7091,33 @@ function ftRender (s) {
   if (document.activeElement !== $('ftFps')) $('ftFps').value = String(cam.fps)
   $('ftGpu').checked = cam.gpu !== false; $('ftAutoStart').checked = !!cam.autoStart
   $('ftHandsN').value = cam.handsEveryN || 1; setText('ftHandsNV', cam.handsEveryN || 1)
+  $('ftPoseN').value = cam.poseEveryN || 1; setText('ftPoseNV', cam.poseEveryN || 1)
+  if (document.activeElement !== $('ftHeight')) { $('ftHeight').value = c.height || 1.7; setText('ftHeightV', Number(c.height || 1.7).toFixed(2)) }
+  const parts = c.trackerParts || {}
+  document.querySelectorAll('#ftParts input[data-part]').forEach(i => { i.checked = !!parts[i.dataset.part] })
   if (s.calibrating) setText('ftCalOut', '⏳ Calibrating — hold still…')
   else if (s.calibrated && /Calibrating/.test($('ftCalOut').textContent)) setText('ftCalOut', '✅ Calibrated')
   else if (!$('ftCalOut').textContent) setText('ftCalOut', s.calibrated ? '✅ Calibrated' : 'Not calibrated')
 }
+function ftRenderBody (s) {
+  const c = s.config || {}; const b = s.body
+  if (!c.body) { setText('ftBodyStats', 'Body tracking off'); $('ftBodyBars').innerHTML = ''; return }
+  if (!s.running) { setText('ftBodyStats', 'Not running'); $('ftBodyBars').innerHTML = ''; return }
+  if (!b || !b.detected) { setText('ftBodyStats', 'No body in view — step back from the camera'); $('ftBodyBars').innerHTML = ''; return }
+  setText('ftBodyStats', `Body ✅ · legs ${b.legsVisible ? '✅' : '— (out of view)'}${c.bodyTrackers ? ' · trackers: ' + (b.trackers.length ? b.trackers.join(', ') : 'none') : ''}${c.bodyParams ? ` · ${Number(s.bodyParams) || 0} BT params on avatar` : ''}`)
+  const v = b.values || {}
+  let bars = ''
+  for (const [label, key, signed] of [['L leg fwd', 'BT/LeftUpperLegX', true], ['R leg fwd', 'BT/RightUpperLegX', true], ['L knee', 'BT/LeftKnee'], ['R knee', 'BT/RightKnee'], ['Crouch', 'BT/Crouch'], ['Lean fwd', 'BT/SpineBend', true], ['Lean side', 'BT/SpineSide', true], ['L arm up', 'BT/LeftUpperArmZ', true], ['R arm up', 'BT/RightUpperArmZ', true]]) {
+    if (key in v) bars += ftBar(label, v[key], signed)
+  }
+  $('ftBodyBars').innerHTML = bars
+}
+for (const [id, key] of [['ftBody', 'body'], ['ftBodyTrackers', 'bodyTrackers'], ['ftBodyParams', 'bodyParams']]) $(id).addEventListener('change', e => ftCfg({ [key]: e.target.checked }))
+$('ftParts').addEventListener('change', e => { const i = e.target.closest('input[data-part]'); if (i) ftCfg({ trackerParts: { [i.dataset.part]: i.checked } }) })
+$('ftHeight').addEventListener('input', e => setText('ftHeightV', Number(e.target.value).toFixed(2)))
+$('ftHeight').addEventListener('change', e => ftCfg({ height: Number(e.target.value) }))
+$('ftPoseN').addEventListener('input', e => setText('ftPoseNV', e.target.value))
+$('ftPoseN').addEventListener('change', e => ftCam({ poseEveryN: Number(e.target.value) }))
 async function ftRefresh () { try { ftRender(await api.trackingStatus()) } catch (_) {} }
 const ftCfg = patch => api.trackingConfig(patch).then(ftRender)
 for (const [id, key] of [['ftFace', 'face'], ['ftEyes', 'eyes'], ['ftHead', 'head'], ['ftHands', 'hands'], ['ftNativeEyes', 'nativeEyes'], ['ftMirror', 'mirror'], ['ftSendAll', 'sendAll']]) $(id).addEventListener('change', e => ftCfg({ [key]: e.target.checked }))

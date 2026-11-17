@@ -1694,7 +1694,7 @@ ipcMain.handle('vrcServerStatus:get', () => vrcServerStatus.current())
 /* hidden, network-blocked window; results become VRCFT v2 + HT/       */
 /* avatar parameters and native VRChat eye tracking.                    */
 /* ------------------------------------------------------------------ */
-const CAMERA_DEFAULTS = { deviceId: '', width: 640, height: 480, fps: 30, gpu: true, handsEveryN: 1, autoStart: false }
+const CAMERA_DEFAULTS = { deviceId: '', width: 640, height: 480, fps: 30, gpu: true, handsEveryN: 1, poseEveryN: 1, autoStart: false }
 const trackingEngine = createTrackingEngine({
   send: msgs => osc.sendMessages(msgs),
   loadSettings: k => settings.get(`faceTracking.${k}`),
@@ -1732,14 +1732,15 @@ async function startTracking () {
   try {
     if (wantFace) models.face = store.load('face')
     if (cfg.hands) models.hand = store.load('hand')
+    if (cfg.body) models.pose = store.load('pose')
   } catch (err) { return { ok: false, error: err.code === 'ENOENT' ? 'Download the tracking models first' : err.message, needModels: true } }
-  if (!models.face && !models.hand) return { ok: false, error: 'Turn on face or hand tracking first' }
+  if (!models.face && !models.hand && !models.pose) return { ok: false, error: 'Turn on face, hand or body tracking first' }
   osc.setOscPort(settings.get('oscPort', 9000))
   if (!trackingOscUnsub) trackingOscUnsub = osc.addOscListener((address, args) => trackingEngine.onOsc(address, args))
   if (!trackingEngine.status().avatar) trackingEngine.loadNewestAvatar()
   trackingRunning = true
   trackerState = { state: 'starting' }
-  await trackerWin.start({ ...cam, models, face: !!models.face, hands: !!models.hand, mirror: cfg.mirror, preview: trackingPreview })
+  await trackerWin.start({ ...cam, models, face: !!models.face, hands: !!models.hand, pose: !!models.pose, mirror: cfg.mirror, preview: trackingPreview })
   clearInterval(trackingStatusTimer); trackingStatusTimer = setInterval(pushTrackingStatus, 500)
   pushTrackingStatus()
   return { ok: true }
@@ -1758,16 +1759,24 @@ function stopTracking (opts = {}) {
 ipcMain.handle('tracking:status', () => trackingStatus())
 ipcMain.handle('tracking:start', () => startTracking())
 ipcMain.handle('tracking:stop', () => stopTracking())
-ipcMain.handle('tracking:config', (e, patch = {}) => {
+const neededModels = c => [(c.face || c.eyes || c.head) && 'face', c.hands && 'hand', c.body && 'pose'].filter(Boolean).join(',')
+ipcMain.handle('tracking:config', async (e, patch = {}) => {
+  const before = neededModels(trackingEngine.getConfig())
   const cfg = trackingEngine.setConfig(patch || {})
-  trackerWin.update({ face: cfg.face || cfg.eyes || cfg.head, hands: cfg.hands, mirror: cfg.mirror })
+  // A model was switched on/off while running: restart so it's (un)loaded.
+  if (trackingRunning && neededModels(cfg) !== before) {
+    const r = await startTracking()
+    if (!r.ok) { stopTracking(); trackerState = { state: 'error', error: r.error } }
+    return trackingStatus()
+  }
+  trackerWin.update({ face: cfg.face || cfg.eyes || cfg.head, hands: cfg.hands, pose: cfg.body, mirror: cfg.mirror })
   return trackingStatus()
 })
 // Camera settings (device, resolution, fps, GPU, hands every N frames, auto-start).
 ipcMain.handle('tracking:camera', (e, patch = {}) => {
   const cur = getCameraSettings(); const n = { ...cur }
   if (typeof patch.deviceId === 'string') n.deviceId = patch.deviceId.slice(0, 200)
-  for (const [k, lo, hi] of [['width', 160, 1920], ['height', 120, 1080], ['fps', 5, 60], ['handsEveryN', 1, 4]]) if (Number.isFinite(patch[k])) n[k] = Math.round(Math.min(hi, Math.max(lo, patch[k])))
+  for (const [k, lo, hi] of [['width', 160, 1920], ['height', 120, 1080], ['fps', 5, 60], ['handsEveryN', 1, 4], ['poseEveryN', 1, 4]]) if (Number.isFinite(patch[k])) n[k] = Math.round(Math.min(hi, Math.max(lo, patch[k])))
   for (const k of ['gpu', 'autoStart']) if (typeof patch[k] === 'boolean') n[k] = patch[k]
   settings.set('faceTracking.camera', n)
   return trackingStatus()
@@ -1777,14 +1786,14 @@ ipcMain.handle('tracking:calibrate', (e, seconds) => { trackingEngine.startCalib
 ipcMain.handle('tracking:resetCalibration', () => { trackingEngine.resetCalibration(); return trackingStatus() })
 ipcMain.handle('tracking:reloadAvatar', () => { trackingEngine.loadNewestAvatar(); return trackingStatus() })
 ipcMain.handle('tracking:downloadModel', async (e, kind) => {
-  if (kind !== 'face' && kind !== 'hand') return { ok: false, error: 'Unknown model' }
+  if (!['face', 'hand', 'pose'].includes(kind)) return { ok: false, error: 'Unknown model' }
   const r = await getTrackingModels().download(kind, p => push('tracking:modelProgress', { kind, progress: p }))
   pushTrackingStatus()
   return r
 })
 ipcMain.handle('tracking:importModel', async (e, kind) => {
-  if (kind !== 'face' && kind !== 'hand') return { ok: false, error: 'Unknown model' }
-  const r = await dialog.showOpenDialog(mainWindow, { title: `Choose ${kind === 'face' ? 'face_landmarker' : 'hand_landmarker'}.task`, properties: ['openFile'], filters: [{ name: 'MediaPipe model', extensions: ['task'] }] })
+  if (!['face', 'hand', 'pose'].includes(kind)) return { ok: false, error: 'Unknown model' }
+  const r = await dialog.showOpenDialog(mainWindow, { title: `Choose ${{ face: 'face_landmarker', hand: 'hand_landmarker', pose: 'pose_landmarker_full' }[kind]}.task`, properties: ['openFile'], filters: [{ name: 'MediaPipe model', extensions: ['task'] }] })
   if (r.canceled || !r.filePaths[0]) return { ok: false, error: 'cancelled' }
   const res = getTrackingModels().importFile(kind, r.filePaths[0])
   pushTrackingStatus()

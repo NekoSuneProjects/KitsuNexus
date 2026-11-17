@@ -383,7 +383,7 @@
       <button class="navbtn" data-tab="tools"><span class="ico">🧩</span><span class="lbl">Tools</span></button>
       <button class="navbtn" data-tab="vrctools"><span class="ico">🧰</span><span class="lbl">VRChat Tools</span></button>
       <button class="navbtn" data-tab="oscapps"><span class="ico">🔌</span><span class="lbl">OSC Apps</span></button>
-      <button class="navbtn" data-tab="facetracking"><span class="ico">🙂</span><span class="lbl">Face &amp; Hands</span></button>
+      <button class="navbtn" data-tab="facetracking"><span class="ico">🙂</span><span class="lbl">Face, Hands &amp; Body</span></button>
       <button class="navbtn" data-tab="audio"><span class="ico">🔊</span><span class="lbl">AudioLink</span></button>
       <div class="navlabel">Integrations</div>
       <button class="navbtn" data-tab="live"><span class="ico">📡</span><span class="lbl">Live</span></button>
@@ -1520,7 +1520,7 @@
       <!-- FACE & HAND TRACKING (webcam -> OSC, VRCFaceTracking-compatible) -->
       <section id="facetracking" class="tabpanel">
         <div class="card">
-          <h3>🙂 Face &amp; Hand Tracking <span class="pill" id="ftState">off</span></h3>
+          <h3>🙂 Face, Hand &amp; Body Tracking <span class="pill" id="ftState">off</span></h3>
           <div class="section-note">Webcam face + hand tracking sent to VRChat over OSC — built in, no VRCFaceTracking needed. One camera drives both. Face uses the VRCFaceTracking <code>FT/v2/…</code> parameters, so avatars made for VRCFT just work; avatars without them get VRChat's native eye tracking. Hands drive <code>HT/…</code> avatar parameters. Everything is processed on your PC — this window has no network access.</div>
           <div class="row" style="flex-wrap:wrap;gap:8px;margin-top:10px">
             <div style="flex:1;min-width:220px"><label>Camera</label><select id="ftCamera"><option value="">Default camera</option></select></div>
@@ -1559,6 +1559,32 @@
             <label>Hand tracking runs every <span id="ftHandsNV">1</span> frame(s)</label><input type="range" id="ftHandsN" min="1" max="4" step="1" value="1">
           </div>
         </div>
+        <div class="card">
+          <h3>🧍 Body tracking (full body from the same camera)</h3>
+          <div class="section-note">Your whole body from the same webcam. Stand back so the camera sees you head to toe for legs. <b>VRChat only uses OSC trackers in VR mode</b> (PC VR, or Quest over Wi-Fi) — on desktop it ignores them, so desktop users get <b>body parameters</b> (<code>BT/…</code>) that an avatar animator can use to pose legs, spine and arms instead.</div>
+          <div class="grid cols-2" style="margin-top:8px">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <label class="switch"><input type="checkbox" id="ftBody"> Body tracking</label>
+              <label class="switch"><input type="checkbox" id="ftBodyTrackers" checked> VRChat OSC trackers (full-body IK — VR mode)</label>
+              <div class="row" style="flex-wrap:wrap;gap:4px 12px;padding-left:22px;font-size:.8rem" id="ftParts">
+                <label><input type="checkbox" data-part="hip"> Hip</label>
+                <label><input type="checkbox" data-part="chest"> Chest</label>
+                <label><input type="checkbox" data-part="feet"> Feet</label>
+                <label><input type="checkbox" data-part="knees"> Knees</label>
+                <label><input type="checkbox" data-part="elbows"> Elbows</label>
+                <label title="Lets VRChat line the trackers up with your head"><input type="checkbox" data-part="head"> Head alignment</label>
+              </div>
+              <label class="switch"><input type="checkbox" id="ftBodyParams" checked> Desktop body parameters — BT/… (works without VR)</label>
+              <label style="margin-top:6px">Your height: <span id="ftHeightV">1.70</span> m</label><input type="range" id="ftHeight" min="1.2" max="2.2" step="0.01" value="1.7">
+              <label>Body tracking runs every <span id="ftPoseNV">1</span> frame(s)</label><input type="range" id="ftPoseN" min="1" max="4" step="1" value="1">
+            </div>
+            <div>
+              <div class="muted" id="ftBodyStats" style="font-size:.78rem">Body tracking off</div>
+              <div id="ftBodyBars" style="margin-top:6px;display:grid;grid-template-columns:110px 1fr;gap:3px 8px;font-size:.74rem"></div>
+              <div class="muted" style="font-size:.74rem;margin-top:10px;line-height:1.45"><b>In VRChat (VR):</b> Action Menu → Options → OSC → Enabled, then Quick Menu → Tracking &amp; IK → Calibrate FBT and stand in a T-pose. Fewer trackers (hip + feet) usually look better than all eight with a webcam.</div>
+            </div>
+          </div>
+        </div>
         <div class="grid cols-2">
           <div class="card">
             <h3>🎯 Calibration</h3>
@@ -1578,7 +1604,8 @@
           <h3>🧩 Avatar parameters</h3>
           <div class="muted" style="font-size:.78rem;line-height:1.5">
             <b>Face:</b> the VRCFaceTracking v2 set (e.g. <code>FT/v2/JawOpen</code>, <code>FT/v2/EyeLidLeft</code>, <code>FT/v2/SmileFrownLeft</code>), as Float, Bool or binary (<code>…1</code>, <code>…2</code>, <code>…4</code>, <code>…Negative</code>), plus <code>EyeTrackingActive</code> / <code>ExpressionTrackingActive</code> / <code>LipTrackingActive</code>.<br>
-            <b>Hands</b> (add these to your avatar to use them): <code>HT/LeftThumbCurl</code> … <code>HT/LeftPinkyCurl</code> (Float 0–1), <code>HT/LeftSpread</code> (Float), <code>HT/LeftGesture</code> (Int, same numbers as VRChat's GestureLeft: 1 fist, 2 open, 3 point, 4 victory, 5 rock, 6 gun, 7 thumbs up), <code>HT/LeftDetected</code> (Bool), <code>HT/LeftX</code>/<code>HT/LeftY</code> (Float −1…1) — and the same with <code>Right</code>. VRChat doesn't accept finger bones over OSC, so hands work through avatar parameters.
+            <b>Hands</b> (add these to your avatar to use them): <code>HT/LeftThumbCurl</code> … <code>HT/LeftPinkyCurl</code> (Float 0–1), <code>HT/LeftSpread</code> (Float), <code>HT/LeftGesture</code> (Int, same numbers as VRChat's GestureLeft: 1 fist, 2 open, 3 point, 4 victory, 5 rock, 6 gun, 7 thumbs up), <code>HT/LeftDetected</code> (Bool), <code>HT/LeftX</code>/<code>HT/LeftY</code> (Float −1…1) — and the same with <code>Right</code>. VRChat doesn't accept finger bones over OSC, so hands work through avatar parameters.<br>
+            <b>Body</b> (desktop; add to your avatar and drive leg/spine/arm muscle animations from them): <code>BT/LeftUpperLegX</code> / <code>…Z</code> (Float −1…1, leg forward / out to the side), <code>BT/LeftKnee</code> (Float 0–1 bend), <code>BT/LeftUpperArmX</code> / <code>…Z</code>, <code>BT/LeftElbow</code> — and the same with <code>Right</code> — plus <code>BT/SpineBend</code>, <code>BT/SpineSide</code>, <code>BT/SpineTwist</code> (Float −1…1), <code>BT/Crouch</code> (Float 0–1), <code>BT/Detected</code> and <code>BT/LegsVisible</code> (Bool). In VR the OSC trackers (<code>/tracking/trackers/1–8</code> + head) drive VRChat's real full-body IK instead.
           </div>
         </div>
       </section>

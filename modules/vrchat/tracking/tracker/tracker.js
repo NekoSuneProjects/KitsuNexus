@@ -5,7 +5,7 @@
 // single camera, like VRChat's own webcam "selfie" tracking. Results go to the
 // main process over IPC; nothing leaves the PC.
 
-import { FilesetResolver, FaceLandmarker, HandLandmarker } from '../../../../node_modules/@mediapipe/tasks-vision/vision_bundle.mjs'
+import { FilesetResolver, FaceLandmarker, HandLandmarker, PoseLandmarker } from '../../../../node_modules/@mediapipe/tasks-vision/vision_bundle.mjs'
 
 const WASM_BASE = new URL('../../../../node_modules/@mediapipe/tasks-vision/wasm', import.meta.url).href
 const video = document.getElementById('cam')
@@ -16,6 +16,8 @@ let cfg = null
 let stream = null
 let face = null
 let hands = null
+let pose = null
+let lastPose = null
 let timer = null
 let frameNo = 0
 let lastPreview = 0
@@ -31,6 +33,7 @@ const status = s => window.knTracker.status({ at: Date.now(), ...s })
 
 const FACE_OPTS = { numFaces: 1, outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true }
 const HAND_OPTS = { numHands: 2 }
+const POSE_OPTS = { numPoses: 1 }
 function createTask (Task, model, extra, delegate) {
   return Task.createFromOptions(fileset, { baseOptions: { modelAssetBuffer: new Uint8Array(model), delegate }, runningMode: 'VIDEO', ...extra })
 }
@@ -38,9 +41,10 @@ async function createTasks (gpu) {
   const delegate = gpu ? 'GPU' : 'CPU'
   face = cfg.models.face ? await createTask(FaceLandmarker, cfg.models.face, FACE_OPTS, delegate) : null
   hands = cfg.models.hand ? await createTask(HandLandmarker, cfg.models.hand, HAND_OPTS, delegate) : null
+  pose = cfg.models.pose ? await createTask(PoseLandmarker, cfg.models.pose, POSE_OPTS, delegate) : null
   usingGpu = gpu
 }
-function closeTasks () { for (const t of [face, hands]) { try { if (t) t.close() } catch (_) {} } face = null; hands = null }
+function closeTasks () { for (const t of [face, hands, pose]) { try { if (t) t.close() } catch (_) {} } face = null; hands = null; pose = null }
 // GPU can fail at creation OR on the first frames (no WebGL / bad driver):
 // rebuild both models on the CPU once, instead of stopping.
 async function fallBackToCpu () {
@@ -69,7 +73,7 @@ async function start (c) {
   } catch (e) { status({ state: 'error', error: 'Model: ' + (e && e.message ? e.message : e) }); await stop(); return }
   const track = stream.getVideoTracks()[0]
   const st = track ? track.getSettings() : {}
-  status({ state: 'running', camera: track ? track.label : '', width: st.width, height: st.height, face: !!face, hands: !!hands, gpu: usingGpu })
+  status({ state: 'running', camera: track ? track.label : '', width: st.width, height: st.height, face: !!face, hands: !!hands, pose: !!pose, gpu: usingGpu })
   tick()
 }
 
@@ -77,7 +81,7 @@ async function stop () {
   if (timer) { clearTimeout(timer); timer = null }
   if (stream) { for (const t of stream.getTracks()) t.stop(); stream = null }
   video.srcObject = null
-  closeTasks(); lastHands = null
+  closeTasks(); lastHands = null; lastPose = null
 }
 
 function tick () {
@@ -94,7 +98,7 @@ function processFrame () {
   if (!stream || video.readyState < 2) return
   let ts = performance.now(); if (ts <= lastTs) ts = lastTs + 1; lastTs = ts // MediaPipe needs increasing timestamps
   frameNo++
-  const frame = { t: Date.now(), face: null, hands: null }
+  const frame = { t: Date.now(), face: null, hands: null, pose: null }
   let faceRes = null
   if (face && cfg.face !== false) {
     faceRes = face.detectForVideo(video, ts)
@@ -119,17 +123,30 @@ function processFrame () {
     }))
     lastHands = frame.hands
   }
+  // Body pose on the same camera frame (every Nth frame).
+  const poseN = Math.max(1, (cfg && cfg.poseEveryN) || 1)
+  if (pose && cfg.pose !== false && frameNo % poseN === 0) {
+    const r = pose.detectForVideo(video, ts)
+    if (r.worldLandmarks && r.worldLandmarks[0] && r.landmarks && r.landmarks[0]) {
+      frame.pose = {
+        world: r.worldLandmarks[0].map(p => [p.x, p.y, p.z, p.visibility == null ? 1 : p.visibility]),
+        image: r.landmarks[0].map(p => [p.x, p.y, p.z, p.visibility == null ? 1 : p.visibility])
+      }
+    }
+    lastPose = frame.pose
+  }
   window.knTracker.frame(frame)
 
   const now = performance.now()
   fpsTimes.push(now); while (fpsTimes.length && fpsTimes[0] < now - 1000) fpsTimes.shift()
-  if (now - lastStatus > 1000) { lastStatus = now; status({ state: 'running', fps: fpsTimes.length, faceSeen: !!frame.face, handsSeen: (lastHands || []).length }) }
-  if (cfg.preview && now - lastPreview > 200) { lastPreview = now; drawPreview(faceRes, lastHands) }
+  if (now - lastStatus > 1000) { lastStatus = now; status({ state: 'running', fps: fpsTimes.length, faceSeen: !!frame.face, handsSeen: (lastHands || []).length, poseSeen: !!lastPose }) }
+  if (cfg.preview && now - lastPreview > 200) { lastPreview = now; drawPreview(faceRes, lastHands, lastPose) }
 }
 
 // Small preview with landmarks, only while the Tracking tab is open.
 const HAND_EDGES = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12], [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [17, 18], [18, 19], [19, 20], [0, 17]]
-function drawPreview (faceRes, handList) {
+const POSE_EDGES = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [27, 29], [29, 31], [27, 31], [24, 26], [26, 28], [28, 30], [30, 32], [28, 32]]
+function drawPreview (faceRes, handList, poseRes) {
   const w = canvas.width; const h = canvas.height
   ctx.save()
   if (!cfg.mirror) { ctx.translate(w, 0); ctx.scale(-1, 1) } // show it like a mirror
@@ -144,6 +161,13 @@ function drawPreview (faceRes, handList) {
     const p = hand.image
     ctx.beginPath()
     for (const [a, b] of HAND_EDGES) { if (!p[a] || !p[b]) continue; ctx.moveTo(p[a][0] * w, p[a][1] * h); ctx.lineTo(p[b][0] * w, p[b][1] * h) }
+    ctx.stroke()
+  }
+  if (poseRes && poseRes.image) {
+    const p = poseRes.image
+    ctx.strokeStyle = 'rgba(96,165,250,.95)'; ctx.lineWidth = 3
+    ctx.beginPath()
+    for (const [a, b] of POSE_EDGES) { if (!p[a] || !p[b] || p[a][3] < 0.5 || p[b][3] < 0.5) continue; ctx.moveTo(p[a][0] * w, p[a][1] * h); ctx.lineTo(p[b][0] * w, p[b][1] * h) }
     ctx.stroke()
   }
   ctx.restore()
