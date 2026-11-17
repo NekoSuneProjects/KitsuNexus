@@ -72,12 +72,15 @@ const config = {
   vrcProfileUrl: '', // manual override; auto-filled from the VRChat log if blank
   showHeartRate: true, // append ❤️ bpm to the presence
   showNowPlaying: true, // show 🎵 song when no world line is available
+  hidePrivateInstances: true, // also hide the world in Invite / Invite+ / Group-members instances, whatever your status
+  showPartySize: true, // "N of M" players in your instance (only when the world is shown)
+  showPlatform: true, // append VR / Desktop to the status line
   showWorldMedia: true // show what's playing in the world (Popcorn Palace, dance worlds, LS Media, ProTV, YouTube) with its poster as the big icon
 }
 
 // Live context fed in via setVrcContext(): world (from the VRChat log tracker),
 // plus heart rate and now-playing (from main.js).
-const vrc = { worldName: '', joinUrl: '', worldUrl: '', profileUrl: '', hrBpm: 0, nowPlaying: '', worldMedia: null }
+const vrc = { worldName: '', joinUrl: '', worldUrl: '', profileUrl: '', hrBpm: 0, nowPlaying: '', worldMedia: null, instanceType: '', instanceKey: '', playerCount: 0, capacity: 0, platform: '' }
 
 // World media to show right now, or null. Shown on every status — the status
 // privacy rule only hides the world name / join button, not the media.
@@ -103,7 +106,14 @@ const STATUS = {
   busy: { label: 'Do Not Disturb', emoji: '🔴', showWorld: false }
 }
 function statusInfo () { return STATUS[config.vrcStatus] || STATUS.active }
-function worldVisible () { return config.showWorld && statusInfo().showWorld }
+// Instance types that are private by nature: joining needs an invite anyway.
+const PRIVATE_INSTANCE_TYPES = new Set(['invite', 'invite+', 'groupMembers'])
+const INSTANCE_LABEL = { public: 'Public', friends: 'Friends', 'friends+': 'Friends+', invite: 'Invite', 'invite+': 'Invite+', group: 'Group Public', 'group+': 'Group+', groupMembers: 'Group' }
+function worldVisible () {
+  if (!config.showWorld || !statusInfo().showWorld) return false
+  return !(config.hidePrivateInstances && PRIVATE_INSTANCE_TYPES.has(vrc.instanceType))
+}
+const PLATFORM_LABEL = { vr: 'VR', desktop: 'Desktop' }
 function effectiveProfileUrl () { return (config.vrcProfileUrl || '').trim() || vrc.profileUrl || '' }
 
 const state = {
@@ -164,6 +174,7 @@ function _pushActivity ({ details, state: st } = {}) {
   // details = status line (+ optional heart rate). While something is playing
   // in the world, its title takes the top line (like VRCX's "Watching" presence).
   let detailsLine = details || (pp ? `${mediaEmoji(pp)} ${pp.videoName}` : `${info.emoji} ${info.label}`)
+  if (!details && !pp && config.showPlatform && PLATFORM_LABEL[vrc.platform]) detailsLine += ` (${PLATFORM_LABEL[vrc.platform]})`
   if (!details && config.showHeartRate && vrc.hrBpm > 0) detailsLine += ` · ❤️ ${vrc.hrBpm}`
 
   // state = where you are. Priority: VRChat world (if status allows) > now playing
@@ -176,7 +187,7 @@ function _pushActivity ({ details, state: st } = {}) {
       const what = pp.kind === 'listen' ? '' : (pp.source === 'PopcornPalace' || pp.source === 'LSMedia' ? ' a movie' : ' a video')
       stateLine = showWorld ? `${info.emoji} ${verb} in ${vrc.worldName}` : `${info.emoji} ${verb}${what}`
     }
-    else if (showWorld) stateLine = `In ${vrc.worldName}`
+    else if (showWorld) stateLine = `In ${vrc.worldName}${INSTANCE_LABEL[vrc.instanceType] ? ` (${INSTANCE_LABEL[vrc.instanceType]})` : ''}`
     else if (config.showNowPlaying && vrc.nowPlaying) stateLine = `🎵 ${vrc.nowPlaying}`
     else stateLine = config.rpState || 'In VRChat'
   }
@@ -190,6 +201,13 @@ function _pushActivity ({ details, state: st } = {}) {
 
   // Minimal, always-valid presence (text only) + the optional extras.
   const minimal = { details: detailsLine.slice(0, 128), state: stateLine.slice(0, 128), startTimestamp, instance: false }
+  // Party "N of M": only when the world is shown (it tells people how full your
+  // instance is). Discord needs size <= max, so lift max if the world is over cap.
+  if (config.showPartySize && showWorld && vrc.playerCount > 0 && vrc.instanceKey) {
+    minimal.partyId = vrc.instanceKey
+    minimal.partySize = vrc.playerCount
+    minimal.partyMax = Math.max(vrc.capacity || 0, vrc.playerCount)
+  }
   const art = { largeImageKey: 'logo', largeImageText: 'KitsuNexus', smallImageKey: 'vrchat', smallImageText: 'VRChat' }
   if (pp) {
     // Poster / thumbnail as the big icon (Discord accepts https URLs as image keys);
@@ -280,6 +298,12 @@ function setVrcContext (ctx = {}) {
   if (typeof ctx.showHeartRate === 'boolean') config.showHeartRate = ctx.showHeartRate
   if (typeof ctx.showNowPlaying === 'boolean') config.showNowPlaying = ctx.showNowPlaying
   if (typeof ctx.showWorldMedia === 'boolean') config.showWorldMedia = ctx.showWorldMedia
+  for (const k of ['hidePrivateInstances', 'showPartySize', 'showPlatform']) if (typeof ctx[k] === 'boolean') config[k] = ctx[k]
+  if (typeof ctx.instanceType === 'string') vrc.instanceType = ctx.instanceType
+  if (typeof ctx.instanceKey === 'string') vrc.instanceKey = ctx.instanceKey.slice(0, 128)
+  if (Number.isFinite(ctx.playerCount)) vrc.playerCount = Math.max(0, Math.floor(ctx.playerCount))
+  if (Number.isFinite(ctx.capacity)) vrc.capacity = Math.max(0, Math.floor(ctx.capacity))
+  if (typeof ctx.platform === 'string') vrc.platform = ctx.platform
   if (ctx.worldMedia === null || (ctx.worldMedia && typeof ctx.worldMedia === 'object')) {
     vrc.worldMedia = sanitizeWorldMedia(ctx.worldMedia)
     scheduleMediaEnd()

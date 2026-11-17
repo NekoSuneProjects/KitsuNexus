@@ -70,7 +70,9 @@ function getNekosuneBackendUrl () {
 }
 const { startVrcWorld, stopVrcWorld, getVrcWorld } = require('./modules/vrchat/world/vrchatWorld')
 const { startVrBattery, stopVrBattery } = require('./modules/vrchat/vr/vrBattery')
+const crypto = require('crypto')
 const vrchatApi = require('./modules/vrchat/api/vrchatApi')
+const { detectVrMode } = require('./modules/vrchat/tools/vrMode')
 const { startWeather, stopWeather, getWeather } = require('./modules/weather/weatherModule')
 const {
   startBot, stopBot, setMute: botSetMute, setDeaf: botSetDeaf, inviteUrl,
@@ -430,7 +432,7 @@ app.whenReady().then(async () => {
       session: w.inWorld ? String(w.worldName || 'In VRChat') : 'Not in world',
       players: Array.isArray(w.players) ? w.players.slice(0, 80).map(name => String(name).slice(0, 64)) : []
     })
-    setVrcContext({ worldName: w.inWorld ? w.worldName : '', joinUrl: w.joinUrl, worldUrl: w.worldUrl, profileUrl: w.profileUrl, worldMedia: w.inWorld ? w.media : null })
+    setVrcContext(worldPresenceContext(w))
     pawprints.setWorld(w.inWorld ? w.worldName : '')
     logWorldDiff(w)
     if (w.lastVideo && w.lastVideo !== lastVideoLogged) { lastVideoLogged = w.lastVideo; gamelog.log('video', '🎬 Video', w.lastVideo, w.worldName) }
@@ -1524,7 +1526,7 @@ ipcMain.handle('discord:start', async (e, cfg) => {
   const r = await startDiscord({ ...(cfg || {}), clientId: discordAppId, oscPort, extraOscTargets: settings.get('extraOscTargets', []) }, s => push('discord:update', s))
   // Seed the presence with the world we've already detected.
   const w = getVrcWorld()
-  setVrcContext({ worldName: w.inWorld ? w.worldName : '', joinUrl: w.joinUrl, worldUrl: w.worldUrl, profileUrl: w.profileUrl, worldMedia: w.inWorld ? w.media : null })
+  setVrcContext(worldPresenceContext(w))
   return r
 })
 ipcMain.handle('discord:stop', async () => { await stopDiscord(); return true })
@@ -1810,6 +1812,38 @@ let lastPlayers = new Set()
 let playersPrimed = false
 let lastWorldLogged = ''
 let lastWorldIdLogged = ''
+// Discord presence context for the current world: name/links, media, instance
+// type (for privacy), player count + world capacity (party "N of M") and
+// VR/Desktop mode. Capacity needs the VRChat API (only fetched when logged in);
+// VR mode is read from VRChat.exe's command line once per instance.
+const _presenceWorld = { worldId: '', capacity: 0, platformFor: '', platform: '' }
+function worldPresenceContext (w) {
+  const inst = w.inWorld && w.worldId ? vrchatApi.parseInstance(`${w.worldId}:${w.instanceId}`) : { type: '' }
+  if (w.inWorld && w.worldId && w.worldId !== _presenceWorld.worldId) {
+    _presenceWorld.worldId = w.worldId
+    _presenceWorld.capacity = 0
+    const wid = w.worldId
+    Promise.resolve(vrchatApi.isLoggedIn()).then(ok => ok ? vrchatApi.getWorld(wid) : null).then(r => {
+      if (r && r.ok && _presenceWorld.worldId === wid) { _presenceWorld.capacity = Number(r.world.capacity) || 0; setVrcContext({ capacity: _presenceWorld.capacity }) }
+    }).catch(() => {})
+  }
+  const location = w.inWorld ? `${w.worldId}:${w.instanceId}` : ''
+  if (location && location !== _presenceWorld.platformFor) {
+    _presenceWorld.platformFor = location
+    detectVrMode(mode => { _presenceWorld.platform = mode; setVrcContext({ platform: mode }) })
+  }
+  return {
+    worldName: w.inWorld ? w.worldName : '', joinUrl: w.joinUrl, worldUrl: w.worldUrl, profileUrl: w.profileUrl,
+    worldMedia: w.inWorld ? w.media : null,
+    instanceType: inst.type || '',
+    // Opaque party id (hash) so the raw instance id/nonce isn't sent to Discord.
+    instanceKey: location ? crypto.createHash('sha256').update(location).digest('hex').slice(0, 32) : '',
+    playerCount: w.inWorld && Array.isArray(w.players) ? w.players.length : 0,
+    capacity: w.inWorld ? _presenceWorld.capacity : 0,
+    platform: w.inWorld ? _presenceWorld.platform : ''
+  }
+}
+
 let lastVideoLogged = ''
 let lastPortalSeq = 0
 let worldEnteredAt = 0
