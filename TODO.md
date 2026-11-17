@@ -137,7 +137,7 @@ category's section below.
   user-editable — disabled the Discord Application ID field in the Discord tab and force the
   fixed ID in `renderer.js` and `main.js`'s `discord:start` handler regardless of saved config.
 - [x] DiscordOSC, Discord voice bot
-- [x] **Popcorn Palace in Rich Presence** — movie name + poster as the big icon + elapsed/remaining bar, parsed from the world's `[VRCX] VideoPlay(PopcornPalace)` log line (`vrchatWorld.js` → `discord.js`). No UI toggle yet (`showPopcornPalace` config defaults on) — add a switch to the Discord card.
+- [x] **World media in Rich Presence** — Popcorn Palace, VR Dancing, LS Media, ProTV `nowplaying` (PyPyDance etc.) and YouTube titles, poster as the big icon + elapsed/remaining bar (`worldMedia.js` → `vrchatWorld.js` → `discord.js`). No UI toggle yet (`showWorldMedia` config defaults on) — add a switch to the Discord card.
 - [ ] `modules/integrations/discord/discordRpc.js` looks like an unused older Rich Presence module (nothing requires it; `discord.js` is the live one) — confirm and remove.
 
 ### Media

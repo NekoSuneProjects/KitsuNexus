@@ -6,7 +6,11 @@ This project follows [Semantic Versioning](https://semver.org/).
 ## Unreleased
 
 ### Added
+- **More world media in Discord Rich Presence: dance worlds, LS Media, ProTV and YouTube titles.** The Popcorn Palace parser is now a general `worldMedia.js` tracker (same log sources as VRCX). It also reads VR Dancing's `[VRCX] VideoPlay(VRDancing)` line, LS Media's `[VRCX] LSMedia` line, and ProTV's `nowplaying {json}` events (also used by PyPyDance-style worlds, with multiple screens and play/pause/seek/stop). Plain video player URLs on YouTube get their title and thumbnail from YouTube oEmbed (no API key); other URLs are never shown, since they can be private streams. Dance worlds read "💃 <song> · Dancing in <world>", cinemas "🍿 <movie>", other videos "🎬 <title>". Videos of unknown length drop off after 30 minutes. The config flag is now `showWorldMedia`.
 - **Popcorn Palace in Discord Rich Presence, with the movie poster as the big icon.** The VRChat log tracker now reads the `[VRCX] VideoPlay(PopcornPalace) {json}` line the Popcorn Palace worlds write (the same source VRCX uses) and keeps the current movie name, poster URL, position, length and paused state. While you're watching, the presence shows `🍿 <movie>` on the top line, "Watching in <world>" (or "⏸ Paused in") underneath, the poster as the large image (KitsuNexus logo moves to the small image; falls back to the logo when the world gives no poster), and a movie elapsed/remaining bar instead of app uptime. The movie shows on every status; Ask Me / Do Not Disturb only hide the world name and join button (state reads "Watching a movie" instead). Clears on leaving or switching instance, ignores stale log lines from finished movies, and re-pushes once after the movie ends so the presence drops back to normal.
+
+### Fixed
+- **Video links from SDK2, USharpVideo and AVPro players were missing from the media-link history.** The old regex only matched `resolve URL '…'` and `added URL '…'` with quotes, but SDK2 logs `User X added URL https://…` without quotes, USharpVideo logs `Started video load for URL: …` and AVPro logs `Resolving URL '…'`. All four formats are now picked up.
 
 ## [1.0.81] - 2026-11-01
 

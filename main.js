@@ -430,7 +430,7 @@ app.whenReady().then(async () => {
       session: w.inWorld ? String(w.worldName || 'In VRChat') : 'Not in world',
       players: Array.isArray(w.players) ? w.players.slice(0, 80).map(name => String(name).slice(0, 64)) : []
     })
-    setVrcContext({ worldName: w.inWorld ? w.worldName : '', joinUrl: w.joinUrl, worldUrl: w.worldUrl, profileUrl: w.profileUrl, popcornPalace: w.inWorld ? w.popcornPalace : null })
+    setVrcContext({ worldName: w.inWorld ? w.worldName : '', joinUrl: w.joinUrl, worldUrl: w.worldUrl, profileUrl: w.profileUrl, worldMedia: w.inWorld ? w.media : null })
     pawprints.setWorld(w.inWorld ? w.worldName : '')
     logWorldDiff(w)
     if (w.lastVideo && w.lastVideo !== lastVideoLogged) { lastVideoLogged = w.lastVideo; gamelog.log('video', '🎬 Video', w.lastVideo, w.worldName) }
@@ -1524,7 +1524,7 @@ ipcMain.handle('discord:start', async (e, cfg) => {
   const r = await startDiscord({ ...(cfg || {}), clientId: discordAppId, oscPort, extraOscTargets: settings.get('extraOscTargets', []) }, s => push('discord:update', s))
   // Seed the presence with the world we've already detected.
   const w = getVrcWorld()
-  setVrcContext({ worldName: w.inWorld ? w.worldName : '', joinUrl: w.joinUrl, worldUrl: w.worldUrl, profileUrl: w.profileUrl, popcornPalace: w.inWorld ? w.popcornPalace : null })
+  setVrcContext({ worldName: w.inWorld ? w.worldName : '', joinUrl: w.joinUrl, worldUrl: w.worldUrl, profileUrl: w.profileUrl, worldMedia: w.inWorld ? w.media : null })
   return r
 })
 ipcMain.handle('discord:stop', async () => { await stopDiscord(); return true })
