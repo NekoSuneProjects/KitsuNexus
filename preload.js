@@ -304,6 +304,12 @@ window.electronAPI = {
   feedList: opts => ipcRenderer.invoke('feed:list', opts),
   feedClear: () => ipcRenderer.invoke('feed:clear'),
   feedPipelineStatus: () => ipcRenderer.invoke('feed:pipelineStatus'),
+  // auto-launch apps with VRChat
+  autoLaunchList: () => ipcRenderer.invoke('autolaunch:list'),
+  autoLaunchAdd: () => ipcRenderer.invoke('autolaunch:add'),
+  autoLaunchUpdate: (id, patch) => ipcRenderer.invoke('autolaunch:update', id, patch),
+  autoLaunchRemove: id => ipcRenderer.invoke('autolaunch:remove', id),
+  autoLaunchTest: id => ipcRenderer.invoke('autolaunch:test', id),
   // instance history / players met
   instancesList: opts => ipcRenderer.invoke('instances:list', opts),
   instanceTimeline: id => ipcRenderer.invoke('instances:timeline', id),

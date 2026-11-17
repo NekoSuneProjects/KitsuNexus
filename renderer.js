@@ -6976,3 +6976,39 @@ if ($('qlProfiles')) {
     }
   })
 }
+
+/* ---------------- Start apps with VRChat (auto-launch) ---------------- */
+function renderAutoLaunch (apps) {
+  const el = $('alList'); if (!el) return
+  if (!apps || !apps.length) { el.textContent = 'No programs yet.'; return }
+  el.innerHTML = apps.map(a => {
+    const name = String(a.path || '').split(/[\\/]/).pop()
+    const opt = (v, label) => `<option value="${v}"${a.mode === v ? ' selected' : ''}>${label}</option>`
+    return `<div class="al-row" data-id="${esc(a.id)}" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--border)">
+      <label class="switch" title="Enabled"><input type="checkbox" class="al-enabled"${a.enabled !== false ? ' checked' : ''}></label>
+      <div class="grow" style="min-width:160px"><b>${esc(name)}</b><div class="muted" style="font-size:.7rem;overflow:hidden;text-overflow:ellipsis" title="${esc(a.path)}">${esc(a.path)}</div></div>
+      <select class="al-mode" style="max-width:120px">${opt('always', 'Always')}${opt('vr', 'VR only')}${opt('desktop', 'Desktop only')}</select>
+      <input class="al-args" placeholder="arguments" value="${esc((a.args || []).map(x => /\s/.test(x) ? `"${x}"` : x).join(' '))}" style="max-width:160px">
+      <label class="switch" title="Close it when VRChat exits (programs started from a shortcut can't be closed)"><input type="checkbox" class="al-close"${a.closeWithVRChat ? ' checked' : ''}> close with VRChat</label>
+      <button class="btn ghost al-test" title="Start it now">▶</button>
+      <button class="btn danger al-remove" title="Remove">✕</button>
+    </div>`
+  }).join('')
+}
+async function loadAutoLaunch () { try { renderAutoLaunch(await api.autoLaunchList()) } catch (_) {} }
+$('alAdd').addEventListener('click', async () => renderAutoLaunch(await api.autoLaunchAdd()))
+$('alList').addEventListener('change', async e => {
+  const row = e.target.closest('.al-row'); if (!row) return
+  const id = row.dataset.id
+  if (e.target.classList.contains('al-enabled')) renderAutoLaunch(await api.autoLaunchUpdate(id, { enabled: e.target.checked }))
+  else if (e.target.classList.contains('al-close')) renderAutoLaunch(await api.autoLaunchUpdate(id, { closeWithVRChat: e.target.checked }))
+  else if (e.target.classList.contains('al-mode')) renderAutoLaunch(await api.autoLaunchUpdate(id, { mode: e.target.value }))
+  else if (e.target.classList.contains('al-args')) renderAutoLaunch(await api.autoLaunchUpdate(id, { args: e.target.value }))
+})
+$('alList').addEventListener('click', async e => {
+  const row = e.target.closest('.al-row'); if (!row) return
+  if (e.target.closest('.al-remove')) renderAutoLaunch(await api.autoLaunchRemove(row.dataset.id))
+  else if (e.target.closest('.al-test')) api.autoLaunchTest(row.dataset.id)
+})
+api.on('autolaunch:log', m => setText('alLog', String(m || '')))
+document.querySelector('[data-tab="quicklaunch"]').addEventListener('click', loadAutoLaunch)

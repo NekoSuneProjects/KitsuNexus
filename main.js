@@ -76,6 +76,7 @@ const { detectVrMode } = require('./modules/vrchat/tools/vrMode')
 const vrchatClient = require('./modules/vrchat/api/vrchatClient')
 const { createPipeline } = require('./modules/vrchat/api/pipeline')
 const { createFriendFeed } = require('./modules/vrchat/friends/friendFeed')
+const { createAutoLauncher } = require('./modules/vrchat/launcher/autoLaunch')
 const { startWeather, stopWeather, getWeather } = require('./modules/weather/weatherModule')
 const {
   startBot, stopBot, setMute: botSetMute, setDeaf: botSetDeaf, inviteUrl,
@@ -448,6 +449,7 @@ app.whenReady().then(async () => {
     if (w.lastVideo && w.lastVideo !== lastVideoLogged) { lastVideoLogged = w.lastVideo; gamelog.log('video', '🎬 Video', w.lastVideo, w.worldName) }
     if (w.portalSeq && w.portalSeq !== lastPortalSeq) { lastPortalSeq = w.portalSeq; gamelog.log('portal', w.lastPortal || 'Someone', 'dropped a portal', w.worldName) }
   })
+  autoLauncher.start()
   crashGuard.start({ enabled: settings.get('autoRejoin', false), getLocation: () => { const w = getVrcWorld(); return (w.inWorld && w.worldId && w.instanceId) ? `${w.worldId}:${w.instanceId}` : '' } })
   setInterval(() => pawprints.tickCommit(), 60000)
   let hudMediaBusy = false
@@ -490,7 +492,7 @@ app.on('before-quit', () => {
   if (blePairingCallback) { const callback = blePairingCallback; blePairingCallback = null; callback({ confirmed: false }) }
   stopComponentStats(); stopNetworkStats(); stopPulsoid(); stopHyperate(); stopDeviceBridge(); stopWindowActivity(); stopTon()
   disconnectTikTok(); stopTwitch(); twitchInteractive.stop(false); stopKick(); stopDiscord(); stopVrBattery(); stopVrcWorld(); stopAfk()
-  stopWeather(); stopVrcStatusPoll(); stopBot(); stopOfficialBot(); stopStatusPush(); pawprints.tickCommit(); stopFriendDiff(); pipeline.stop(); friendFeed.flush(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); stopTonLog(); ranks.close(); screenshotMetadata.stop(); localFavoritesDb.close()
+  stopWeather(); stopVrcStatusPoll(); stopBot(); stopOfficialBot(); stopStatusPush(); pawprints.tickCommit(); stopFriendDiff(); pipeline.stop(); autoLauncher.stop(); friendFeed.flush(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); stopTonLog(); ranks.close(); screenshotMetadata.stop(); localFavoritesDb.close()
   ruskLaserdome.stop(false)
   if (unsubHotkeyHold) { unsubHotkeyHold(); unsubHotkeyHold = null }
   stopHotkeyTick()
@@ -1598,6 +1600,37 @@ ipcMain.handle('vrchat:status', () => vrchatApi.fetchUser())
 ipcMain.handle('vrchat:isLoggedIn', () => vrchatApi.isLoggedIn())
 ipcMain.handle('vrchat:logout', () => { pipeline.stop(); vrchatApi.logout(); stopVrcStatusPoll(); return true })
 ipcMain.handle('feed:list', (e, opts) => gamelog.listFeed(opts || {}))
+
+/* Auto-launch apps with VRChat. Paths are only added via this file picker, so
+   the renderer can't make the app spawn an arbitrary path. */
+const AUTO_LAUNCH_MODES = new Set(['always', 'vr', 'desktop'])
+const getAutoLaunchApps = () => { const a = settings.get('autoLaunchApps', []); return Array.isArray(a) ? a : [] }
+const autoLauncher = createAutoLauncher({ getApps: getAutoLaunchApps, detectMode: detectVrMode, onLog: m => push('autolaunch:log', m) })
+ipcMain.handle('autolaunch:list', () => getAutoLaunchApps())
+ipcMain.handle('autolaunch:add', async () => {
+  const r = await dialog.showOpenDialog(mainWindow, { title: 'Choose a program to start with VRChat', properties: ['openFile'], filters: [{ name: 'Programs & shortcuts', extensions: ['exe', 'lnk', 'url', 'bat', 'cmd'] }, { name: 'All files', extensions: ['*'] }] })
+  if (r.canceled || !r.filePaths || !r.filePaths[0]) return getAutoLaunchApps()
+  const apps = getAutoLaunchApps()
+  apps.push({ id: crypto.randomUUID(), path: r.filePaths[0], args: [], mode: 'always', closeWithVRChat: true, enabled: true })
+  settings.set('autoLaunchApps', apps)
+  return apps
+})
+// Only toggles/options can change here — never the path.
+ipcMain.handle('autolaunch:update', (e, id, patch = {}) => {
+  const apps = getAutoLaunchApps().map(a => {
+    if (a.id !== id) return a
+    const n = { ...a }
+    if (typeof patch.enabled === 'boolean') n.enabled = patch.enabled
+    if (typeof patch.closeWithVRChat === 'boolean') n.closeWithVRChat = patch.closeWithVRChat
+    if (AUTO_LAUNCH_MODES.has(patch.mode)) n.mode = patch.mode
+    if (typeof patch.args === 'string') n.args = (patch.args.match(/"[^"]*"|\S+/g) || []).map(x => x.replace(/^"|"$/g, '')).slice(0, 32)
+    return n
+  })
+  settings.set('autoLaunchApps', apps)
+  return apps
+})
+ipcMain.handle('autolaunch:remove', (e, id) => { const apps = getAutoLaunchApps().filter(a => a.id !== id); settings.set('autoLaunchApps', apps); return apps })
+ipcMain.handle('autolaunch:test', (e, id) => { const a = getAutoLaunchApps().find(x => x.id === id); if (a) autoLauncher.launchNow(a.mode === 'always' ? '' : a.mode); return !!a })
 ipcMain.handle('instances:list', (e, opts) => gamelog.listInstances(opts || {}))
 ipcMain.handle('instances:timeline', (e, id) => gamelog.instanceTimeline(id))
 // Players you've shared instances with (yourself excluded).

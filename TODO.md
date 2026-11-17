@@ -143,6 +143,7 @@ category's section below.
 - [ ] Feed: optional desktop/VR notifications for chosen friends coming online or joining your world.
 - [x] **Instance history + player timeline chart + Players Met + last seen in profile** (`instances` / `instance_players` tables in `gamelog.js`, events from `vrchatWorld.js`).
 - [ ] **Linux: app startup aborts at the tray icon.** `createTray()` loads `assets/icon.ico`, which Electron can't load on Linux, so `new Tray()` throws and the rest of the `whenReady` startup (world tracker, Discord, history, etc.) never runs. Needs a PNG tray icon on non-Windows (or a try/catch). Found while testing under Linux; not fixed here.
+- [x] **Start apps with VRChat** (auto-launch, VR/Desktop/always, close on exit) — `autoLaunch.js`, card in Quick Launch. Needs a real-Windows check of spawn/close.
 - [ ] `modules/integrations/discord/discordRpc.js` looks like an unused older Rich Presence module (nothing requires it; `discord.js` is the live one) — confirm and remove.
 
 ### Media
