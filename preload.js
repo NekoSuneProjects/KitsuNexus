@@ -304,6 +304,9 @@ window.electronAPI = {
   feedList: opts => ipcRenderer.invoke('feed:list', opts),
   feedClear: () => ipcRenderer.invoke('feed:clear'),
   feedPipelineStatus: () => ipcRenderer.invoke('feed:pipelineStatus'),
+  // VRChat server status
+  vrcServerStatusGet: () => ipcRenderer.invoke('vrcServerStatus:get'),
+  vrcServerStatusRefresh: () => ipcRenderer.invoke('vrcServerStatus:refresh'),
   // auto-launch apps with VRChat
   autoLaunchList: () => ipcRenderer.invoke('autolaunch:list'),
   autoLaunchAdd: () => ipcRenderer.invoke('autolaunch:add'),

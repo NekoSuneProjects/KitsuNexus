@@ -77,6 +77,7 @@ const vrchatClient = require('./modules/vrchat/api/vrchatClient')
 const { createPipeline } = require('./modules/vrchat/api/pipeline')
 const { createFriendFeed } = require('./modules/vrchat/friends/friendFeed')
 const { createAutoLauncher } = require('./modules/vrchat/launcher/autoLaunch')
+const { createServerStatus } = require('./modules/vrchat/status/serverStatus')
 const { startWeather, stopWeather, getWeather } = require('./modules/weather/weatherModule')
 const {
   startBot, stopBot, setMute: botSetMute, setDeaf: botSetDeaf, inviteUrl,
@@ -450,6 +451,7 @@ app.whenReady().then(async () => {
     if (w.portalSeq && w.portalSeq !== lastPortalSeq) { lastPortalSeq = w.portalSeq; gamelog.log('portal', w.lastPortal || 'Someone', 'dropped a portal', w.worldName) }
   })
   autoLauncher.start()
+  vrcServerStatus.start()
   crashGuard.start({ enabled: settings.get('autoRejoin', false), getLocation: () => { const w = getVrcWorld(); return (w.inWorld && w.worldId && w.instanceId) ? `${w.worldId}:${w.instanceId}` : '' } })
   setInterval(() => pawprints.tickCommit(), 60000)
   let hudMediaBusy = false
@@ -492,7 +494,7 @@ app.on('before-quit', () => {
   if (blePairingCallback) { const callback = blePairingCallback; blePairingCallback = null; callback({ confirmed: false }) }
   stopComponentStats(); stopNetworkStats(); stopPulsoid(); stopHyperate(); stopDeviceBridge(); stopWindowActivity(); stopTon()
   disconnectTikTok(); stopTwitch(); twitchInteractive.stop(false); stopKick(); stopDiscord(); stopVrBattery(); stopVrcWorld(); stopAfk()
-  stopWeather(); stopVrcStatusPoll(); stopBot(); stopOfficialBot(); stopStatusPush(); pawprints.tickCommit(); stopFriendDiff(); pipeline.stop(); autoLauncher.stop(); friendFeed.flush(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); stopTonLog(); ranks.close(); screenshotMetadata.stop(); localFavoritesDb.close()
+  stopWeather(); stopVrcStatusPoll(); stopBot(); stopOfficialBot(); stopStatusPush(); pawprints.tickCommit(); stopFriendDiff(); pipeline.stop(); autoLauncher.stop(); vrcServerStatus.stop(); friendFeed.flush(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); stopTonLog(); ranks.close(); screenshotMetadata.stop(); localFavoritesDb.close()
   ruskLaserdome.stop(false)
   if (unsubHotkeyHold) { unsubHotkeyHold(); unsubHotkeyHold = null }
   stopHotkeyTick()
@@ -1600,6 +1602,21 @@ ipcMain.handle('vrchat:status', () => vrchatApi.fetchUser())
 ipcMain.handle('vrchat:isLoggedIn', () => vrchatApi.isLoggedIn())
 ipcMain.handle('vrchat:logout', () => { pipeline.stop(); vrchatApi.logout(); stopVrcStatusPoll(); return true })
 ipcMain.handle('feed:list', (e, opts) => gamelog.listFeed(opts || {}))
+
+/* VRChat server status (status.vrchat.com): banner on Home + an alert when it
+   degrades / recovers (not on the first check, unless it's already degraded). */
+const vrcServerStatus = createServerStatus({
+  onChange: (cur, prev) => {
+    push('vrcServerStatus', cur)
+    if (!settings.get('vrcServerStatusAlerts', true)) return
+    const mode = settings.get('tonNotifyMode', 'auto')
+    const what = [...cur.components, ...cur.incidents].slice(0, 4).join(', ')
+    if (!cur.ok && (!prev || prev.ok || prev.indicator !== cur.indicator)) vrNotify.notify('⚠️ VRChat service issue', `${cur.description}${what ? ' — ' + what : ''}`, mode).catch(() => {})
+    else if (cur.ok && prev && !prev.ok) vrNotify.notify('✅ VRChat is back to normal', 'All Systems Operational', mode).catch(() => {})
+  }
+})
+ipcMain.handle('vrcServerStatus:get', () => vrcServerStatus.current())
+ipcMain.handle('vrcServerStatus:refresh', () => vrcServerStatus.poll())
 
 /* Auto-launch apps with VRChat. Paths are only added via this file picker, so
    the renderer can't make the app spawn an arbitrary path. */

@@ -7012,3 +7012,16 @@ $('alList').addEventListener('click', async e => {
 })
 api.on('autolaunch:log', m => setText('alLog', String(m || '')))
 document.querySelector('[data-tab="quicklaunch"]').addEventListener('click', loadAutoLaunch)
+
+/* ---------------- VRChat server status banner (status.vrchat.com) ---------------- */
+function renderVrcServerStatus (st) {
+  const el = $('vrcStatusBanner'); if (!el) return
+  if (!st || st.ok) { el.style.display = 'none'; return }
+  const what = [...(st.components || []), ...(st.incidents || [])]
+  el.style.borderLeftColor = st.indicator === 'critical' || st.indicator === 'major' ? '#ef4444' : '#f59e0b'
+  el.innerHTML = `<b>⚠️ VRChat: ${esc(st.description || 'Service issue')}</b>${what.length ? `<div class="muted" style="font-size:.78rem;margin-top:2px">${esc(what.join(', '))}</div>` : ''}`
+  el.style.display = ''
+}
+$('vrcStatusBanner').addEventListener('click', () => api.openExternal ? api.openExternal('https://status.vrchat.com') : window.open('https://status.vrchat.com'))
+api.on('vrcServerStatus', renderVrcServerStatus)
+api.vrcServerStatusGet().then(renderVrcServerStatus).catch(() => {})
