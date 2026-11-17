@@ -67,12 +67,15 @@ test('Discord presence uses the movie poster as the big icon', async () => {
   assert.match(a.state, /Watching in Popcorn Palace/)
   assert.equal(a.endTimestamp, Math.round(now + 600000))
 
-  // Ask Me / DND hide the world, so the movie is hidden too.
+  // Ask Me / DND hide only the world name + join button; the movie stays.
   pushes.length = 0
   discord.setVrcContext({ vrcStatus: 'busy' })
   await new Promise(r => setTimeout(r, 6000))
   const b = pushes.at(-1)
-  assert.equal(b.largeImageKey, 'logo')
-  assert.doesNotMatch(b.details, /Dune/)
+  assert.equal(b.largeImageKey, 'https://img.example/dune.jpg')
+  assert.match(b.details, /Dune/)
+  assert.match(b.state, /Watching a movie/)
+  assert.doesNotMatch(b.state, /Popcorn Palace/)
+  assert.ok(!(b.buttons || []).some(x => /Join World/.test(x.label)))
   await discord.stopDiscord()
 })

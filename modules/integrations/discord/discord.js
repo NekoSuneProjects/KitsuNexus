@@ -79,12 +79,12 @@ const config = {
 // plus heart rate and now-playing (from main.js).
 const vrc = { worldName: '', joinUrl: '', worldUrl: '', profileUrl: '', hrBpm: 0, nowPlaying: '', popcornPalace: null }
 
-// Popcorn Palace movie to show right now, or null. Gated by the same privacy
-// rule as the world (it names where you are), and dropped once the movie's
-// expected end has passed (stale log line / nobody restarted it).
+// Popcorn Palace movie to show right now, or null. Shown on every status — the
+// status privacy rule only hides the world name / join button, not the movie.
+// Dropped once the movie's expected end has passed (stale log line).
 function activePopcornPalace () {
   const pp = vrc.popcornPalace
-  if (!config.showPopcornPalace || !pp || !pp.videoName || !worldVisible()) return null
+  if (!config.showPopcornPalace || !pp || !pp.videoName) return null
   if (!pp.isPaused && pp.endsAt && pp.endsAt < Date.now()) return null
   return pp
 }
@@ -165,7 +165,11 @@ function _pushActivity ({ details, state: st } = {}) {
   // > the generic fallback. This is what makes the presence "switch" by context.
   let stateLine = st
   if (!stateLine) {
-    if (pp) stateLine = `${info.emoji} ${pp.isPaused ? '⏸ Paused in' : 'Watching in'} ${vrc.worldName || 'Popcorn Palace'}`
+    if (pp) {
+      // World name only when the status allows it (Ask Me / DND keep it hidden).
+      const verb = pp.isPaused ? '⏸ Paused' : 'Watching'
+      stateLine = showWorld ? `${info.emoji} ${verb} in ${vrc.worldName}` : `${info.emoji} ${verb} a movie`
+    }
     else if (showWorld) stateLine = `In ${vrc.worldName}`
     else if (config.showNowPlaying && vrc.nowPlaying) stateLine = `🎵 ${vrc.nowPlaying}`
     else stateLine = config.rpState || 'In VRChat'
