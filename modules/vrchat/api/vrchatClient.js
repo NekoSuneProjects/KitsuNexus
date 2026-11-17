@@ -38,6 +38,12 @@ function extractCookies (value) {
     .map(c => ({ name: c.name, value: c.value, expires: c.expires || c.expiry || null }))
 }
 
+// Value of the `auth` cookie (for the pipeline websocket), or ''.
+function getAuthToken () {
+  const m = persistedCookieHeader().match(/(?:^|;\s*)auth=([^;]+)/)
+  return m ? m[1] : ''
+}
+
 function persistedCookieHeader () {
   const saved = settings.get(COOKIE_SHADOW_KEY, []) || []
   if (Array.isArray(saved) && saved.length) return saved.filter(c => c && c.name && c.value).map(c => `${c.name}=${c.value}`).join('; ')
@@ -183,5 +189,5 @@ function logout () {
 module.exports = {
   APP, call, request, memo, invalidate, isRateLimited, getClient,
   setCurrentUserId, getCurrentUserId, getTwoFactorMethods, clearTwoFactorMethods,
-  setLoggedIn, isLoggedIn, logout, persistedCookieHeader
+  setLoggedIn, isLoggedIn, logout, persistedCookieHeader, getAuthToken
 }

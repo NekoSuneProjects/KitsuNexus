@@ -73,6 +73,9 @@ const { startVrBattery, stopVrBattery } = require('./modules/vrchat/vr/vrBattery
 const crypto = require('crypto')
 const vrchatApi = require('./modules/vrchat/api/vrchatApi')
 const { detectVrMode } = require('./modules/vrchat/tools/vrMode')
+const vrchatClient = require('./modules/vrchat/api/vrchatClient')
+const { createPipeline } = require('./modules/vrchat/api/pipeline')
+const { createFriendFeed } = require('./modules/vrchat/friends/friendFeed')
 const { startWeather, stopWeather, getWeather } = require('./modules/weather/weatherModule')
 const {
   startBot, stopBot, setMute: botSetMute, setDeaf: botSetDeaf, inviteUrl,
@@ -480,7 +483,7 @@ app.on('before-quit', () => {
   if (blePairingCallback) { const callback = blePairingCallback; blePairingCallback = null; callback({ confirmed: false }) }
   stopComponentStats(); stopNetworkStats(); stopPulsoid(); stopHyperate(); stopDeviceBridge(); stopWindowActivity(); stopTon()
   disconnectTikTok(); stopTwitch(); twitchInteractive.stop(false); stopKick(); stopDiscord(); stopVrBattery(); stopVrcWorld(); stopAfk()
-  stopWeather(); stopVrcStatusPoll(); stopBot(); stopOfficialBot(); stopStatusPush(); pawprints.tickCommit(); stopFriendDiff(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); stopTonLog(); ranks.close(); screenshotMetadata.stop(); localFavoritesDb.close()
+  stopWeather(); stopVrcStatusPoll(); stopBot(); stopOfficialBot(); stopStatusPush(); pawprints.tickCommit(); stopFriendDiff(); pipeline.stop(); friendFeed.flush(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); stopTonLog(); ranks.close(); screenshotMetadata.stop(); localFavoritesDb.close()
   ruskLaserdome.stop(false)
   if (unsubHotkeyHold) { unsubHotkeyHold(); unsubHotkeyHold = null }
   stopHotkeyTick()
@@ -1582,11 +1585,14 @@ async function applyVrcStatus () {
 function startVrcStatusPoll () { stopVrcStatusPoll(); applyVrcStatus(); vrcStatusTimer = setInterval(applyVrcStatus, 60000) }
 function stopVrcStatusPoll () { if (vrcStatusTimer) { clearInterval(vrcStatusTimer); vrcStatusTimer = null } }
 
-ipcMain.handle('vrchat:login', (e, { username, password }) => vrchatApi.login(username, password))
-ipcMain.handle('vrchat:verify2fa', (e, { code, method }) => vrchatApi.verify2fa(code, method))
+ipcMain.handle('vrchat:login', async (e, { username, password }) => { const r = await vrchatApi.login(username, password); if (r && r.ok && !r.needs2fa) pipeline.start(); return r })
+ipcMain.handle('vrchat:verify2fa', async (e, { code, method }) => { const r = await vrchatApi.verify2fa(code, method); if (r && r.ok) pipeline.start(); return r })
 ipcMain.handle('vrchat:status', () => vrchatApi.fetchUser())
 ipcMain.handle('vrchat:isLoggedIn', () => vrchatApi.isLoggedIn())
-ipcMain.handle('vrchat:logout', () => { vrchatApi.logout(); stopVrcStatusPoll(); return true })
+ipcMain.handle('vrchat:logout', () => { pipeline.stop(); vrchatApi.logout(); stopVrcStatusPoll(); return true })
+ipcMain.handle('feed:list', (e, opts) => gamelog.listFeed(opts || {}))
+ipcMain.handle('feed:clear', () => { gamelog.clearFeed(); return true })
+ipcMain.handle('feed:pipelineStatus', () => pipeline.status())
 ipcMain.handle('vrchat:autostatus', (e, on) => { if (on) startVrcStatusPoll(); else stopVrcStatusPoll(); return true })
 
 /* Friend Den / Event Scout / Pawprints / Auto-Greeter (VRChat API) */
@@ -1865,7 +1871,26 @@ function logWorldDiff (w) {
   lastPlayers = cur
 }
 
-let lastFriends = null // Map(id -> displayName)
+// Friend feed + friend log (VRCX-style). One snapshot shared by the live
+// pipeline websocket and the 2-minute full-list poll, persisted in settings so
+// adds/removes/renames/trust changes made while the app was closed are caught.
+const friendFeed = createFriendFeed({
+  loadSnapshot: () => settings.get('friendSnapshot', null),
+  saveSnapshot: snap => settings.set('friendSnapshot', snap),
+  resolveWorldName: async worldId => { const r = await vrchatApi.getWorldName(worldId); return r && r.ok ? r.name : '' },
+  onFeed: e => { gamelog.logFeed(e); push('vrchat:feed', e) },
+  onFriendLog: e => { gamelog.log(e.type, e.name, e.detail, ''); push('vrchat:friendLog', e) }
+})
+const pipeline = createPipeline({
+  getToken: () => (vrchatApi.isLoggedIn() ? vrchatClient.getAuthToken() : ''),
+  userAgent: `KitsuNexus/${app.getVersion()} nekosunevr@nekosunevr.co.uk`,
+  onEvent: (type, content) => {
+    if (/^friend-/.test(type)) friendFeed.handlePipeline(type, content)
+    if (type === 'friend-add' || type === 'friend-delete') vrchatApi.invalidate('friends:all')
+  },
+  onStatus: s => push('vrchat:pipeline', { status: s })
+})
+
 let friendDiffTimer = null
 async function pollFriendDiff () {
   if (!vrchatApi.isLoggedIn() || vrchatApi.isRateLimited()) return
@@ -1875,15 +1900,9 @@ async function pollFriendDiff () {
   vrchatApi.invalidate('friends:all')
   const r = await vrchatApi.getAllFriends()
   if (!r.ok) return
-  const map = new Map()
-  for (const f of (r.friends || [])) map.set(f.id, f.displayName)
-  if (lastFriends === null) { lastFriends = map; return } // baseline
-  for (const [id, name] of map) {
-    if (!lastFriends.has(id)) gamelog.log('friend_add', name, 'New friend', '')
-    else if (lastFriends.get(id) !== name) gamelog.log('name_change', name, `was "${lastFriends.get(id)}"`, '')
-  }
-  for (const [id, name] of lastFriends) if (!map.has(id)) gamelog.log('friend_remove', name, 'No longer friends', '')
-  lastFriends = map
+  friendFeed.reconcile(r.friends || [])
+  // Make sure the live feed is up once we know we're logged in.
+  if (pipeline.status() === 'stopped' || pipeline.status() === 'auth-failed') pipeline.start()
 }
 function startFriendDiff () { stopFriendDiff(); pollFriendDiff(); friendDiffTimer = setInterval(pollFriendDiff, 120000) }
 function stopFriendDiff () { if (friendDiffTimer) { clearInterval(friendDiffTimer); friendDiffTimer = null } }

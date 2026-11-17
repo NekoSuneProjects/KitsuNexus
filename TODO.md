@@ -139,6 +139,8 @@ category's section below.
 - [x] DiscordOSC, Discord voice bot
 - [x] **World media in Rich Presence** — Popcorn Palace, VR Dancing, LS Media, ProTV `nowplaying` (PyPyDance etc.) and YouTube titles, poster as the big icon + elapsed/remaining bar (`worldMedia.js` → `vrchatWorld.js` → `discord.js`). No UI toggle yet (`showWorldMedia` config defaults on) — add a switch to the Discord card.
 - [x] **Rich Presence party size / instance type / VR-Desktop label + hide world in private instances** (`worldPresenceContext` in `main.js`, `vrMode.js`). No UI toggles yet for `showPartySize`, `showPlatform`, `hidePrivateInstances` — add to the Discord card.
+- [x] **Live Friend Feed** (pipeline websocket → 📡 Feed tab) + Friend Log trust rank changes + persisted friend snapshot (`pipeline.js`, `friendFeed.js`).
+- [ ] Feed: optional desktop/VR notifications for chosen friends coming online or joining your world.
 - [ ] `modules/integrations/discord/discordRpc.js` looks like an unused older Rich Presence module (nothing requires it; `discord.js` is the live one) — confirm and remove.
 
 ### Media

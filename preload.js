@@ -300,6 +300,10 @@ window.electronAPI = {
   historyClear: () => ipcRenderer.invoke('history:clear'),
   historyLog: ev => ipcRenderer.invoke('history:log', ev),
   historyImportVrcx: p => ipcRenderer.invoke('history:importVrcx', p),
+  // live friend feed
+  feedList: opts => ipcRenderer.invoke('feed:list', opts),
+  feedClear: () => ipcRenderer.invoke('feed:clear'),
+  feedPipelineStatus: () => ipcRenderer.invoke('feed:pipelineStatus'),
 
   // notifications (cached)
   notifList: () => ipcRenderer.invoke('notif:list'),

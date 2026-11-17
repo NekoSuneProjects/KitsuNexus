@@ -45,6 +45,14 @@ async function init (userDataDir) {
   db.run(`CREATE TABLE IF NOT EXISTS notification_history (
     id TEXT, ts INTEGER, type TEXT, sender TEXT, message TEXT, world TEXT, link TEXT, action TEXT, archivedAt INTEGER
   )`)
+  // Live friend feed (online/offline/GPS/status/avatar/bio) — its own table and
+  // cap, so a busy feed can't push world/join history out of `events`.
+  db.run(`CREATE TABLE IF NOT EXISTS feed (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, type TEXT NOT NULL,
+    user_id TEXT, name TEXT, detail TEXT, location TEXT, world TEXT
+  )`)
+  db.run('CREATE INDEX IF NOT EXISTS idx_feed_ts ON feed(ts)')
+  try { db.run('DELETE FROM feed WHERE id NOT IN (SELECT id FROM feed ORDER BY ts DESC LIMIT 10000)') } catch (_) {}
   // Migrate older DBs that predate the read flag.
   try { db.run('ALTER TABLE notifications ADD COLUMN read INTEGER DEFAULT 0') } catch (_) { /* column already exists */ }
   return true
@@ -119,6 +127,27 @@ function log (type, name, detail, world, worldId, groupId) {
     [Date.now(), String(type), name || '', detail || '', world || '', worldId || '', groupId || ''])
   persist()
 }
+
+// ---- live friend feed ----
+let feedInserts = 0
+function logFeed (e = {}) {
+  if (!db || !e.type) return
+  db.run('INSERT INTO feed (ts,type,user_id,name,detail,location,world) VALUES (?,?,?,?,?,?,?)',
+    [e.ts || Date.now(), String(e.type), e.userId || '', e.name || '', String(e.detail || '').slice(0, 2000), e.location || e.status || '', e.worldName || ''])
+  if (++feedInserts % 500 === 0) { try { db.run('DELETE FROM feed WHERE id NOT IN (SELECT id FROM feed ORDER BY ts DESC LIMIT 10000)') } catch (_) {} }
+  persist()
+}
+function listFeed (opts = {}) {
+  if (!db) return []
+  const limit = Math.min(parseInt(opts.limit, 10) || 200, 1000)
+  const conds = []; const bind = {}
+  if (opts.type) { conds.push('type = :t'); bind[':t'] = String(opts.type) }
+  if (opts.search) { conds.push('(name LIKE :q OR world LIKE :q OR detail LIKE :q)'); bind[':q'] = `%${String(opts.search)}%` }
+  const st = db.prepare(`SELECT id,ts,type,user_id AS userId,name,detail,location,world FROM feed${conds.length ? ' WHERE ' + conds.join(' AND ') : ''} ORDER BY ts DESC LIMIT ${limit}`)
+  st.bind(bind)
+  const out = []; while (st.step()) out.push(st.getAsObject()); st.free(); return out
+}
+function clearFeed () { if (!db) return; db.run('DELETE FROM feed'); persist() }
 
 function list (opts = {}) {
   if (!db) return []
@@ -214,4 +243,4 @@ async function importVrcx (filePath) {
 
 function close () { try { if (db) { fs.writeFileSync(dbPath, Buffer.from(db.export())) } } catch (_) {} }
 
-module.exports = { init, log, list, listWorldVisitsSince, mergeWorldVisit, countGroupInstanceVisits, clear, clearType, close, importVrcx, upsertNotif, listNotifs, unreadNotifCount, markAllNotifsRead, removeNotif, reconcileNotifs, clearNotifs }
+module.exports = { init, log, list, logFeed, listFeed, clearFeed, listWorldVisitsSince, mergeWorldVisit, countGroupInstanceVisits, clear, clearType, close, importVrcx, upsertNotif, listNotifs, unreadNotifCount, markAllNotifsRead, removeNotif, reconcileNotifs, clearNotifs }

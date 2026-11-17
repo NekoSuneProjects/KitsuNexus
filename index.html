@@ -373,6 +373,7 @@
       <button class="navbtn" data-tab="content"><span class="ico">🌐</span><span class="lbl">Content</span></button>
       <button class="navbtn" data-tab="media"><span class="ico">🖼</span><span class="lbl">Media</span></button>
       <button class="navbtn" data-tab="history"><span class="ico">📜</span><span class="lbl">History</span></button>
+      <button class="navbtn" data-tab="feed"><span class="ico">📡</span><span class="lbl">Feed</span></button>
       <div class="navlabel">AI &amp; Speech</div>
       <button class="navbtn" data-tab="ai"><span class="ico">🤖</span><span class="lbl">AI</span></button>
       <button class="navbtn" data-tab="translation"><span class="ico">🌐</span><span class="lbl">Translation</span></button>
@@ -1835,6 +1836,7 @@
               <option value="video">Videos</option>
               <option value="portal">Portals</option>
               <option value="name_change">Name changes</option>
+              <option value="trust_change">Trust rank changes</option>
               <option value="alert">Alerts</option>
               <option value="group">Group</option>
             </select>
@@ -1844,6 +1846,29 @@
           </div>
           <div id="histHeatmap" style="margin:12px 0"></div>
           <div id="histList" class="muted" style="margin-top:10px;max-height:520px;overflow:auto;font-size:.82rem">Loading…</div>
+        </div>
+      </section>
+
+      <!-- FEED (live friend activity from VRChat's pipeline websocket) -->
+      <section id="feed" class="tabpanel">
+        <div class="card">
+          <h3>📡 Friend Feed <span class="muted" style="font-size:.72rem" id="feedPipeline">live feed: …</span></h3>
+          <p class="muted" style="font-size:.8rem;margin-top:0">Friends coming online / going offline, changing world, status, avatar or bio — live from VRChat while you're logged in (saved locally).</p>
+          <div class="row">
+            <select id="feedType" style="max-width:160px">
+              <option value="">All</option>
+              <option value="gps">World changes</option>
+              <option value="online">Online</option>
+              <option value="offline">Offline</option>
+              <option value="status">Status</option>
+              <option value="avatar">Avatar</option>
+              <option value="bio">Bio</option>
+            </select>
+            <input id="feedSearch" placeholder="Search name / world…" style="max-width:220px">
+            <button class="btn" id="feedRefresh">Refresh</button>
+            <button class="btn danger" id="feedClear">Clear</button>
+          </div>
+          <div id="feedList" class="muted" style="margin-top:10px;max-height:560px;overflow:auto;font-size:.82rem">Loading…</div>
         </div>
       </section>
 

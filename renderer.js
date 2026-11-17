@@ -4003,7 +4003,7 @@ $('searchQuery').addEventListener('keydown', e => { if (e.key === 'Enter') doSea
 $('searchResults').addEventListener('click', e => { const c = e.target.closest('.mini-card[data-kind="user"]'); if (c) openUserModal(c.dataset.id) })
 
 /* ---------------- History page ---------------- */
-const HIST_ICON = { join: '➡️', leave: '⬅️', friend_add: '➕', friend_remove: '➖', name_change: '✏️', world: '🌐', video: '🎬', portal: '🌀', alert: '🔔', group: '👥' }
+const HIST_ICON = { join: '➡️', leave: '⬅️', friend_add: '➕', friend_remove: '➖', name_change: '✏️', trust_change: '🛡️', world: '🌐', video: '🎬', portal: '🌀', alert: '🔔', group: '👥' }
 function renderHeatmap (rows) {
   const el = $('histHeatmap'); if (!el) return
   const grid = Array.from({ length: 7 }, () => Array(24).fill(0))
@@ -4032,7 +4032,7 @@ async function loadHistory () {
   }).join('')
 }
 // History event types whose `name` is a person (so the name resolves to a profile).
-const HIST_PERSON_TYPES = new Set(['join', 'leave', 'friend_add', 'friend_remove', 'name_change', 'alert'])
+const HIST_PERSON_TYPES = new Set(['join', 'leave', 'friend_add', 'friend_remove', 'name_change', 'trust_change', 'alert'])
 // History only stores display names, not user ids — resolve the name via search,
 // then open the profile (exact match preferred, else the first result).
 async function openUserByName (name, anchorEl) {
@@ -4079,6 +4079,44 @@ $('histImport').addEventListener('click', async () => {
   if (r.ok) { setText('histList', `✅ Imported ${r.imported} VRCX events.`); loadHistory() } else setText('histList', 'Import failed: ' + (r.error || ''))
 })
 document.querySelector('[data-tab="history"]').addEventListener('click', loadHistory)
+
+/* ---------------- Friend Feed (live pipeline) ---------------- */
+const FEED_ICON = { gps: '🌐', online: '🟢', offline: '⚫', status: '💬', avatar: '🧍', bio: '📝' }
+const FEED_STATUS_DOT = { 'join me': '🔵', active: '🟢', 'ask me': '🟠', busy: '🔴' }
+const PIPELINE_LABEL = { connected: '🟢 live', connecting: '🟡 connecting…', reconnecting: '🟡 reconnecting…', 'no-auth': '⚪ log into VRChat for the live feed', 'auth-failed': '🔴 VRChat login expired — log in again', stopped: '⚪ off', error: '🔴 error' }
+function feedRowHtml (r) {
+  const when = new Date(r.ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  let what = ''
+  if (r.type === 'gps') what = r.world ? `→ ${esc(r.world)}` : 'changed world'
+  else if (r.type === 'online') what = 'came online'
+  else if (r.type === 'offline') what = 'went offline'
+  else if (r.type === 'status') what = `${FEED_STATUS_DOT[r.status || r.location] || ''} ${esc(r.detail || '')}`
+  else if (r.type === 'avatar') what = 'changed avatar'
+  else if (r.type === 'bio') what = `bio: ${esc(String(r.detail || '').slice(0, 140))}`
+  return `<div style="display:flex;gap:8px;padding:5px 0;border-top:1px solid var(--border);align-items:center"><span>${FEED_ICON[r.type] || '•'}</span><div class="grow" style="min-width:0"><div><b class="hist-user" data-name="${esc(r.name || '')}" style="cursor:pointer;text-decoration:underline dotted">${esc(r.name || '')}</b> <span class="muted">${what}</span></div><div class="muted" style="font-size:.72rem">${when}</div></div></div>`
+}
+async function loadFeed () {
+  const el = $('feedList'); el.textContent = 'Loading…'
+  api.feedPipelineStatus().then(s => setText('feedPipeline', 'live feed: ' + (PIPELINE_LABEL[s] || s))).catch(() => {})
+  const rows = await api.feedList({ type: $('feedType').value || undefined, search: $('feedSearch').value.trim() || undefined, limit: 400 })
+  el.innerHTML = rows && rows.length ? rows.map(feedRowHtml).join('') : 'No friend activity yet — log into VRChat and keep the app open.'
+}
+$('feedRefresh').addEventListener('click', loadFeed)
+$('feedType').addEventListener('change', loadFeed)
+$('feedSearch').addEventListener('keydown', e => { if (e.key === 'Enter') loadFeed() })
+$('feedClear').addEventListener('click', async () => { await api.feedClear(); loadFeed() })
+$('feedList').addEventListener('click', e => { const u = e.target.closest('.hist-user'); if (u && u.dataset.name) openUserByName(u.dataset.name, u) })
+document.querySelector('[data-tab="feed"]').addEventListener('click', loadFeed)
+api.on('vrchat:pipeline', ({ status }) => setText('feedPipeline', 'live feed: ' + (PIPELINE_LABEL[status] || status)))
+// Prepend live rows while the Feed tab is open (if they match the filter).
+api.on('vrchat:feed', e => {
+  if (!$('feed').classList.contains('active')) return
+  const t = $('feedType').value; const q = $('feedSearch').value.trim().toLowerCase()
+  if (t && e.type !== t) return
+  if (q && ![e.name, e.worldName, e.detail].some(v => String(v || '').toLowerCase().includes(q))) return
+  const el = $('feedList'); if (!el.querySelector('div')) el.innerHTML = ''
+  el.insertAdjacentHTML('afterbegin', feedRowHtml({ ...e, world: e.worldName }))
+})
 
 /* ---------------- Auto-Greeter ---------------- */
 function greeterCfg () { return { enabled: $('greeterEnable').checked, mode: $('greeterMode').value, allow: $('greeterAllow').value.split(',').map(s => s.trim()).filter(Boolean) } }
