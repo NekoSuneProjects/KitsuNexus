@@ -13,7 +13,7 @@
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
-const { createWorldMediaTracker } = require('./worldMedia')
+const { createWorldMediaTracker, lineTime } = require('./worldMedia')
 
 const LOG_DIR = path.join(os.homedir(), 'AppData', 'LocalLow', 'VRChat', 'VRChat')
 const POLL_MS = 5000
@@ -68,6 +68,15 @@ function splitNameAndId (raw) {
 // Media tracker; async YouTube title lookups re-emit when they resolve.
 const media = createWorldMediaTracker({ onChange: () => { state.media = media.current(); emit() } })
 
+// Optional listener for timestamped instance events (instance history / charts):
+//   { type: 'instance', worldId, instanceId, groupId, at } | { type: 'worldName', name, at }
+//   { type: 'join' | 'leave', displayName, userId, at }   | { type: 'left', at }
+// `at` is the log line's own time, so replaying a log on startup gives the same
+// events again (consumers dedupe on it).
+let onEvent = null
+function setEventListener (fn) { onEvent = typeof fn === 'function' ? fn : null }
+function event (e) { if (onEvent) { try { onEvent(e) } catch (err) { console.warn('vrc world event listener:', err.message) } } }
+
 function buildUrls () {
   state.worldUrl = state.worldId ? `https://vrchat.com/home/world/${state.worldId}` : ''
   state.joinUrl = (state.worldId && state.instanceId)
@@ -94,6 +103,7 @@ function processLine (line) {
     state.inWorld = true
     media.reset(); media.setWorld(m[1]); state.media = null
     playerSet.clear(); playerMap.clear(); syncPlayers() // new instance — radar resets
+    event({ type: 'instance', worldId: state.worldId, instanceId: state.instanceId, groupId: state.groupId, at: lineTime(line) })
     return true
   }
   // RADAR: "[Behaviour] OnPlayerJoined <DisplayName> (usr_...)"
@@ -103,12 +113,14 @@ function processLine (line) {
     playerSet.add(displayName)
     if (id) playerMap.set(displayName, id)
     syncPlayers()
+    event({ type: 'join', displayName, userId: id, at: lineTime(line) })
     return true
   }
   // "[Behaviour] OnPlayerLeft <DisplayName> (usr_...)"
   m = line.match(/OnPlayerLeft\s+(.+)$/)
   if (m) {
-    const { displayName } = splitNameAndId(m[1])
+    const { displayName, id } = splitNameAndId(m[1])
+    event({ type: 'leave', displayName, userId: id || playerMap.get(displayName) || '', at: lineTime(line) })
     playerSet.delete(displayName)
     playerMap.delete(displayName)
     syncPlayers()
@@ -119,10 +131,12 @@ function processLine (line) {
   if (m) {
     state.worldName = m[1]
     state.inWorld = true
+    event({ type: 'worldName', name: m[1], at: lineTime(line) })
     return true
   }
   // "[Behaviour] OnLeftRoom"
   if (/OnLeftRoom\b/.test(line)) {
+    event({ type: 'left', at: lineTime(line) })
     state.inWorld = false
     state.worldId = ''
     state.instanceId = ''
@@ -233,4 +247,4 @@ function stopVrcWorld () {
 
 function getVrcWorld () { return { ...state, media: state.media ? { ...state.media } : null } }
 
-module.exports = { startVrcWorld, stopVrcWorld, getVrcWorld, _processLine: processLine }
+module.exports = { startVrcWorld, stopVrcWorld, getVrcWorld, setEventListener, _processLine: processLine }

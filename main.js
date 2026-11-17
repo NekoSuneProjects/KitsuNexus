@@ -68,7 +68,7 @@ const DEFAULT_NEKOSUNE_BACKEND_URL = 'https://kitsunexus.nekosunevr.co.uk'
 function getNekosuneBackendUrl () {
   return String(settings.get('nekosuneBackendUrl', '') || '').trim() || DEFAULT_NEKOSUNE_BACKEND_URL
 }
-const { startVrcWorld, stopVrcWorld, getVrcWorld } = require('./modules/vrchat/world/vrchatWorld')
+const { startVrcWorld, stopVrcWorld, getVrcWorld, setEventListener: setVrcWorldEventListener } = require('./modules/vrchat/world/vrchatWorld')
 const { startVrBattery, stopVrBattery } = require('./modules/vrchat/vr/vrBattery')
 const crypto = require('crypto')
 const vrchatApi = require('./modules/vrchat/api/vrchatApi')
@@ -379,7 +379,14 @@ app.whenReady().then(async () => {
   createWindow()
   // Track the current VRChat world from its log; feed it to the renderer and
   // (when connected) into the Discord presence.
-  gamelog.init(app.getPath('userData')).catch(err => console.warn('gamelog init:', err.message))
+  // Instance-history events can arrive before the history DB has loaded (the
+  // world tracker replays the current log right away), so queue until ready.
+  const pendingInstanceEvents = []
+  let gamelogReady = false
+  setVrcWorldEventListener(e => { if (gamelogReady) gamelog.instanceEvent(e); else if (pendingInstanceEvents.length < 20000) pendingInstanceEvents.push(e) })
+  gamelog.init(app.getPath('userData'))
+    .then(ok => { if (ok) { gamelogReady = true; pendingInstanceEvents.splice(0).forEach(e => gamelog.instanceEvent(e)) } })
+    .catch(err => console.warn('gamelog init:', err.message))
   // Local Favorites — independent of VRChat's own /favorites API; path is user-configurable
   // (Settings > Favorites), defaulting next to the other local DBs.
   localFavoritesDb.init(settings.get('favorites.dbPath') || localFavoritesDb.defaultPath(app.getPath('userData')))
@@ -1591,6 +1598,10 @@ ipcMain.handle('vrchat:status', () => vrchatApi.fetchUser())
 ipcMain.handle('vrchat:isLoggedIn', () => vrchatApi.isLoggedIn())
 ipcMain.handle('vrchat:logout', () => { pipeline.stop(); vrchatApi.logout(); stopVrcStatusPoll(); return true })
 ipcMain.handle('feed:list', (e, opts) => gamelog.listFeed(opts || {}))
+ipcMain.handle('instances:list', (e, opts) => gamelog.listInstances(opts || {}))
+ipcMain.handle('instances:timeline', (e, id) => gamelog.instanceTimeline(id))
+// Players you've shared instances with (yourself excluded).
+ipcMain.handle('instances:playersMet', (e, opts) => gamelog.playersMet({ ...(opts || {}), excludeName: getVrcWorld().userDisplayName || undefined }))
 ipcMain.handle('feed:clear', () => { gamelog.clearFeed(); return true })
 ipcMain.handle('feed:pipelineStatus', () => pipeline.status())
 ipcMain.handle('vrchat:autostatus', (e, on) => { if (on) startVrcStatusPoll(); else stopVrcStatusPoll(); return true })

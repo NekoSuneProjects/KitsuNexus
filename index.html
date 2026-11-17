@@ -1847,6 +1847,23 @@
           <div id="histHeatmap" style="margin:12px 0"></div>
           <div id="histList" class="muted" style="margin-top:10px;max-height:520px;overflow:auto;font-size:.82rem">Loading…</div>
         </div>
+        <div class="card">
+          <h3>🗺️ Instances <span class="muted" style="font-size:.72rem">(from the VRChat log — click one for its player timeline)</span></h3>
+          <div class="row">
+            <input id="instSearch" placeholder="Search world…" style="max-width:220px">
+            <button class="btn" id="instRefresh">Refresh</button>
+          </div>
+          <div id="instList" class="muted" style="margin-top:10px;max-height:360px;overflow:auto;font-size:.82rem">Loading…</div>
+          <div id="instTimeline" style="margin-top:12px"></div>
+        </div>
+        <div class="card">
+          <h3>👥 Players Met <span class="muted" style="font-size:.72rem">(times met, time together, last seen)</span></h3>
+          <div class="row">
+            <input id="metSearch" placeholder="Search name…" style="max-width:220px">
+            <button class="btn" id="metRefresh">Refresh</button>
+          </div>
+          <div id="metList" class="muted" style="margin-top:10px;max-height:420px;overflow:auto;font-size:.82rem">Loading…</div>
+        </div>
       </section>
 
       <!-- FEED (live friend activity from VRChat's pipeline websocket) -->

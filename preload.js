@@ -304,6 +304,10 @@ window.electronAPI = {
   feedList: opts => ipcRenderer.invoke('feed:list', opts),
   feedClear: () => ipcRenderer.invoke('feed:clear'),
   feedPipelineStatus: () => ipcRenderer.invoke('feed:pipelineStatus'),
+  // instance history / players met
+  instancesList: opts => ipcRenderer.invoke('instances:list', opts),
+  instanceTimeline: id => ipcRenderer.invoke('instances:timeline', id),
+  playersMet: opts => ipcRenderer.invoke('instances:playersMet', opts),
 
   // notifications (cached)
   notifList: () => ipcRenderer.invoke('notif:list'),

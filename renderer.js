@@ -4080,6 +4080,60 @@ $('histImport').addEventListener('click', async () => {
 })
 document.querySelector('[data-tab="history"]').addEventListener('click', loadHistory)
 
+/* ---------------- Instances, timeline chart, players met ---------------- */
+const fmtWhen = ts => new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+const fmtSpan = ms => fmtDuration(Math.max(0, Math.round(ms / 1000)))
+async function loadInstances () {
+  const el = $('instList'); el.textContent = 'Loading…'
+  const rows = await api.instancesList({ search: $('instSearch').value.trim() || undefined, limit: 200 })
+  if (!rows || !rows.length) { el.textContent = 'No instances yet — they are recorded from the VRChat log while the app is open.'; return }
+  el.innerHTML = rows.map(r => {
+    const dur = (r.leftAt || Date.now()) - r.joinedAt
+    return `<div class="inst-row" data-id="${Number(r.id)}" style="display:flex;gap:8px;padding:5px 0;border-top:1px solid var(--border);cursor:pointer"><span>${r.leftAt ? '🌐' : '🟢'}</span><div class="grow" style="min-width:0"><div><b>${esc(r.worldName || r.worldId)}</b> <span class="muted">${Number(r.players) || 0} players · ${fmtSpan(dur)}${r.leftAt ? '' : ' (now)'}</span></div><div class="muted" style="font-size:.72rem">${fmtWhen(r.joinedAt)}</div></div></div>`
+  }).join('')
+}
+// Player timeline for one instance: one bar per stay, across the visit.
+async function showInstanceTimeline (id) {
+  const box = $('instTimeline'); box.textContent = 'Loading timeline…'
+  const t = await api.instanceTimeline(id)
+  if (!t) { box.textContent = ''; return }
+  const start = t.joinedAt; const end = Math.max(t.leftAt || Date.now(), start + 1000)
+  const span = end - start
+  const pct = v => (((Math.min(Math.max(v, start), end) - start) / span) * 100).toFixed(2)
+  // one row per player, stays merged onto the same row
+  const byName = new Map()
+  for (const p of t.players) { if (!byName.has(p.name)) byName.set(p.name, []); byName.get(p.name).push(p) }
+  const rowsHtml = [...byName].map(([name, stays]) => {
+    const total = stays.reduce((a, s) => a + ((s.leftAt || end) - s.joinedAt), 0)
+    const bars = stays.map(s => { const l = pct(s.joinedAt); const w = Math.max(0.6, pct(s.leftAt || end) - l); return `<div title="${esc(name)}: ${esc(fmtWhen(s.joinedAt))} → ${s.leftAt ? esc(fmtWhen(s.leftAt)) : 'now'}" style="position:absolute;left:${l}%;width:${w}%;top:3px;bottom:3px;border-radius:3px;background:var(--accent)"></div>` }).join('')
+    return `<div style="display:grid;grid-template-columns:150px 1fr 60px;gap:8px;align-items:center;font-size:.76rem"><span class="hist-user" data-name="${esc(name)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" title="${esc(name)}">${esc(name)}</span><div style="position:relative;height:16px;background:var(--border);border-radius:3px">${bars}</div><span class="muted">${fmtSpan(total)}</span></div>`
+  }).join('')
+  box.innerHTML = `<div class="um-sec">${esc(t.worldName || t.worldId)} — ${esc(fmtWhen(start))} → ${t.leftAt ? esc(fmtWhen(t.leftAt)) : 'now'} (${fmtSpan(span)})</div>` +
+    `<div style="display:flex;flex-direction:column;gap:3px;max-height:420px;overflow:auto">${rowsHtml || '<span class="muted">No players recorded.</span>'}</div>`
+}
+async function loadPlayersMet () {
+  const el = $('metList'); el.textContent = 'Loading…'
+  const rows = await api.playersMet({ search: $('metSearch').value.trim() || undefined, limit: 300 })
+  if (!rows || !rows.length) { el.textContent = 'Nobody yet — players are recorded from the VRChat log while the app is open.'; return }
+  el.innerHTML = rows.map(r => `<div style="display:flex;gap:8px;padding:5px 0;border-top:1px solid var(--border)"><span>👤</span><div class="grow" style="min-width:0"><div><b class="hist-user" data-name="${esc(r.name)}" style="cursor:pointer;text-decoration:underline dotted">${esc(r.name)}</b> <span class="muted">met ${Number(r.timesMet) || 0}× · ${fmtSpan(r.totalMs || 0)} together</span></div><div class="muted" style="font-size:.72rem">last seen ${esc(fmtWhen(r.lastSeen))}${r.lastWorld ? ' · ' + esc(r.lastWorld) : ''}</div></div></div>`).join('')
+}
+$('instRefresh').addEventListener('click', loadInstances)
+$('instSearch').addEventListener('keydown', e => { if (e.key === 'Enter') loadInstances() })
+$('instList').addEventListener('click', e => { const r = e.target.closest('.inst-row'); if (r) showInstanceTimeline(Number(r.dataset.id)) })
+$('instTimeline').addEventListener('click', e => { const u = e.target.closest('.hist-user'); if (u && u.dataset.name) openUserByName(u.dataset.name, u) })
+$('metRefresh').addEventListener('click', loadPlayersMet)
+$('metSearch').addEventListener('keydown', e => { if (e.key === 'Enter') loadPlayersMet() })
+$('metList').addEventListener('click', e => { const u = e.target.closest('.hist-user'); if (u && u.dataset.name) openUserByName(u.dataset.name, u) })
+document.querySelector('[data-tab="history"]').addEventListener('click', () => { loadInstances(); loadPlayersMet() })
+// "Last seen" block for the user modal (by user id, falling back to name).
+async function lastSeenBlock (u) {
+  if (!u || !u.id) return ''
+  let r = []
+  try { r = await api.playersMet({ userId: u.id, limit: 1 }); if (!r.length && u.displayName) r = await api.playersMet({ name: u.displayName, limit: 1 }) } catch (_) { return '' }
+  const m = r[0]; if (!m) return ''
+  return `<div class="um-sec">Met in VRChat</div><div class="muted" style="font-size:.8rem">${Number(m.timesMet) || 0}× · ${esc(fmtSpan(m.totalMs || 0))} together · last seen ${esc(fmtWhen(m.lastSeen))}${m.lastWorld ? ' in ' + esc(m.lastWorld) : ''}</div>`
+}
+
 /* ---------------- Friend Feed (live pipeline) ---------------- */
 const FEED_ICON = { gps: '🌐', online: '🟢', offline: '⚫', status: '💬', avatar: '🧍', bio: '📝' }
 const FEED_STATUS_DOT = { 'join me': '🔵', active: '🟢', 'ask me': '🟠', busy: '🔴' }
@@ -4690,12 +4744,14 @@ async function renderMTab (tab) {
       : ''
     // Previous display names, reconstructed from the local name-change history.
     const pastBlock = await pastNamesBlock(u.displayName)
+    const seenBlock = (u.id !== myUserId) ? await lastSeenBlock(u) : ''
     body.innerHTML =
       `<div class="rb-card">${umLocationLine(u)}${umJoinActions(u)}</div>` +
       (u.bio ? `<div class="um-bio">${esc(u.bio)}</div>` : '') +
       (links ? `<div class="row" style="flex-wrap:wrap;gap:8px">${links}</div>` : '') +
       (badges ? `<div class="um-sec">Badges</div><div class="badge-grid">${badges}</div>` : '') +
       pastBlock +
+      seenBlock +
       trustLadder +
       `<div class="um-sec">Info</div><div class="um-info">${rows.map(r => `<div><span>${esc(r[0])}</span><b>${esc(r[1])}</b></div>`).join('')}</div>` +
       noteBlock
