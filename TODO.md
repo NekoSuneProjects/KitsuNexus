@@ -147,6 +147,9 @@ category's section below.
 - [x] **VRChat server status banner + outage/recovery alerts** (`serverStatus.js`). No UI toggle yet for `vrcServerStatusAlerts`; couldn't test the live status.vrchat.com fetch from the dev sandbox.
 - [x] **Import VRCX local favourites** (avatars / worlds / friends → Local Favorites, `importVrcx` in `localFavoritesDb.js`).
 - [ ] History "Import VRCX" (`gamelog.importVrcx`) reports success with 0 events for a file that isn't a database — sql.js opens any bytes lazily and the per-table errors are swallowed. Validate the file first like `localFavoritesDb.importVrcx` now does. Also its VRCX table names look outdated (`gamelog_join_leave` etc.) — check against current VRCX.
+- [x] **Face & Hand Tracking over OSC** (built-in VRCFT-compatible face + webcam hands, one camera) — `modules/vrchat/tracking/`, 🙂 Face & Hands tab. Tested with a real face image + Google's face model under Linux; **needs a real-webcam check on Windows, and the hand model was never run** (couldn't download it in the dev sandbox; hand maths is unit-tested only).
+- [ ] Face & Hands: tongue tracking (FoxyFace has an extra ONNX tongue model), per-shape calibration UI, and an avatar setup guide / example animator for the `HT/` hand parameters.
+- [ ] Face & Hands: MediaPipe 1.x sends usage metrics to Google — stay on 0.10.x (pinned 0.10.35) or keep the tracker session's network block if upgrading.
 - [ ] `modules/integrations/discord/discordRpc.js` looks like an unused older Rich Presence module (nothing requires it; `discord.js` is the live one) — confirm and remove.
 
 ### Media

@@ -78,6 +78,9 @@ const { createPipeline } = require('./modules/vrchat/api/pipeline')
 const { createFriendFeed } = require('./modules/vrchat/friends/friendFeed')
 const { createAutoLauncher } = require('./modules/vrchat/launcher/autoLaunch')
 const { createServerStatus } = require('./modules/vrchat/status/serverStatus')
+const { createTrackingEngine } = require('./modules/vrchat/tracking/trackingEngine')
+const { createModelStore } = require('./modules/vrchat/tracking/models')
+const { createTrackerWindow } = require('./modules/vrchat/tracking/trackerWindow')
 const { startWeather, stopWeather, getWeather } = require('./modules/weather/weatherModule')
 const {
   startBot, stopBot, setMute: botSetMute, setDeaf: botSetDeaf, inviteUrl,
@@ -452,6 +455,7 @@ app.whenReady().then(async () => {
   })
   autoLauncher.start()
   vrcServerStatus.start()
+  if (settings.get('faceTracking.camera.autoStart', false)) startTracking().catch(() => {})
   crashGuard.start({ enabled: settings.get('autoRejoin', false), getLocation: () => { const w = getVrcWorld(); return (w.inWorld && w.worldId && w.instanceId) ? `${w.worldId}:${w.instanceId}` : '' } })
   setInterval(() => pawprints.tickCommit(), 60000)
   let hudMediaBusy = false
@@ -494,7 +498,7 @@ app.on('before-quit', () => {
   if (blePairingCallback) { const callback = blePairingCallback; blePairingCallback = null; callback({ confirmed: false }) }
   stopComponentStats(); stopNetworkStats(); stopPulsoid(); stopHyperate(); stopDeviceBridge(); stopWindowActivity(); stopTon()
   disconnectTikTok(); stopTwitch(); twitchInteractive.stop(false); stopKick(); stopDiscord(); stopVrBattery(); stopVrcWorld(); stopAfk()
-  stopWeather(); stopVrcStatusPoll(); stopBot(); stopOfficialBot(); stopStatusPush(); pawprints.tickCommit(); stopFriendDiff(); pipeline.stop(); autoLauncher.stop(); vrcServerStatus.stop(); friendFeed.flush(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); stopTonLog(); ranks.close(); screenshotMetadata.stop(); localFavoritesDb.close()
+  stopWeather(); stopVrcStatusPoll(); stopBot(); stopOfficialBot(); stopStatusPush(); pawprints.tickCommit(); stopFriendDiff(); pipeline.stop(); autoLauncher.stop(); vrcServerStatus.stop(); stopTracking(); trackerWin.destroy(); friendFeed.flush(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); stopTonLog(); ranks.close(); screenshotMetadata.stop(); localFavoritesDb.close()
   ruskLaserdome.stop(false)
   if (unsubHotkeyHold) { unsubHotkeyHold(); unsubHotkeyHold = null }
   stopHotkeyTick()
@@ -1616,6 +1620,109 @@ const vrcServerStatus = createServerStatus({
   }
 })
 ipcMain.handle('vrcServerStatus:get', () => vrcServerStatus.current())
+
+/* ------------------------------------------------------------------ */
+/* Face & hand tracking over OSC (built-in VRCFaceTracking-style)      */
+/* One webcam stream feeds both the face and the hand model in a       */
+/* hidden, network-blocked window; results become VRCFT v2 + HT/       */
+/* avatar parameters and native VRChat eye tracking.                    */
+/* ------------------------------------------------------------------ */
+const CAMERA_DEFAULTS = { deviceId: '', width: 640, height: 480, fps: 30, gpu: true, handsEveryN: 1, autoStart: false }
+const trackingEngine = createTrackingEngine({
+  send: msgs => osc.sendMessages(msgs),
+  loadSettings: k => settings.get(`faceTracking.${k}`),
+  saveSettings: (k, v) => settings.set(`faceTracking.${k}`, v)
+})
+let trackingModels = null
+const getTrackingModels = () => trackingModels || (trackingModels = createModelStore(path.join(app.getPath('userData'), 'tracking-models')))
+let trackerState = { state: 'stopped' }
+let trackingRunning = false
+let trackingPreview = false
+let trackingOscUnsub = null
+let trackingStatusTimer = null
+const trackerWin = createTrackerWindow({
+  onFrame: f => { if (trackingRunning) trackingEngine.onFrame(f) },
+  onStatus: s => {
+    if (trackerState.state === 'error' && s.state === 'stopped') return // keep the error visible after the auto-stop
+    trackerState = s.state === 'starting' ? { ...s } : { ...trackerState, ...s }
+    if (s.state === 'error') stopTracking({ keepError: true })
+    pushTrackingStatus()
+  },
+  onPreview: img => { if (trackingPreview) push('tracking:preview', img) }
+})
+const getCameraSettings = () => ({ ...CAMERA_DEFAULTS, ...(settings.get('faceTracking.camera', {}) || {}) })
+function trackingStatus () {
+  return { ...trackingEngine.status(), running: trackingRunning, tracker: trackerState, models: getTrackingModels().status(), camera: getCameraSettings() }
+}
+function pushTrackingStatus () { push('tracking:status', trackingStatus()) }
+
+async function startTracking () {
+  const cfg = trackingEngine.getConfig()
+  const cam = getCameraSettings()
+  const wantFace = cfg.face || cfg.eyes || cfg.head
+  const models = {}
+  const store = getTrackingModels()
+  try {
+    if (wantFace) models.face = store.load('face')
+    if (cfg.hands) models.hand = store.load('hand')
+  } catch (err) { return { ok: false, error: err.code === 'ENOENT' ? 'Download the tracking models first' : err.message, needModels: true } }
+  if (!models.face && !models.hand) return { ok: false, error: 'Turn on face or hand tracking first' }
+  osc.setOscPort(settings.get('oscPort', 9000))
+  if (!trackingOscUnsub) trackingOscUnsub = osc.addOscListener((address, args) => trackingEngine.onOsc(address, args))
+  if (!trackingEngine.status().avatar) trackingEngine.loadNewestAvatar()
+  trackingRunning = true
+  trackerState = { state: 'starting' }
+  await trackerWin.start({ ...cam, models, face: !!models.face, hands: !!models.hand, mirror: cfg.mirror, preview: trackingPreview })
+  clearInterval(trackingStatusTimer); trackingStatusTimer = setInterval(pushTrackingStatus, 500)
+  pushTrackingStatus()
+  return { ok: true }
+}
+function stopTracking (opts = {}) {
+  const was = trackingRunning
+  trackingRunning = false
+  clearInterval(trackingStatusTimer); trackingStatusTimer = null
+  trackerWin.stop()
+  if (was) trackingEngine.stop()
+  if (trackingOscUnsub) { trackingOscUnsub(); trackingOscUnsub = null }
+  if (!opts.keepError) trackerState = { state: 'stopped' }
+  pushTrackingStatus()
+  return true
+}
+ipcMain.handle('tracking:status', () => trackingStatus())
+ipcMain.handle('tracking:start', () => startTracking())
+ipcMain.handle('tracking:stop', () => stopTracking())
+ipcMain.handle('tracking:config', (e, patch = {}) => {
+  const cfg = trackingEngine.setConfig(patch || {})
+  trackerWin.update({ face: cfg.face || cfg.eyes || cfg.head, hands: cfg.hands, mirror: cfg.mirror })
+  return trackingStatus()
+})
+// Camera settings (device, resolution, fps, GPU, hands every N frames, auto-start).
+ipcMain.handle('tracking:camera', (e, patch = {}) => {
+  const cur = getCameraSettings(); const n = { ...cur }
+  if (typeof patch.deviceId === 'string') n.deviceId = patch.deviceId.slice(0, 200)
+  for (const [k, lo, hi] of [['width', 160, 1920], ['height', 120, 1080], ['fps', 5, 60], ['handsEveryN', 1, 4]]) if (Number.isFinite(patch[k])) n[k] = Math.round(Math.min(hi, Math.max(lo, patch[k])))
+  for (const k of ['gpu', 'autoStart']) if (typeof patch[k] === 'boolean') n[k] = patch[k]
+  settings.set('faceTracking.camera', n)
+  return trackingStatus()
+})
+ipcMain.handle('tracking:preview', (e, on) => { trackingPreview = !!on; trackerWin.update({ preview: trackingPreview }); return true })
+ipcMain.handle('tracking:calibrate', (e, seconds) => { trackingEngine.startCalibration(Math.min(10, Math.max(1, Number(seconds) || 2))); return true })
+ipcMain.handle('tracking:resetCalibration', () => { trackingEngine.resetCalibration(); return trackingStatus() })
+ipcMain.handle('tracking:reloadAvatar', () => { trackingEngine.loadNewestAvatar(); return trackingStatus() })
+ipcMain.handle('tracking:downloadModel', async (e, kind) => {
+  if (kind !== 'face' && kind !== 'hand') return { ok: false, error: 'Unknown model' }
+  const r = await getTrackingModels().download(kind, p => push('tracking:modelProgress', { kind, progress: p }))
+  pushTrackingStatus()
+  return r
+})
+ipcMain.handle('tracking:importModel', async (e, kind) => {
+  if (kind !== 'face' && kind !== 'hand') return { ok: false, error: 'Unknown model' }
+  const r = await dialog.showOpenDialog(mainWindow, { title: `Choose ${kind === 'face' ? 'face_landmarker' : 'hand_landmarker'}.task`, properties: ['openFile'], filters: [{ name: 'MediaPipe model', extensions: ['task'] }] })
+  if (r.canceled || !r.filePaths[0]) return { ok: false, error: 'cancelled' }
+  const res = getTrackingModels().importFile(kind, r.filePaths[0])
+  pushTrackingStatus()
+  return res
+})
 ipcMain.handle('vrcServerStatus:refresh', () => vrcServerStatus.poll())
 
 /* Auto-launch apps with VRChat. Paths are only added via this file picker, so

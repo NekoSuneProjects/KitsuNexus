@@ -7031,3 +7031,96 @@ function renderVrcServerStatus (st) {
 $('vrcStatusBanner').addEventListener('click', () => api.openExternal ? api.openExternal('https://status.vrchat.com') : window.open('https://status.vrchat.com'))
 api.on('vrcServerStatus', renderVrcServerStatus)
 api.vrcServerStatusGet().then(renderVrcServerStatus).catch(() => {})
+
+/* ---------------- Face & Hand Tracking (webcam -> OSC) ---------------- */
+const FT_SMOOTH = [{ label: 'off', minCutoff: 10, beta: 0 }, { label: 'low', minCutoff: 4, beta: 0.5 }, { label: 'medium', minCutoff: 1.5, beta: 0.3 }, { label: 'high', minCutoff: 0.8, beta: 0.1 }, { label: 'max', minCutoff: 0.3, beta: 0.05 }]
+const FT_GESTURE = ['neutral', 'fist', 'open', 'point', 'victory', 'rock', 'gun', 'thumbs up']
+const FT_STATE = { stopped: 'off', starting: 'starting…', running: 'running', error: 'error' }
+let ftLast = null
+async function ftLoadCameras () {
+  const sel = $('ftCamera'); if (!sel) return
+  let devs = []
+  try { devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput') } catch (_) {}
+  const cur = (ftLast && ftLast.camera && ftLast.camera.deviceId) || ''
+  sel.innerHTML = '<option value="">Default camera</option>' + devs.map((d, i) => `<option value="${esc(d.deviceId)}">${esc(d.label || 'Camera ' + (i + 1))}</option>`).join('')
+  sel.value = devs.some(d => d.deviceId === cur) ? cur : ''
+}
+function ftBar (label, v, signed) {
+  const n = Math.max(signed ? -1 : 0, Math.min(1, Number(v) || 0))
+  const left = signed ? (n < 0 ? 50 + n * 50 : 50) : 0; const width = signed ? Math.abs(n) * 50 : n * 100
+  return `<span class="muted">${esc(label)}</span><div style="position:relative;height:10px;background:var(--border);border-radius:5px;overflow:hidden"><div style="position:absolute;left:${left}%;width:${width}%;top:0;bottom:0;background:var(--accent)"></div></div>`
+}
+function ftRender (s) {
+  if (!s) return
+  ftLast = s
+  const t = s.tracker || {}
+  setText('ftState', s.running ? (FT_STATE[t.state] || t.state || 'running') : (t.state === 'error' ? 'error' : 'off'))
+  setText('ftOut', t.state === 'error' ? '⚠️ ' + (t.error || 'Error') : s.running ? `${t.camera ? '📷 ' + t.camera + ' · ' : ''}${t.width ? t.width + '×' + t.height : ''}` : 'Stopped')
+  const hands = s.hands || {}
+  setText('ftStats', s.running ? `${s.fps || 0} fps · face ${s.face ? '✅' : '—'} · hands ${hands.Left ? 'L' : '–'}${hands.Right ? 'R' : '–'} · ${s.sent || 0} values sent` : 'Not running')
+  const v = s.values || {}
+  let bars = ''
+  if (s.face) bars += ftBar('Jaw open', v.JawOpen) + ftBar('Smile L / R', ((v.SmileLeft || 0) + (v.SmileRight || 0)) / 2) + ftBar('Eye open L', v.EyeOpenLeft) + ftBar('Eye open R', v.EyeOpenRight) + ftBar('Brow up', v.BrowUp) + ftBar('Pucker', v.Pucker) + ftBar('Look X', v.EyeX, true) + ftBar('Head yaw', v.HeadYaw, true)
+  for (const side of ['Left', 'Right']) {
+    const c = (s.curls || {})[side]; if (!c) continue
+    bars += `<span class="muted"><b>${side} hand</b></span><span class="muted">${esc(FT_GESTURE[c.gesture] || '')}</span>`
+    for (const f of ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky']) bars += ftBar(`${f}`, c[f])
+  }
+  $('ftBars').innerHTML = bars
+  const a = s.avatar
+  $('ftAvatar').innerHTML = a
+    ? `<b>${esc(a.name || a.id)}</b><br>${a.fullFaceTracking ? 'Avatar uses its own face tracking — no FT parameters sent.<br>' : ''}${Number(s.faceParams) || 0} face parameters · ${Number(s.handParams) || 0} hand parameters${s.nativeEyes && (s.nativeEyes.gaze || s.nativeEyes.lid) ? ' · VRChat native eye tracking' : ''}`
+    : 'No avatar yet — change or reset your avatar in VRChat (with OSC on).'
+  const m = s.models || {}
+  $('ftModels').innerHTML = ['face', 'hand'].map(k => `<div class="row" style="gap:6px;align-items:center;margin-top:4px"><span style="min-width:90px">${k === 'face' ? '🙂 Face' : '✋ Hands'}</span><span class="muted">${m[k] && m[k].ready ? `✅ ready (${(m[k].size / 1048576).toFixed(1)} MB)` : 'not downloaded'}</span><button class="btn ghost ft-dl" data-kind="${k}" style="margin-left:auto;padding:3px 8px;font-size:.75rem">${m[k] && m[k].ready ? 'Re-download' : 'Download'}</button><button class="btn ghost ft-import" data-kind="${k}" style="padding:3px 8px;font-size:.75rem">From file…</button></div>`).join('')
+  const c = s.config || {}
+  for (const [id, key] of [['ftFace', 'face'], ['ftEyes', 'eyes'], ['ftHead', 'head'], ['ftHands', 'hands'], ['ftNativeEyes', 'nativeEyes'], ['ftMirror', 'mirror'], ['ftSendAll', 'sendAll']]) if ($(id) && document.activeElement !== $(id)) $(id).checked = !!c[key]
+  if (document.activeElement !== $('ftIntensity')) { $('ftIntensity').value = c.intensity || 1; setText('ftIntensityV', Number(c.intensity || 1).toFixed(1)) }
+  const smooth = FT_SMOOTH.findIndex(p => p.minCutoff === c.minCutoff && p.beta === c.beta)
+  if (smooth >= 0 && document.activeElement !== $('ftSmooth')) { $('ftSmooth').value = smooth; setText('ftSmoothV', FT_SMOOTH[smooth].label) }
+  const cam = s.camera || {}
+  if (document.activeElement !== $('ftRes')) $('ftRes').value = `${cam.width}x${cam.height}`
+  if (document.activeElement !== $('ftFps')) $('ftFps').value = String(cam.fps)
+  $('ftGpu').checked = cam.gpu !== false; $('ftAutoStart').checked = !!cam.autoStart
+  $('ftHandsN').value = cam.handsEveryN || 1; setText('ftHandsNV', cam.handsEveryN || 1)
+  if (s.calibrating) setText('ftCalOut', '⏳ Calibrating — hold still…')
+  else if (s.calibrated && /Calibrating/.test($('ftCalOut').textContent)) setText('ftCalOut', '✅ Calibrated')
+  else if (!$('ftCalOut').textContent) setText('ftCalOut', s.calibrated ? '✅ Calibrated' : 'Not calibrated')
+}
+async function ftRefresh () { try { ftRender(await api.trackingStatus()) } catch (_) {} }
+const ftCfg = patch => api.trackingConfig(patch).then(ftRender)
+for (const [id, key] of [['ftFace', 'face'], ['ftEyes', 'eyes'], ['ftHead', 'head'], ['ftHands', 'hands'], ['ftNativeEyes', 'nativeEyes'], ['ftMirror', 'mirror'], ['ftSendAll', 'sendAll']]) $(id).addEventListener('change', e => ftCfg({ [key]: e.target.checked }))
+$('ftIntensity').addEventListener('input', e => setText('ftIntensityV', Number(e.target.value).toFixed(1)))
+$('ftIntensity').addEventListener('change', e => ftCfg({ intensity: Number(e.target.value) }))
+$('ftSmooth').addEventListener('input', e => setText('ftSmoothV', FT_SMOOTH[e.target.value].label))
+$('ftSmooth').addEventListener('change', e => { const p = FT_SMOOTH[e.target.value]; ftCfg({ minCutoff: p.minCutoff, beta: p.beta }) })
+const ftCam = patch => api.trackingCamera(patch).then(ftRender)
+$('ftCamera').addEventListener('change', e => ftCam({ deviceId: e.target.value }))
+$('ftRes').addEventListener('change', e => { const [w, h] = e.target.value.split('x').map(Number); ftCam({ width: w, height: h }) })
+$('ftFps').addEventListener('change', e => ftCam({ fps: Number(e.target.value) }))
+$('ftGpu').addEventListener('change', e => ftCam({ gpu: e.target.checked }))
+$('ftAutoStart').addEventListener('change', e => ftCam({ autoStart: e.target.checked }))
+$('ftHandsN').addEventListener('input', e => setText('ftHandsNV', e.target.value))
+$('ftHandsN').addEventListener('change', e => ftCam({ handsEveryN: Number(e.target.value) }))
+$('ftCamRefresh').addEventListener('click', ftLoadCameras)
+$('ftStart').addEventListener('click', async () => {
+  setText('ftOut', 'Starting…')
+  const r = await api.trackingStart()
+  if (!r.ok) setText('ftOut', '⚠️ ' + (r.error || 'Could not start'))
+  ftRefresh()
+})
+$('ftStop').addEventListener('click', async () => { await api.trackingStop(); $('ftPreview').removeAttribute('src'); ftRefresh() })
+$('ftCalibrate').addEventListener('click', async () => { if (!(ftLast && ftLast.running)) { setText('ftCalOut', 'Start tracking first'); return } setText('ftCalOut', '⏳ Calibrating — hold still…'); await api.trackingCalibrate(2) })
+$('ftCalReset').addEventListener('click', async () => { setText('ftCalOut', 'Not calibrated'); ftRender(await api.trackingResetCalibration()) })
+$('ftReloadAvatar').addEventListener('click', async () => ftRender(await api.trackingReloadAvatar()))
+$('ftModels').addEventListener('click', async e => {
+  const dl = e.target.closest('.ft-dl'); const im = e.target.closest('.ft-import')
+  if (dl) { dl.disabled = true; dl.textContent = 'Downloading…'; const r = await api.trackingDownloadModel(dl.dataset.kind); if (!r.ok) setText('ftOut', '⚠️ ' + r.error); ftRefresh() }
+  if (im) { const r = await api.trackingImportModel(im.dataset.kind); if (!r.ok && r.error !== 'cancelled') setText('ftOut', '⚠️ ' + r.error); ftRefresh() }
+})
+api.on('tracking:modelProgress', ({ kind, progress }) => { const b = document.querySelector(`.ft-dl[data-kind="${kind}"]`); if (b) b.textContent = `Downloading… ${Math.round(progress * 100)}%` })
+api.on('tracking:status', s => { if ($('facetracking').classList.contains('active')) ftRender(s); else ftLast = s })
+api.on('tracking:preview', img => { if ($('facetracking').classList.contains('active')) $('ftPreview').src = img })
+// Preview frames only while this tab is open.
+document.querySelectorAll('.navbtn').forEach(b => b.addEventListener('click', () => api.trackingPreview(b.dataset.tab === 'facetracking')))
+document.querySelector('[data-tab="facetracking"]').addEventListener('click', () => { ftRefresh(); ftLoadCameras() })

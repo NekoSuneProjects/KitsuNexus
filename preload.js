@@ -305,6 +305,18 @@ window.electronAPI = {
   feedList: opts => ipcRenderer.invoke('feed:list', opts),
   feedClear: () => ipcRenderer.invoke('feed:clear'),
   feedPipelineStatus: () => ipcRenderer.invoke('feed:pipelineStatus'),
+  // face & hand tracking
+  trackingStatus: () => ipcRenderer.invoke('tracking:status'),
+  trackingStart: () => ipcRenderer.invoke('tracking:start'),
+  trackingStop: () => ipcRenderer.invoke('tracking:stop'),
+  trackingConfig: patch => ipcRenderer.invoke('tracking:config', patch),
+  trackingCamera: patch => ipcRenderer.invoke('tracking:camera', patch),
+  trackingPreview: on => ipcRenderer.invoke('tracking:preview', on),
+  trackingCalibrate: seconds => ipcRenderer.invoke('tracking:calibrate', seconds),
+  trackingResetCalibration: () => ipcRenderer.invoke('tracking:resetCalibration'),
+  trackingReloadAvatar: () => ipcRenderer.invoke('tracking:reloadAvatar'),
+  trackingDownloadModel: kind => ipcRenderer.invoke('tracking:downloadModel', kind),
+  trackingImportModel: kind => ipcRenderer.invoke('tracking:importModel', kind),
   // VRChat server status
   vrcServerStatusGet: () => ipcRenderer.invoke('vrcServerStatus:get'),
   vrcServerStatusRefresh: () => ipcRenderer.invoke('vrcServerStatus:refresh'),

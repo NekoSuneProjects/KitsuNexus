@@ -48,6 +48,23 @@ function createOscMessage (address, args = []) {
   ])
 }
 
+// Pack many messages into OSC bundles of at most `maxBytes` each (VRChat-safe
+// UDP size; VRCFaceTracking uses 4096). Each message: { address, args }.
+// Returns an array of Buffers, one per bundle.
+function createOscBundles (messages, maxBytes = 4096) {
+  const header = Buffer.concat([encodeOscString('#bundle'), Buffer.from([0, 0, 0, 0, 0, 0, 0, 1])]) // timetag = immediately
+  const bundles = []
+  let parts = [header]; let size = header.length
+  for (const m of messages) {
+    const msg = createOscMessage(m.address, m.args)
+    const lenBuf = Buffer.alloc(4); lenBuf.writeInt32BE(msg.length, 0)
+    if (size + 4 + msg.length > maxBytes && parts.length > 1) { bundles.push(Buffer.concat(parts)); parts = [header]; size = header.length }
+    parts.push(lenBuf, msg); size += 4 + msg.length
+  }
+  if (parts.length > 1) bundles.push(Buffer.concat(parts))
+  return bundles
+}
+
 // Decode a single incoming OSC message buffer into { address, args }.
 // args are float/int/bool values in type-tag order (string args are skipped
 // back as raw strings). Used by avatarScaling.js to read VRChat's
@@ -89,4 +106,5 @@ function decodeOscMessage (data) {
   return { address, args }
 }
 
-module.exports = { encodeOscString, createOscMessage, decodeOscMessage }
+module.exports = {
+  createOscBundles, encodeOscString, createOscMessage, decodeOscMessage }
