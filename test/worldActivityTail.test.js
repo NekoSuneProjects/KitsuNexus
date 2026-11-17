@@ -12,7 +12,7 @@ test('log tail suppresses historical replay and delivers new join, avatar and le
     const file = path.join(logs, 'output_log_test.txt')
     fs.writeFileSync(file, '[Behaviour] OnPlayerJoined Historical (usr_old)\n')
     let poll
-    const context = { module: { exports: {} }, Buffer, Date, console, setInterval: fn => { poll = fn; return 1 }, clearInterval () {}, require: name => name === 'os' ? { homedir: () => home } : name === './activityEvents' ? require('../modules/vrchat/world/activityEvents') : require(name) }
+    const context = { module: { exports: {} }, Buffer, Date, console, setInterval: fn => { poll = fn; return 1 }, clearInterval () {}, require: name => name === 'os' ? { homedir: () => home } : name.startsWith('./') ? require(path.join(__dirname, '../modules/vrchat/world', name)) : require(name) }
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../modules/vrchat/world/vrchatWorld.js'), 'utf8'), context)
     const updates = []; context.module.exports.startVrcWorld(value => updates.push(value))
     assert.equal(updates.at(-1).activityEvents.length, 0)

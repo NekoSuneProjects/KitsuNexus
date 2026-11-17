@@ -264,6 +264,7 @@ window.electronAPI = {
   localFavGetPath: () => ipcRenderer.invoke('localfav:getPath'),
   localFavExport: () => ipcRenderer.invoke('localfav:export'),
   localFavImport: () => ipcRenderer.invoke('localfav:import'),
+  localFavImportVrcx: () => ipcRenderer.invoke('localfav:importVrcx'),
   localFavChoosePath: () => ipcRenderer.invoke('localfav:choosePath'),
   cloudSyncStatus: () => ipcRenderer.invoke('cloudsync:status'),
   cloudSyncStartPairing: (baseUrl, deviceName) => ipcRenderer.invoke('cloudsync:startPairing', { baseUrl, deviceName }),
@@ -301,6 +302,35 @@ window.electronAPI = {
   historyClear: () => ipcRenderer.invoke('history:clear'),
   historyLog: ev => ipcRenderer.invoke('history:log', ev),
   historyImportVrcx: p => ipcRenderer.invoke('history:importVrcx', p),
+  // live friend feed
+  feedList: opts => ipcRenderer.invoke('feed:list', opts),
+  feedClear: () => ipcRenderer.invoke('feed:clear'),
+  feedPipelineStatus: () => ipcRenderer.invoke('feed:pipelineStatus'),
+  // face & hand tracking
+  trackingStatus: () => ipcRenderer.invoke('tracking:status'),
+  trackingStart: () => ipcRenderer.invoke('tracking:start'),
+  trackingStop: () => ipcRenderer.invoke('tracking:stop'),
+  trackingConfig: patch => ipcRenderer.invoke('tracking:config', patch),
+  trackingCamera: patch => ipcRenderer.invoke('tracking:camera', patch),
+  trackingPreview: on => ipcRenderer.invoke('tracking:preview', on),
+  trackingCalibrate: seconds => ipcRenderer.invoke('tracking:calibrate', seconds),
+  trackingResetCalibration: () => ipcRenderer.invoke('tracking:resetCalibration'),
+  trackingReloadAvatar: () => ipcRenderer.invoke('tracking:reloadAvatar'),
+  trackingDownloadModel: kind => ipcRenderer.invoke('tracking:downloadModel', kind),
+  trackingImportModel: kind => ipcRenderer.invoke('tracking:importModel', kind),
+  // VRChat server status
+  vrcServerStatusGet: () => ipcRenderer.invoke('vrcServerStatus:get'),
+  vrcServerStatusRefresh: () => ipcRenderer.invoke('vrcServerStatus:refresh'),
+  // auto-launch apps with VRChat
+  autoLaunchList: () => ipcRenderer.invoke('autolaunch:list'),
+  autoLaunchAdd: () => ipcRenderer.invoke('autolaunch:add'),
+  autoLaunchUpdate: (id, patch) => ipcRenderer.invoke('autolaunch:update', id, patch),
+  autoLaunchRemove: id => ipcRenderer.invoke('autolaunch:remove', id),
+  autoLaunchTest: id => ipcRenderer.invoke('autolaunch:test', id),
+  // instance history / players met
+  instancesList: opts => ipcRenderer.invoke('instances:list', opts),
+  instanceTimeline: id => ipcRenderer.invoke('instances:timeline', id),
+  playersMet: opts => ipcRenderer.invoke('instances:playersMet', opts),
 
   // notifications (cached)
   notifList: () => ipcRenderer.invoke('notif:list'),

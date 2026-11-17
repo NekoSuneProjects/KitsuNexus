@@ -16,6 +16,8 @@ function mapStatus (s) {
   }
 }
 
+const { trustLevelFromTags } = require('../friends/friendFeed')
+
 function parseInstance (location) {
   if (!location || location === 'offline' || location === 'traveling') return { type: location || 'offline', private: false, joinable: false }
   if (location === 'private') return { type: 'private', private: true, joinable: false }
@@ -159,6 +161,7 @@ function pickFriend (f = {}) {
     private: inst.private, joinable: inst.joinable, state: f.state, platform: f.platform,
     languages: Array.isArray(f.languages) && f.languages.length ? f.languages : languagesFromTags(f.tags),
     trustTags,
+    trustLevel: Array.isArray(f.tags) ? trustLevelFromTags(f.tags) : '',
     communityRank: trustTags.length ? rankEngine.estimateFromTags([...trustTags, ...((f.tags || []).includes('system_supporter') ? ['system_supporter'] : [])]) : null,
     isEconomyCreator: f.isEconomyCreator === true, economyCreatorVerified: f.isEconomyCreator === true,
     image: f.userIcon || f.iconUrl || f.profilePicOverride || f.currentAvatarThumbnailImageUrl || ''

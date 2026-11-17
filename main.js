@@ -71,9 +71,19 @@ const DEFAULT_NEKOSUNE_BACKEND_URL = 'https://kitsunexus.nekosunevr.co.uk'
 function getNekosuneBackendUrl () {
   return String(settings.get('nekosuneBackendUrl', '') || '').trim() || DEFAULT_NEKOSUNE_BACKEND_URL
 }
-const { startVrcWorld, stopVrcWorld, getVrcWorld } = require('./modules/vrchat/world/vrchatWorld')
+const { startVrcWorld, stopVrcWorld, getVrcWorld, setEventListener: setVrcWorldEventListener } = require('./modules/vrchat/world/vrchatWorld')
 const { startVrBattery, stopVrBattery } = require('./modules/vrchat/vr/vrBattery')
+const crypto = require('crypto')
 const vrchatApi = require('./modules/vrchat/api/vrchatApi')
+const { detectVrMode } = require('./modules/vrchat/tools/vrMode')
+const vrchatClient = require('./modules/vrchat/api/vrchatClient')
+const { createPipeline } = require('./modules/vrchat/api/pipeline')
+const { createFriendFeed } = require('./modules/vrchat/friends/friendFeed')
+const { createAutoLauncher } = require('./modules/vrchat/launcher/autoLaunch')
+const { createServerStatus } = require('./modules/vrchat/status/serverStatus')
+const { createTrackingEngine } = require('./modules/vrchat/tracking/trackingEngine')
+const { createModelStore } = require('./modules/vrchat/tracking/models')
+const { createTrackerWindow } = require('./modules/vrchat/tracking/trackerWindow')
 const { startWeather, stopWeather, getWeather } = require('./modules/weather/weatherModule')
 const {
   startBot, stopBot, setMute: botSetMute, setDeaf: botSetDeaf, inviteUrl,
@@ -403,7 +413,14 @@ app.whenReady().then(async () => {
   }
   // Track the current VRChat world from its log; feed it to the renderer and
   // (when connected) into the Discord presence.
-  gamelog.init(app.getPath('userData')).catch(err => console.warn('gamelog init:', err.message))
+  // Instance-history events can arrive before the history DB has loaded (the
+  // world tracker replays the current log right away), so queue until ready.
+  const pendingInstanceEvents = []
+  let gamelogReady = false
+  setVrcWorldEventListener(e => { if (gamelogReady) gamelog.instanceEvent(e); else if (pendingInstanceEvents.length < 20000) pendingInstanceEvents.push(e) })
+  gamelog.init(app.getPath('userData'))
+    .then(ok => { if (ok) { gamelogReady = true; pendingInstanceEvents.splice(0).forEach(e => gamelog.instanceEvent(e)) } })
+    .catch(err => console.warn('gamelog init:', err.message))
   // Local Favorites — independent of VRChat's own /favorites API; path is user-configurable
   // (Settings > Favorites), defaulting next to the other local DBs.
   localFavoritesDb.init(settings.get('favorites.dbPath') || localFavoritesDb.defaultPath(app.getPath('userData')))
@@ -462,12 +479,15 @@ app.whenReady().then(async () => {
       session: w.inWorld ? String(w.worldName || 'In VRChat') : 'Not in world',
       players: Array.isArray(w.players) ? w.players.slice(0, 80).map(name => String(name).slice(0, 64)) : []
     })
-    setVrcContext({ worldName: w.inWorld ? w.worldName : '', joinUrl: w.joinUrl, worldUrl: w.worldUrl, profileUrl: w.profileUrl })
+    setVrcContext(worldPresenceContext(w))
     pawprints.setWorld(w.inWorld ? w.worldName : '')
     logWorldDiff(w)
     if (w.lastVideo && w.lastVideo !== lastVideoLogged) { lastVideoLogged = w.lastVideo; gamelog.log('video', '🎬 Video', w.lastVideo, w.worldName) }
     if (w.portalSeq && w.portalSeq !== lastPortalSeq) { lastPortalSeq = w.portalSeq; gamelog.log('portal', w.lastPortal || 'Portal', w.lastPortalDetail || 'Portal activity', w.worldName) }
   })
+  autoLauncher.start()
+  vrcServerStatus.start()
+  if (settings.get('faceTracking.camera.autoStart', false)) startTracking().catch(() => {})
   crashGuard.start({ enabled: settings.get('autoRejoin', false), getLocation: () => { const w = getVrcWorld(); return (w.inWorld && w.worldId && w.instanceId) ? `${w.worldId}:${w.instanceId}` : '' } })
   setInterval(() => pawprints.tickCommit(), 60000)
   let hudMediaBusy = false
@@ -512,7 +532,7 @@ app.on('before-quit', () => {
   if (blePairingCallback) { const callback = blePairingCallback; blePairingCallback = null; callback({ confirmed: false }) }
   stopComponentStats(); stopNetworkStats(); stopPulsoid(); stopHyperate(); stopDeviceBridge(); stopWindowActivity(); stopTon()
   disconnectTikTok(); stopTwitch(); twitchInteractive.stop(false); stopKick(); stopDiscord(); stopVrBattery(); stopVrcWorld(); stopAfk()
-  stopWeather(); stopVrcStatusPoll(); stopBot(); stopOfficialBot(); stopStatusPush(); pawprints.tickCommit(); stopFriendDiff(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); stopTonLog(); ranks.close(); screenshotMetadata.stop(); localFavoritesDb.close()
+  stopWeather(); stopVrcStatusPoll(); stopBot(); stopOfficialBot(); stopStatusPush(); pawprints.tickCommit(); stopFriendDiff(); pipeline.stop(); autoLauncher.stop(); vrcServerStatus.stop(); stopTracking(); trackerWin.destroy(); friendFeed.flush(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); stopTonLog(); ranks.close(); screenshotMetadata.stop(); localFavoritesDb.close()
   ruskLaserdome.stop(false)
   if (unsubHotkeyHold) { unsubHotkeyHold(); unsubHotkeyHold = null }
   stopHotkeyTick()
@@ -1591,7 +1611,7 @@ ipcMain.handle('discord:start', async (e, cfg) => {
   const r = await startDiscord({ ...(cfg || {}), clientId: discordAppId, oscPort, extraOscTargets: settings.get('extraOscTargets', []) }, s => push('discord:update', s))
   // Seed the presence with the world we've already detected.
   const w = getVrcWorld()
-  setVrcContext({ worldName: w.inWorld ? w.worldName : '', joinUrl: w.joinUrl, worldUrl: w.worldUrl, profileUrl: w.profileUrl })
+  setVrcContext(worldPresenceContext(w))
   return r
 })
 ipcMain.handle('discord:stop', async () => { await stopDiscord(); return true })
@@ -1647,11 +1667,167 @@ async function applyVrcStatus () {
 function startVrcStatusPoll () { stopVrcStatusPoll(); applyVrcStatus(); vrcStatusTimer = setInterval(applyVrcStatus, 60000) }
 function stopVrcStatusPoll () { if (vrcStatusTimer) { clearInterval(vrcStatusTimer); vrcStatusTimer = null } }
 
-ipcMain.handle('vrchat:login', (e, { username, password }) => vrchatApi.login(username, password))
-ipcMain.handle('vrchat:verify2fa', (e, { code, method }) => vrchatApi.verify2fa(code, method))
+ipcMain.handle('vrchat:login', async (e, { username, password }) => { const r = await vrchatApi.login(username, password); if (r && r.ok && !r.needs2fa) pipeline.start(); return r })
+ipcMain.handle('vrchat:verify2fa', async (e, { code, method }) => { const r = await vrchatApi.verify2fa(code, method); if (r && r.ok) pipeline.start(); return r })
 ipcMain.handle('vrchat:status', () => vrchatApi.fetchUser())
 ipcMain.handle('vrchat:isLoggedIn', () => vrchatApi.isLoggedIn())
-ipcMain.handle('vrchat:logout', () => { vrchatApi.logout(); stopVrcStatusPoll(); return true })
+ipcMain.handle('vrchat:logout', () => { pipeline.stop(); vrchatApi.logout(); stopVrcStatusPoll(); return true })
+ipcMain.handle('feed:list', (e, opts) => gamelog.listFeed(opts || {}))
+
+/* VRChat server status (status.vrchat.com): banner on Home + an alert when it
+   degrades / recovers (not on the first check, unless it's already degraded). */
+const vrcServerStatus = createServerStatus({
+  onChange: (cur, prev) => {
+    push('vrcServerStatus', cur)
+    if (!settings.get('vrcServerStatusAlerts', true)) return
+    const mode = settings.get('tonNotifyMode', 'auto')
+    const what = [...cur.components, ...cur.incidents].slice(0, 4).join(', ')
+    if (!cur.ok && (!prev || prev.ok || prev.indicator !== cur.indicator)) vrNotify.notify('⚠️ VRChat service issue', `${cur.description}${what ? ' — ' + what : ''}`, mode).catch(() => {})
+    else if (cur.ok && prev && !prev.ok) vrNotify.notify('✅ VRChat is back to normal', 'All Systems Operational', mode).catch(() => {})
+  }
+})
+ipcMain.handle('vrcServerStatus:get', () => vrcServerStatus.current())
+
+/* ------------------------------------------------------------------ */
+/* Face & hand tracking over OSC (built-in VRCFaceTracking-style)      */
+/* One webcam stream feeds both the face and the hand model in a       */
+/* hidden, network-blocked window; results become VRCFT v2 + HT/       */
+/* avatar parameters and native VRChat eye tracking.                    */
+/* ------------------------------------------------------------------ */
+const CAMERA_DEFAULTS = { deviceId: '', width: 640, height: 480, fps: 30, gpu: true, handsEveryN: 1, autoStart: false }
+const trackingEngine = createTrackingEngine({
+  send: msgs => osc.sendMessages(msgs),
+  loadSettings: k => settings.get(`faceTracking.${k}`),
+  saveSettings: (k, v) => settings.set(`faceTracking.${k}`, v)
+})
+let trackingModels = null
+const getTrackingModels = () => trackingModels || (trackingModels = createModelStore(path.join(app.getPath('userData'), 'tracking-models')))
+let trackerState = { state: 'stopped' }
+let trackingRunning = false
+let trackingPreview = false
+let trackingOscUnsub = null
+let trackingStatusTimer = null
+const trackerWin = createTrackerWindow({
+  onFrame: f => { if (trackingRunning) trackingEngine.onFrame(f) },
+  onStatus: s => {
+    if (trackerState.state === 'error' && s.state === 'stopped') return // keep the error visible after the auto-stop
+    trackerState = s.state === 'starting' ? { ...s } : { ...trackerState, ...s }
+    if (s.state === 'error') stopTracking({ keepError: true })
+    pushTrackingStatus()
+  },
+  onPreview: img => { if (trackingPreview) push('tracking:preview', img) }
+})
+const getCameraSettings = () => ({ ...CAMERA_DEFAULTS, ...(settings.get('faceTracking.camera', {}) || {}) })
+function trackingStatus () {
+  return { ...trackingEngine.status(), running: trackingRunning, tracker: trackerState, models: getTrackingModels().status(), camera: getCameraSettings() }
+}
+function pushTrackingStatus () { push('tracking:status', trackingStatus()) }
+
+async function startTracking () {
+  const cfg = trackingEngine.getConfig()
+  const cam = getCameraSettings()
+  const wantFace = cfg.face || cfg.eyes || cfg.head
+  const models = {}
+  const store = getTrackingModels()
+  try {
+    if (wantFace) models.face = store.load('face')
+    if (cfg.hands) models.hand = store.load('hand')
+  } catch (err) { return { ok: false, error: err.code === 'ENOENT' ? 'Download the tracking models first' : err.message, needModels: true } }
+  if (!models.face && !models.hand) return { ok: false, error: 'Turn on face or hand tracking first' }
+  osc.setOscPort(settings.get('oscPort', 9000))
+  if (!trackingOscUnsub) trackingOscUnsub = osc.addOscListener((address, args) => trackingEngine.onOsc(address, args))
+  if (!trackingEngine.status().avatar) trackingEngine.loadNewestAvatar()
+  trackingRunning = true
+  trackerState = { state: 'starting' }
+  await trackerWin.start({ ...cam, models, face: !!models.face, hands: !!models.hand, mirror: cfg.mirror, preview: trackingPreview })
+  clearInterval(trackingStatusTimer); trackingStatusTimer = setInterval(pushTrackingStatus, 500)
+  pushTrackingStatus()
+  return { ok: true }
+}
+function stopTracking (opts = {}) {
+  const was = trackingRunning
+  trackingRunning = false
+  clearInterval(trackingStatusTimer); trackingStatusTimer = null
+  trackerWin.stop()
+  if (was) trackingEngine.stop()
+  if (trackingOscUnsub) { trackingOscUnsub(); trackingOscUnsub = null }
+  if (!opts.keepError) trackerState = { state: 'stopped' }
+  pushTrackingStatus()
+  return true
+}
+ipcMain.handle('tracking:status', () => trackingStatus())
+ipcMain.handle('tracking:start', () => startTracking())
+ipcMain.handle('tracking:stop', () => stopTracking())
+ipcMain.handle('tracking:config', (e, patch = {}) => {
+  const cfg = trackingEngine.setConfig(patch || {})
+  trackerWin.update({ face: cfg.face || cfg.eyes || cfg.head, hands: cfg.hands, mirror: cfg.mirror })
+  return trackingStatus()
+})
+// Camera settings (device, resolution, fps, GPU, hands every N frames, auto-start).
+ipcMain.handle('tracking:camera', (e, patch = {}) => {
+  const cur = getCameraSettings(); const n = { ...cur }
+  if (typeof patch.deviceId === 'string') n.deviceId = patch.deviceId.slice(0, 200)
+  for (const [k, lo, hi] of [['width', 160, 1920], ['height', 120, 1080], ['fps', 5, 60], ['handsEveryN', 1, 4]]) if (Number.isFinite(patch[k])) n[k] = Math.round(Math.min(hi, Math.max(lo, patch[k])))
+  for (const k of ['gpu', 'autoStart']) if (typeof patch[k] === 'boolean') n[k] = patch[k]
+  settings.set('faceTracking.camera', n)
+  return trackingStatus()
+})
+ipcMain.handle('tracking:preview', (e, on) => { trackingPreview = !!on; trackerWin.update({ preview: trackingPreview }); return true })
+ipcMain.handle('tracking:calibrate', (e, seconds) => { trackingEngine.startCalibration(Math.min(10, Math.max(1, Number(seconds) || 2))); return true })
+ipcMain.handle('tracking:resetCalibration', () => { trackingEngine.resetCalibration(); return trackingStatus() })
+ipcMain.handle('tracking:reloadAvatar', () => { trackingEngine.loadNewestAvatar(); return trackingStatus() })
+ipcMain.handle('tracking:downloadModel', async (e, kind) => {
+  if (kind !== 'face' && kind !== 'hand') return { ok: false, error: 'Unknown model' }
+  const r = await getTrackingModels().download(kind, p => push('tracking:modelProgress', { kind, progress: p }))
+  pushTrackingStatus()
+  return r
+})
+ipcMain.handle('tracking:importModel', async (e, kind) => {
+  if (kind !== 'face' && kind !== 'hand') return { ok: false, error: 'Unknown model' }
+  const r = await dialog.showOpenDialog(mainWindow, { title: `Choose ${kind === 'face' ? 'face_landmarker' : 'hand_landmarker'}.task`, properties: ['openFile'], filters: [{ name: 'MediaPipe model', extensions: ['task'] }] })
+  if (r.canceled || !r.filePaths[0]) return { ok: false, error: 'cancelled' }
+  const res = getTrackingModels().importFile(kind, r.filePaths[0])
+  pushTrackingStatus()
+  return res
+})
+ipcMain.handle('vrcServerStatus:refresh', () => vrcServerStatus.poll())
+
+/* Auto-launch apps with VRChat. Paths are only added via this file picker, so
+   the renderer can't make the app spawn an arbitrary path. */
+const AUTO_LAUNCH_MODES = new Set(['always', 'vr', 'desktop'])
+const getAutoLaunchApps = () => { const a = settings.get('autoLaunchApps', []); return Array.isArray(a) ? a : [] }
+const autoLauncher = createAutoLauncher({ getApps: getAutoLaunchApps, detectMode: detectVrMode, onLog: m => push('autolaunch:log', m) })
+ipcMain.handle('autolaunch:list', () => getAutoLaunchApps())
+ipcMain.handle('autolaunch:add', async () => {
+  const r = await dialog.showOpenDialog(mainWindow, { title: 'Choose a program to start with VRChat', properties: ['openFile'], filters: [{ name: 'Programs & shortcuts', extensions: ['exe', 'lnk', 'url', 'bat', 'cmd'] }, { name: 'All files', extensions: ['*'] }] })
+  if (r.canceled || !r.filePaths || !r.filePaths[0]) return getAutoLaunchApps()
+  const apps = getAutoLaunchApps()
+  apps.push({ id: crypto.randomUUID(), path: r.filePaths[0], args: [], mode: 'always', closeWithVRChat: true, enabled: true })
+  settings.set('autoLaunchApps', apps)
+  return apps
+})
+// Only toggles/options can change here — never the path.
+ipcMain.handle('autolaunch:update', (e, id, patch = {}) => {
+  const apps = getAutoLaunchApps().map(a => {
+    if (a.id !== id) return a
+    const n = { ...a }
+    if (typeof patch.enabled === 'boolean') n.enabled = patch.enabled
+    if (typeof patch.closeWithVRChat === 'boolean') n.closeWithVRChat = patch.closeWithVRChat
+    if (AUTO_LAUNCH_MODES.has(patch.mode)) n.mode = patch.mode
+    if (typeof patch.args === 'string') n.args = (patch.args.match(/"[^"]*"|\S+/g) || []).map(x => x.replace(/^"|"$/g, '')).slice(0, 32)
+    return n
+  })
+  settings.set('autoLaunchApps', apps)
+  return apps
+})
+ipcMain.handle('autolaunch:remove', (e, id) => { const apps = getAutoLaunchApps().filter(a => a.id !== id); settings.set('autoLaunchApps', apps); return apps })
+ipcMain.handle('autolaunch:test', (e, id) => { const a = getAutoLaunchApps().find(x => x.id === id); if (a) autoLauncher.launchNow(a.mode === 'always' ? '' : a.mode); return !!a })
+ipcMain.handle('instances:list', (e, opts) => gamelog.listInstances(opts || {}))
+ipcMain.handle('instances:timeline', (e, id) => gamelog.instanceTimeline(id))
+// Players you've shared instances with (yourself excluded).
+ipcMain.handle('instances:playersMet', (e, opts) => gamelog.playersMet({ ...(opts || {}), excludeName: getVrcWorld().userDisplayName || undefined }))
+ipcMain.handle('feed:clear', () => { gamelog.clearFeed(); return true })
+ipcMain.handle('feed:pipelineStatus', () => pipeline.status())
 ipcMain.handle('vrchat:autostatus', (e, on) => { if (on) startVrcStatusPoll(); else stopVrcStatusPoll(); return true })
 
 /* Friend Den / Event Scout / Pawprints / Auto-Greeter (VRChat API) */
@@ -1716,6 +1892,17 @@ ipcMain.handle('localfav:export', async () => {
     fs.writeFileSync(r.filePath, JSON.stringify(localFavoritesDb.exportAll(), null, 2))
     return { ok: true, path: r.filePath }
   } catch (err) { return { ok: false, error: err.message } }
+})
+// Import VRCX's local favourites: uses the default VRCX database if it exists,
+// otherwise asks for VRCX.sqlite3.
+ipcMain.handle('localfav:importVrcx', async () => {
+  let p = path.join(app.getPath('appData'), 'VRCX', 'VRCX.sqlite3')
+  if (!fs.existsSync(p)) {
+    const r = await dialog.showOpenDialog(mainWindow, { title: 'Find VRCX.sqlite3 (usually %AppData%\\VRCX)', properties: ['openFile'], filters: [{ name: 'VRCX database', extensions: ['sqlite3', 'sqlite', 'db'] }] })
+    if (r.canceled || !r.filePaths[0]) return { ok: false, error: 'cancelled' }
+    p = r.filePaths[0]
+  }
+  try { return localFavoritesDb.importVrcx(fs.readFileSync(p)) } catch (err) { return { ok: false, error: err.message } }
 })
 ipcMain.handle('localfav:import', async () => {
   const r = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] })
@@ -1877,6 +2064,38 @@ let lastPlayers = new Set()
 let playersPrimed = false
 let lastWorldLogged = ''
 let lastWorldIdLogged = ''
+// Discord presence context for the current world: name/links, media, instance
+// type (for privacy), player count + world capacity (party "N of M") and
+// VR/Desktop mode. Capacity needs the VRChat API (only fetched when logged in);
+// VR mode is read from VRChat.exe's command line once per instance.
+const _presenceWorld = { worldId: '', capacity: 0, platformFor: '', platform: '' }
+function worldPresenceContext (w) {
+  const inst = w.inWorld && w.worldId ? vrchatApi.parseInstance(`${w.worldId}:${w.instanceId}`) : { type: '' }
+  if (w.inWorld && w.worldId && w.worldId !== _presenceWorld.worldId) {
+    _presenceWorld.worldId = w.worldId
+    _presenceWorld.capacity = 0
+    const wid = w.worldId
+    Promise.resolve(vrchatApi.isLoggedIn()).then(ok => ok ? vrchatApi.getWorld(wid) : null).then(r => {
+      if (r && r.ok && _presenceWorld.worldId === wid) { _presenceWorld.capacity = Number(r.world.capacity) || 0; setVrcContext({ capacity: _presenceWorld.capacity }) }
+    }).catch(() => {})
+  }
+  const location = w.inWorld ? `${w.worldId}:${w.instanceId}` : ''
+  if (location && location !== _presenceWorld.platformFor) {
+    _presenceWorld.platformFor = location
+    detectVrMode(mode => { _presenceWorld.platform = mode; setVrcContext({ platform: mode }) })
+  }
+  return {
+    worldName: w.inWorld ? w.worldName : '', joinUrl: w.joinUrl, worldUrl: w.worldUrl, profileUrl: w.profileUrl,
+    worldMedia: w.inWorld ? w.media : null,
+    instanceType: inst.type || '',
+    // Opaque party id (hash) so the raw instance id/nonce isn't sent to Discord.
+    instanceKey: location ? crypto.createHash('sha256').update(location).digest('hex').slice(0, 32) : '',
+    playerCount: w.inWorld && Array.isArray(w.players) ? w.players.length : 0,
+    capacity: w.inWorld ? _presenceWorld.capacity : 0,
+    platform: w.inWorld ? _presenceWorld.platform : ''
+  }
+}
+
 let lastVideoLogged = ''
 let lastPortalSeq = 0
 let worldEnteredAt = 0
@@ -1898,7 +2117,26 @@ function logWorldDiff (w) {
   lastPlayers = cur
 }
 
-let lastFriends = null // Map(id -> displayName)
+// Friend feed + friend log (VRCX-style). One snapshot shared by the live
+// pipeline websocket and the 2-minute full-list poll, persisted in settings so
+// adds/removes/renames/trust changes made while the app was closed are caught.
+const friendFeed = createFriendFeed({
+  loadSnapshot: () => settings.get('friendSnapshot', null),
+  saveSnapshot: snap => settings.set('friendSnapshot', snap),
+  resolveWorldName: async worldId => { const r = await vrchatApi.getWorldName(worldId); return r && r.ok ? r.name : '' },
+  onFeed: e => { gamelog.logFeed(e); push('vrchat:feed', e) },
+  onFriendLog: e => { gamelog.log(e.type, e.name, e.detail, ''); push('vrchat:friendLog', e) }
+})
+const pipeline = createPipeline({
+  getToken: () => (vrchatApi.isLoggedIn() ? vrchatClient.getAuthToken() : ''),
+  userAgent: `KitsuNexus/${app.getVersion()} nekosunevr@nekosunevr.co.uk`,
+  onEvent: (type, content) => {
+    if (/^friend-/.test(type)) friendFeed.handlePipeline(type, content)
+    if (type === 'friend-add' || type === 'friend-delete') vrchatApi.invalidate('friends:all')
+  },
+  onStatus: s => push('vrchat:pipeline', { status: s })
+})
+
 let friendDiffTimer = null
 async function pollFriendDiff () {
   if (!vrchatApi.isLoggedIn() || vrchatApi.isRateLimited()) return
@@ -1908,15 +2146,9 @@ async function pollFriendDiff () {
   vrchatApi.invalidate('friends:all')
   const r = await vrchatApi.getAllFriends()
   if (!r.ok) return
-  const map = new Map()
-  for (const f of (r.friends || [])) map.set(f.id, f.displayName)
-  if (lastFriends === null) { lastFriends = map; return } // baseline
-  for (const [id, name] of map) {
-    if (!lastFriends.has(id)) gamelog.log('friend_add', name, 'New friend', '')
-    else if (lastFriends.get(id) !== name) gamelog.log('name_change', name, `was "${lastFriends.get(id)}"`, '')
-  }
-  for (const [id, name] of lastFriends) if (!map.has(id)) gamelog.log('friend_remove', name, 'No longer friends', '')
-  lastFriends = map
+  friendFeed.reconcile(r.friends || [])
+  // Make sure the live feed is up once we know we're logged in.
+  if (pipeline.status() === 'stopped' || pipeline.status() === 'auth-failed') pipeline.start()
 }
 function startFriendDiff () { stopFriendDiff(); pollFriendDiff(); friendDiffTimer = setInterval(pollFriendDiff, 120000) }
 function stopFriendDiff () { if (friendDiffTimer) { clearInterval(friendDiffTimer); friendDiffTimer = null } }
