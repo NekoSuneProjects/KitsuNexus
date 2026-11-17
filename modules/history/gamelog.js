@@ -45,6 +45,34 @@ async function init (userDataDir) {
   db.run(`CREATE TABLE IF NOT EXISTS notification_history (
     id TEXT, ts INTEGER, type TEXT, sender TEXT, message TEXT, world TEXT, link TEXT, action TEXT, archivedAt INTEGER
   )`)
+  // Live friend feed (online/offline/GPS/status/avatar/bio) — its own table and
+  // cap, so a busy feed can't push world/join history out of `events`.
+  db.run(`CREATE TABLE IF NOT EXISTS feed (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, type TEXT NOT NULL,
+    user_id TEXT, name TEXT, detail TEXT, location TEXT, world TEXT
+  )`)
+  db.run('CREATE INDEX IF NOT EXISTS idx_feed_ts ON feed(ts)')
+  try { db.run('DELETE FROM feed WHERE id NOT IN (SELECT id FROM feed ORDER BY ts DESC LIMIT 10000)') } catch (_) {}
+  // Instance history (VRCX-style): one row per instance visit and one per player
+  // stay, keyed on the VRChat log's own timestamps so re-reading the same log on
+  // startup is a no-op (INSERT OR IGNORE).
+  db.run(`CREATE TABLE IF NOT EXISTS instances (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, world_id TEXT NOT NULL, instance_id TEXT NOT NULL,
+    world_name TEXT, group_id TEXT, joined_at INTEGER NOT NULL, left_at INTEGER,
+    UNIQUE(world_id, instance_id, joined_at)
+  )`)
+  db.run('CREATE INDEX IF NOT EXISTS idx_instances_joined ON instances(joined_at)')
+  db.run(`CREATE TABLE IF NOT EXISTS instance_players (
+    session_id INTEGER NOT NULL, name TEXT NOT NULL, user_id TEXT, joined_at INTEGER NOT NULL, left_at INTEGER,
+    UNIQUE(session_id, name, joined_at)
+  )`)
+  db.run('CREATE INDEX IF NOT EXISTS idx_iplayers_name ON instance_players(name)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_iplayers_user ON instance_players(user_id)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_iplayers_session ON instance_players(session_id)')
+  try {
+    db.run('DELETE FROM instances WHERE id NOT IN (SELECT id FROM instances ORDER BY joined_at DESC LIMIT 3000)')
+    db.run('DELETE FROM instance_players WHERE session_id NOT IN (SELECT id FROM instances)')
+  } catch (_) {}
   // Migrate older DBs that predate the read flag.
   try { db.run('ALTER TABLE notifications ADD COLUMN read INTEGER DEFAULT 0') } catch (_) { /* column already exists */ }
   return true
@@ -118,6 +146,97 @@ function log (type, name, detail, world, worldId, groupId) {
   db.run('INSERT INTO events (ts,type,name,detail,world,world_id,group_id) VALUES (?,?,?,?,?,?,?)',
     [Date.now(), String(type), name || '', detail || '', world || '', worldId || '', groupId || ''])
   persist()
+}
+
+// ---- live friend feed ----
+let feedInserts = 0
+function logFeed (e = {}) {
+  if (!db || !e.type) return
+  db.run('INSERT INTO feed (ts,type,user_id,name,detail,location,world) VALUES (?,?,?,?,?,?,?)',
+    [e.ts || Date.now(), String(e.type), e.userId || '', e.name || '', String(e.detail || '').slice(0, 2000), e.location || e.status || '', e.worldName || ''])
+  if (++feedInserts % 500 === 0) { try { db.run('DELETE FROM feed WHERE id NOT IN (SELECT id FROM feed ORDER BY ts DESC LIMIT 10000)') } catch (_) {} }
+  persist()
+}
+function listFeed (opts = {}) {
+  if (!db) return []
+  const limit = Math.min(parseInt(opts.limit, 10) || 200, 1000)
+  const conds = []; const bind = {}
+  if (opts.type) { conds.push('type = :t'); bind[':t'] = String(opts.type) }
+  if (opts.search) { conds.push('(name LIKE :q OR world LIKE :q OR detail LIKE :q)'); bind[':q'] = `%${String(opts.search)}%` }
+  const st = db.prepare(`SELECT id,ts,type,user_id AS userId,name,detail,location,world FROM feed${conds.length ? ' WHERE ' + conds.join(' AND ') : ''} ORDER BY ts DESC LIMIT ${limit}`)
+  st.bind(bind)
+  const out = []; while (st.step()) out.push(st.getAsObject()); st.free(); return out
+}
+function clearFeed () { if (!db) return; db.run('DELETE FROM feed'); persist() }
+
+// ---- instance history ----
+let currentSession = 0
+function rows (sql, bind) {
+  const st = db.prepare(sql); if (bind) st.bind(bind)
+  const out = []; while (st.step()) out.push(st.getAsObject()); st.free(); return out
+}
+function closeSession (id, at) {
+  if (!id) return
+  // Never close with a time before the join (replaying an older log line).
+  db.run('UPDATE instance_players SET left_at = ? WHERE session_id = ? AND left_at IS NULL AND joined_at <= ?', [at, id, at])
+  db.run('UPDATE instances SET left_at = ? WHERE id = ? AND left_at IS NULL AND joined_at <= ?', [at, id, at])
+}
+// Events from vrchatWorld.setEventListener().
+function instanceEvent (e = {}) {
+  if (!db || !e.type) return
+  const at = Number(e.at) || Date.now()
+  if (e.type === 'instance' && e.worldId && e.instanceId) {
+    // A session never closed (crash / log cut) ends when the next one starts.
+    if (currentSession) closeSession(currentSession, at)
+    else db.run('UPDATE instances SET left_at = ? WHERE left_at IS NULL AND joined_at < ?', [at, at])
+    db.run('INSERT OR IGNORE INTO instances (world_id,instance_id,group_id,joined_at) VALUES (?,?,?,?)', [e.worldId, e.instanceId, e.groupId || '', at])
+    const r = rows('SELECT id FROM instances WHERE world_id = :w AND instance_id = :i AND joined_at = :t', { ':w': e.worldId, ':i': e.instanceId, ':t': at })
+    currentSession = r.length ? r[0].id : 0
+  } else if (e.type === 'worldName' && currentSession) {
+    db.run('UPDATE instances SET world_name = ? WHERE id = ?', [String(e.name || '').slice(0, 200), currentSession])
+  } else if (e.type === 'join' && currentSession && e.displayName) {
+    db.run('INSERT OR IGNORE INTO instance_players (session_id,name,user_id,joined_at) VALUES (?,?,?,?)', [currentSession, e.displayName, e.userId || '', at])
+  } else if (e.type === 'leave' && currentSession && e.displayName) {
+    db.run('UPDATE instance_players SET left_at = ? WHERE session_id = ? AND name = ? AND left_at IS NULL AND joined_at <= ?', [at, currentSession, e.displayName, at])
+  } else if (e.type === 'left' && currentSession) {
+    closeSession(currentSession, at); currentSession = 0
+  } else return
+  persist()
+}
+// Recent instance visits, optionally filtered by world name / id.
+function listInstances (opts = {}) {
+  if (!db) return []
+  const limit = Math.min(parseInt(opts.limit, 10) || 100, 500)
+  const where = opts.search ? 'WHERE i.world_name LIKE :q OR i.world_id = :raw' : ''
+  return rows(`SELECT i.id, i.world_id AS worldId, i.instance_id AS instanceId, i.world_name AS worldName, i.group_id AS groupId,
+      i.joined_at AS joinedAt, i.left_at AS leftAt, (SELECT COUNT(DISTINCT name) FROM instance_players p WHERE p.session_id = i.id) AS players
+    FROM instances i ${where} ORDER BY i.joined_at DESC LIMIT ${limit}`, opts.search ? { ':q': `%${opts.search}%`, ':raw': String(opts.search) } : undefined)
+}
+// One instance visit + every player stay in it (for the timeline chart).
+function instanceTimeline (id) {
+  if (!db) return null
+  const inst = rows('SELECT id, world_id AS worldId, instance_id AS instanceId, world_name AS worldName, joined_at AS joinedAt, left_at AS leftAt FROM instances WHERE id = :id', { ':id': Number(id) })[0]
+  if (!inst) return null
+  inst.players = rows('SELECT name, user_id AS userId, joined_at AS joinedAt, left_at AS leftAt FROM instance_players WHERE session_id = :id ORDER BY joined_at', { ':id': Number(id) })
+  return inst
+}
+// People you've been in instances with: times met, last seen, time together.
+// `now` closes still-open stays (current instance).
+function playersMet (opts = {}) {
+  if (!db) return []
+  const limit = Math.min(parseInt(opts.limit, 10) || 100, 1000)
+  const now = Date.now()
+  const conds = []; const bind = { ':now': now }
+  if (opts.search) { conds.push('p.name LIKE :q'); bind[':q'] = `%${opts.search}%` }
+  if (opts.userId) { conds.push('p.user_id = :u'); bind[':u'] = String(opts.userId) }
+  if (opts.name) { conds.push('p.name = :n'); bind[':n'] = String(opts.name) }
+  if (opts.excludeName) { conds.push('p.name != :x'); bind[':x'] = String(opts.excludeName) }
+  return rows(`SELECT p.name, MAX(p.user_id) AS userId, COUNT(DISTINCT p.session_id) AS timesMet,
+      MAX(COALESCE(p.left_at, p.joined_at)) AS lastSeen, MIN(p.joined_at) AS firstSeen,
+      SUM(MAX(0, COALESCE(p.left_at, :now) - p.joined_at)) AS totalMs,
+      (SELECT i.world_name FROM instance_players q JOIN instances i ON i.id = q.session_id WHERE q.name = p.name ORDER BY q.joined_at DESC LIMIT 1) AS lastWorld
+    FROM instance_players p ${conds.length ? 'WHERE ' + conds.join(' AND ') : ''}
+    GROUP BY p.name ORDER BY lastSeen DESC LIMIT ${limit}`, bind)
 }
 
 function list (opts = {}) {
@@ -214,4 +333,4 @@ async function importVrcx (filePath) {
 
 function close () { try { if (db) { fs.writeFileSync(dbPath, Buffer.from(db.export())) } } catch (_) {} }
 
-module.exports = { init, log, list, listWorldVisitsSince, mergeWorldVisit, countGroupInstanceVisits, clear, clearType, close, importVrcx, upsertNotif, listNotifs, unreadNotifCount, markAllNotifsRead, removeNotif, reconcileNotifs, clearNotifs }
+module.exports = { init, log, list, logFeed, listFeed, clearFeed, instanceEvent, listInstances, instanceTimeline, playersMet, listWorldVisitsSince, mergeWorldVisit, countGroupInstanceVisits, clear, clearType, close, importVrcx, upsertNotif, listNotifs, unreadNotifCount, markAllNotifsRead, removeNotif, reconcileNotifs, clearNotifs }

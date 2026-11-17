@@ -4,6 +4,8 @@
 //   - current world id + instance id  -> a clickable "launch/join" URL
 //   - the world's display name
 //   - your own user id (usr_...)       -> your VRChat profile URL
+//   - what's playing in the instance   -> see worldMedia.js (Popcorn Palace,
+//     VR Dancing, LS Media, ProTV nowplaying, YouTube titles)
 // Used to enrich the Discord Rich Presence. Runs in the MAIN process.
 //
 // Log location:  %USERPROFILE%\AppData\LocalLow\VRChat\VRChat\output_log_*.txt
@@ -11,9 +13,13 @@
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
+const { createWorldMediaTracker, lineTime } = require('./worldMedia')
 
 const LOG_DIR = path.join(os.homedir(), 'AppData', 'LocalLow', 'VRChat', 'VRChat')
-const POLL_MS = 5000
+const POLL_MS = 2000
+const { ActivityEvents, parsePortalEvent } = require('./activityEvents')
+const activity = new ActivityEvents()
+let primingActivity = true
 
 let timer = null
 let onUpdate = null
@@ -39,6 +45,9 @@ const state = {
   playersDetailed: [], // same players, as {id, displayName} - for screenshot metadata
   lastVideo: '', // last video URL played in the instance (from the log)
   lastPortal: '', // who dropped the last portal
+  // What's playing in this instance (null when nothing): { source, kind, label,
+  // videoName, thumbnailUrl, isPaused, startedAt, endsAt, ... } — see worldMedia.js.
+  media: null,
   portalSeq: 0 // increments each portal drop (so repeats are logged)
 }
 
@@ -59,6 +68,18 @@ function splitNameAndId (raw) {
   return m ? { displayName: m[1].trim(), id: m[2] } : { displayName: raw.trim(), id: '' }
 }
 
+// Media tracker; async YouTube title lookups re-emit when they resolve.
+const media = createWorldMediaTracker({ onChange: () => { state.media = media.current(); emit() } })
+
+// Optional listener for timestamped instance events (instance history / charts):
+//   { type: 'instance', worldId, instanceId, groupId, at } | { type: 'worldName', name, at }
+//   { type: 'join' | 'leave', displayName, userId, at }   | { type: 'left', at }
+// `at` is the log line's own time, so replaying a log on startup gives the same
+// events again (consumers dedupe on it).
+let onEvent = null
+function setEventListener (fn) { onEvent = typeof fn === 'function' ? fn : null }
+function event (e) { if (onEvent) { try { onEvent(e) } catch (err) { console.warn('vrc world event listener:', err.message) } } }
+
 function buildUrls () {
   state.worldUrl = state.worldId ? `https://vrchat.com/home/world/${state.worldId}` : ''
   state.joinUrl = (state.worldId && state.instanceId)
@@ -69,12 +90,13 @@ function buildUrls () {
 
 function emit () {
   buildUrls()
-  if (typeof onUpdate === 'function') onUpdate({ ...state, at: Date.now() })
+  if (typeof onUpdate === 'function') onUpdate({ ...getVrcWorld(), at: Date.now() })
 }
 
 // Parse a single log line and fold any world/user info into state.
 // Returns true if something relevant changed.
 function processLine (line) {
+  activity.process(line)
   // "[Behaviour] Joining wrld_xxxx-...:12345~region(use)~nonce(...)" — a Group instance's id
   // additionally carries a "~group(grp_xxxx)" tag (VRChat's own instance-type marker).
   let m = line.match(/Joining (wrld_[^\s:]+):(\S+)/)
@@ -83,7 +105,9 @@ function processLine (line) {
     state.instanceId = m[2]
     state.groupId = (m[2].match(/~group\(([^)]+)\)/) || [])[1] || ''
     state.inWorld = true
+    media.reset(); media.setWorld(m[1]); state.media = null
     playerSet.clear(); playerMap.clear(); syncPlayers() // new instance — radar resets
+    event({ type: 'instance', worldId: state.worldId, instanceId: state.instanceId, groupId: state.groupId, at: lineTime(line) })
     return true
   }
   // RADAR: "[Behaviour] OnPlayerJoined <DisplayName> (usr_...)"
@@ -93,12 +117,14 @@ function processLine (line) {
     playerSet.add(displayName)
     if (id) playerMap.set(displayName, id)
     syncPlayers()
+    event({ type: 'join', displayName, userId: id, at: lineTime(line) })
     return true
   }
   // "[Behaviour] OnPlayerLeft <DisplayName> (usr_...)"
   m = line.match(/OnPlayerLeft\s+(.+)$/)
   if (m) {
-    const { displayName } = splitNameAndId(m[1])
+    const { displayName, id } = splitNameAndId(m[1])
+    event({ type: 'leave', displayName, userId: id || playerMap.get(displayName) || '', at: lineTime(line) })
     playerSet.delete(displayName)
     playerMap.delete(displayName)
     syncPlayers()
@@ -109,25 +135,34 @@ function processLine (line) {
   if (m) {
     state.worldName = m[1]
     state.inWorld = true
+    event({ type: 'worldName', name: m[1], at: lineTime(line) })
     return true
   }
   // "[Behaviour] OnLeftRoom"
   if (/OnLeftRoom\b/.test(line)) {
+    event({ type: 'left', at: lineTime(line) })
     state.inWorld = false
     state.worldId = ''
     state.instanceId = ''
     state.groupId = ''
     state.worldName = ''
+    media.reset(); media.setWorld(''); state.media = null
     playerSet.clear(); playerMap.clear(); syncPlayers()
     return true
   }
-  // Video player URLs (for media-link history).
-  m = line.match(/\[Video Playback\][^']*resolve URL '([^']+)'/) || line.match(/added URL '([^']+)'/)
-  if (m) { state.lastVideo = m[1]; return true }
-  // Portal drops (best-effort — log wording varies between VRChat builds).
-  if (/dropped a portal/i.test(line)) {
-    const nm = (line.match(/([\w .\-]{2,40}?) (?:has )?dropped a portal/i) || [])[1]
-    state.lastPortal = (nm ? nm.trim() : 'Someone'); state.portalSeq++
+  // World media + video player URLs (media-link history). Covers AVPro
+  // "Resolving URL", USharpVideo and SDK2 "User X added URL ..." lines too,
+  // which the old single regex missed.
+  if (media.processLine(line)) {
+    state.media = media.current()
+    state.lastVideo = media.lastVideoUrl() || state.lastVideo
+    return true
+  }
+  const portal = parsePortalEvent(line)
+  if (portal) {
+    state.lastPortal = portal.name
+    state.lastPortalDetail = portal.detail
+    state.portalSeq++
     return true
   }
   // "User Authenticated: DisplayName (usr_xxxx-...)"
@@ -176,6 +211,8 @@ function poll () {
 
   // A new VRChat session started -> switch to the fresh log, read it whole.
   if (newest !== currentFile) {
+    primingActivity = true
+    activity.players.clear(); activity.avatars.clear(); activity.events = []
     currentFile = newest
     readPos = 0
     tail = ''
@@ -183,7 +220,7 @@ function poll () {
 
   let size
   try { size = fs.statSync(currentFile).size } catch (_) { return }
-  if (size < readPos) { readPos = 0; tail = '' } // log truncated/rotated
+  if (size < readPos) { readPos = 0; tail = ''; primingActivity = true; activity.events = []; activity.players.clear(); activity.avatars.clear() } // log truncated/rotated
   if (size === readPos) return // nothing new
 
   let fd
@@ -193,7 +230,9 @@ function poll () {
     const buf = Buffer.alloc(len)
     fs.readSync(fd, buf, 0, len, readPos)
     readPos = size
-    if (consume(buf.toString('utf8'))) emit()
+    const changed = consume(buf.toString('utf8'))
+    if (primingActivity) { activity.events = []; primingActivity = false }
+    if (changed || activity.events.length) emit()
   } catch (_) {
     /* ignore transient read errors */
   } finally {
@@ -215,6 +254,6 @@ function stopVrcWorld () {
   if (timer) { clearInterval(timer); timer = null }
 }
 
-function getVrcWorld () { return { ...state } }
+function getVrcWorld () { return { ...state, media: state.media ? { ...state.media } : null, activityEvents: activity.snapshot(), activitySequence: activity.sequence } }
 
-module.exports = { startVrcWorld, stopVrcWorld, getVrcWorld }
+module.exports = { startVrcWorld, stopVrcWorld, getVrcWorld, setEventListener, _processLine: processLine }

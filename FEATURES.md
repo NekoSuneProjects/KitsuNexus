@@ -35,6 +35,15 @@ program.**
   encrypted local vault and sends Locked, Partial, Unlocked, avatar hashes, and selected
   feature groups to VRChat over OSC. Existing NekoAvatarLocker desktop vaults can be
   migrated from AppData; creator templates can be signed without bundling private keys.
+- **Face & Hand Tracking** — webcam face and hand tracking to VRChat over OSC, built in
+  (no VRCFaceTracking install). One camera drives both. Face uses the VRCFaceTracking
+  `FT/v2/…` parameters (Float / Bool / binary), so VRCFT avatars work unchanged; avatars
+  without them get VRChat's native eye tracking. Hands drive `HT/…` finger-curl, spread,
+  gesture and position parameters. Calibration, smoothing, strength, GPU/CPU, live preview.
+  Processing is local, in a window with no network access.
+  **Body:** the same camera also tracks your full body — VRChat OSC trackers (hip, chest,
+  feet, knees, elbows) for full-body IK in VR, and `BT/…` leg/spine/arm parameters for
+  desktop avatars (VRChat only enables OSC full-body in VR mode).
 - **OSC Apps** — SpotiOSC media controls and DiscordOSC voice controls, native Rusk
   Laserdome log-to-OSC compatibility, and Twitch command/reward mapping for Fooma's
   Twitch to VRChat Interaction System.

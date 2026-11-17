@@ -71,12 +71,31 @@ const config = {
   showWorld: true, // master toggle for the world + join button
   vrcProfileUrl: '', // manual override; auto-filled from the VRChat log if blank
   showHeartRate: true, // append ❤️ bpm to the presence
-  showNowPlaying: true // show 🎵 song when no world line is available
+  showNowPlaying: true, // show 🎵 song when no world line is available
+  hidePrivateInstances: true, // also hide the world in Invite / Invite+ / Group-members instances, whatever your status
+  showPartySize: true, // "N of M" players in your instance (only when the world is shown)
+  showPlatform: true, // append VR / Desktop to the status line
+  showWorldMedia: true // show what's playing in the world (Popcorn Palace, dance worlds, LS Media, ProTV, YouTube) with its poster as the big icon
 }
 
 // Live context fed in via setVrcContext(): world (from the VRChat log tracker),
 // plus heart rate and now-playing (from main.js).
-const vrc = { worldName: '', joinUrl: '', worldUrl: '', profileUrl: '', hrBpm: 0, nowPlaying: '' }
+const vrc = { worldName: '', joinUrl: '', worldUrl: '', profileUrl: '', hrBpm: 0, nowPlaying: '', worldMedia: null, instanceType: '', instanceKey: '', playerCount: 0, capacity: 0, platform: '' }
+
+// World media to show right now, or null. Shown on every status — the status
+// privacy rule only hides the world name / join button, not the media.
+// Dropped once its expected end has passed (stale log line), or for media of
+// unknown length once its expiry passes.
+function activeWorldMedia () {
+  const m = vrc.worldMedia
+  if (!config.showWorldMedia || !m || !m.videoName) return null
+  const now = Date.now()
+  if (!m.isPaused && m.endsAt && m.endsAt < now) return null
+  if (!m.endsAt && m.expiresAt && m.expiresAt < now) return null
+  return m
+}
+const MEDIA_EMOJI = { PopcornPalace: '🍿', LSMedia: '🍿' }
+const mediaEmoji = m => MEDIA_EMOJI[m.source] || (m.kind === 'listen' ? '💃' : '🎬')
 
 // Privacy gate: only green (Join Me) and blue (Active) reveal where you are.
 // Orange (Ask Me) and red (Do Not Disturb) hide the world + join button.
@@ -87,7 +106,14 @@ const STATUS = {
   busy: { label: 'Do Not Disturb', emoji: '🔴', showWorld: false }
 }
 function statusInfo () { return STATUS[config.vrcStatus] || STATUS.active }
-function worldVisible () { return config.showWorld && statusInfo().showWorld }
+// Instance types that are private by nature: joining needs an invite anyway.
+const PRIVATE_INSTANCE_TYPES = new Set(['invite', 'invite+', 'groupMembers'])
+const INSTANCE_LABEL = { public: 'Public', friends: 'Friends', 'friends+': 'Friends+', invite: 'Invite', 'invite+': 'Invite+', group: 'Group Public', 'group+': 'Group+', groupMembers: 'Group' }
+function worldVisible () {
+  if (!config.showWorld || !statusInfo().showWorld) return false
+  return !(config.hidePrivateInstances && PRIVATE_INSTANCE_TYPES.has(vrc.instanceType))
+}
+const PLATFORM_LABEL = { vr: 'VR', desktop: 'Desktop' }
 function effectiveProfileUrl () { return (config.vrcProfileUrl || '').trim() || vrc.profileUrl || '' }
 
 const state = {
@@ -143,15 +169,25 @@ function _pushActivity ({ details, state: st } = {}) {
   const info = statusInfo()
   const showWorld = worldVisible() && !!vrc.worldName
 
-  // details = status line (+ optional heart rate).
-  let detailsLine = details || `${info.emoji} ${info.label}`
+  const pp = (!details && !st) ? activeWorldMedia() : null
+
+  // details = status line (+ optional heart rate). While something is playing
+  // in the world, its title takes the top line (like VRCX's "Watching" presence).
+  let detailsLine = details || (pp ? `${mediaEmoji(pp)} ${pp.videoName}` : `${info.emoji} ${info.label}`)
+  if (!details && !pp && config.showPlatform && PLATFORM_LABEL[vrc.platform]) detailsLine += ` (${PLATFORM_LABEL[vrc.platform]})`
   if (!details && config.showHeartRate && vrc.hrBpm > 0) detailsLine += ` · ❤️ ${vrc.hrBpm}`
 
   // state = where you are. Priority: VRChat world (if status allows) > now playing
   // > the generic fallback. This is what makes the presence "switch" by context.
   let stateLine = st
   if (!stateLine) {
-    if (showWorld) stateLine = `In ${vrc.worldName}`
+    if (pp) {
+      // World name only when the status allows it (Ask Me / DND keep it hidden).
+      const verb = pp.isPaused ? '⏸ Paused' : (pp.kind === 'listen' ? 'Dancing' : 'Watching')
+      const what = pp.kind === 'listen' ? '' : (pp.source === 'PopcornPalace' || pp.source === 'LSMedia' ? ' a movie' : ' a video')
+      stateLine = showWorld ? `${info.emoji} ${verb} in ${vrc.worldName}` : `${info.emoji} ${verb}${what}`
+    }
+    else if (showWorld) stateLine = `In ${vrc.worldName}${INSTANCE_LABEL[vrc.instanceType] ? ` (${INSTANCE_LABEL[vrc.instanceType]})` : ''}`
     else if (config.showNowPlaying && vrc.nowPlaying) stateLine = `🎵 ${vrc.nowPlaying}`
     else stateLine = config.rpState || 'In VRChat'
   }
@@ -165,7 +201,29 @@ function _pushActivity ({ details, state: st } = {}) {
 
   // Minimal, always-valid presence (text only) + the optional extras.
   const minimal = { details: detailsLine.slice(0, 128), state: stateLine.slice(0, 128), startTimestamp, instance: false }
+  // Party "N of M": only when the world is shown (it tells people how full your
+  // instance is). Discord needs size <= max, so lift max if the world is over cap.
+  if (config.showPartySize && showWorld && vrc.playerCount > 0 && vrc.instanceKey) {
+    minimal.partyId = vrc.instanceKey
+    minimal.partySize = vrc.playerCount
+    minimal.partyMax = Math.max(vrc.capacity || 0, vrc.playerCount)
+  }
   const art = { largeImageKey: 'logo', largeImageText: 'KitsuNexus', smallImageKey: 'vrchat', smallImageText: 'VRChat' }
+  if (pp) {
+    // Poster / thumbnail as the big icon (Discord accepts https URLs as image keys);
+    // KitsuNexus logo moves to the small icon. No poster -> keep the logo.
+    if (pp.thumbnailUrl && pp.thumbnailUrl.length <= 256) {
+      art.largeImageKey = pp.thumbnailUrl
+      art.smallImageKey = 'logo'
+      art.smallImageText = 'KitsuNexus'
+    }
+    art.largeImageText = pp.videoName.padEnd(2, ' ').slice(0, 128)
+    // Playing: show the media's own elapsed/remaining bar instead of app uptime.
+    if (!pp.isPaused && pp.endsAt > Date.now() && pp.startedAt > 0) {
+      minimal.startTimestamp = Math.round(pp.startedAt)
+      minimal.endTimestamp = Math.round(pp.endsAt)
+    }
+  }
 
   // Compose the presence for a given rung of the ladder.
   const build = level => {
@@ -195,6 +253,38 @@ function _pushActivity ({ details, state: st } = {}) {
   attempt(rpLevel) // start from the last rung that worked this session
 }
 
+// setVrcContext can also be reached from the renderer (discord:vrc IPC), so
+// only keep the fields we use, with the right types.
+function sanitizeWorldMedia (pp) {
+  if (!pp || typeof pp !== 'object') return null
+  const videoName = String(pp.videoName || '').trim().slice(0, 200)
+  if (!videoName) return null
+  const thumb = String(pp.thumbnailUrl || '').trim()
+  const num = v => (Number.isFinite(Number(v)) ? Number(v) : 0)
+  return {
+    source: String(pp.source || ''),
+    kind: pp.kind === 'listen' ? 'listen' : 'watch',
+    videoName,
+    thumbnailUrl: /^https:\/\//i.test(thumb) ? thumb : '',
+    isPaused: !!pp.isPaused,
+    startedAt: num(pp.startedAt),
+    endsAt: num(pp.endsAt),
+    expiresAt: num(pp.expiresAt)
+  }
+}
+
+// When media finishes there's no new log line, so re-push once just after
+// its expected end (or expiry) to drop back to the normal presence.
+let _mediaEndTimer = null
+function scheduleMediaEnd () {
+  if (_mediaEndTimer) { clearTimeout(_mediaEndTimer); _mediaEndTimer = null }
+  const pp = vrc.worldMedia
+  const until = pp && !pp.isPaused ? (pp.endsAt || pp.expiresAt) : 0
+  if (!until) return
+  const wait = until - Date.now() + 1000
+  if (wait > 0 && wait < 2 ** 31 - 1) { _mediaEndTimer = setTimeout(() => { _mediaEndTimer = null; setActivity() }, wait); if (_mediaEndTimer.unref) _mediaEndTimer.unref() }
+}
+
 // Called by main when the VRChat world tracker (or the UI status dropdown)
 // updates. Stores the latest world/profile context and refreshes the presence.
 function setVrcContext (ctx = {}) {
@@ -207,6 +297,17 @@ function setVrcContext (ctx = {}) {
   if (typeof ctx.vrcProfileUrl === 'string') config.vrcProfileUrl = ctx.vrcProfileUrl
   if (typeof ctx.showHeartRate === 'boolean') config.showHeartRate = ctx.showHeartRate
   if (typeof ctx.showNowPlaying === 'boolean') config.showNowPlaying = ctx.showNowPlaying
+  if (typeof ctx.showWorldMedia === 'boolean') config.showWorldMedia = ctx.showWorldMedia
+  for (const k of ['hidePrivateInstances', 'showPartySize', 'showPlatform']) if (typeof ctx[k] === 'boolean') config[k] = ctx[k]
+  if (typeof ctx.instanceType === 'string') vrc.instanceType = ctx.instanceType
+  if (typeof ctx.instanceKey === 'string') vrc.instanceKey = ctx.instanceKey.slice(0, 128)
+  if (Number.isFinite(ctx.playerCount)) vrc.playerCount = Math.max(0, Math.floor(ctx.playerCount))
+  if (Number.isFinite(ctx.capacity)) vrc.capacity = Math.max(0, Math.floor(ctx.capacity))
+  if (typeof ctx.platform === 'string') vrc.platform = ctx.platform
+  if (ctx.worldMedia === null || (ctx.worldMedia && typeof ctx.worldMedia === 'object')) {
+    vrc.worldMedia = sanitizeWorldMedia(ctx.worldMedia)
+    scheduleMediaEnd()
+  }
   if (typeof ctx.hrBpm === 'number') vrc.hrBpm = ctx.hrBpm
   if (typeof ctx.nowPlaying === 'string') vrc.nowPlaying = ctx.nowPlaying
   setActivity()
@@ -356,6 +457,7 @@ async function startDiscord (opts = {}, listener) {
 }
 
 async function stopDiscord () {
+  if (_mediaEndTimer) { clearTimeout(_mediaEndTimer); _mediaEndTimer = null }
   state.connected = false
   state.voiceAuthorized = false
   currentChannelId = null

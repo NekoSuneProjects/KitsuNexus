@@ -373,6 +373,7 @@
       <button class="navbtn" data-tab="content"><span class="ico">🌐</span><span class="lbl">Content</span></button>
       <button class="navbtn" data-tab="media"><span class="ico">🖼</span><span class="lbl">Media</span></button>
       <button class="navbtn" data-tab="history"><span class="ico">📜</span><span class="lbl">History</span></button>
+      <button class="navbtn" data-tab="feed"><span class="ico">📡</span><span class="lbl">Feed</span></button>
       <div class="navlabel">AI &amp; Speech</div>
       <button class="navbtn" data-tab="ai"><span class="ico">🤖</span><span class="lbl">AI</span></button>
       <button class="navbtn" data-tab="translation"><span class="ico">🌐</span><span class="lbl">Translation</span></button>
@@ -382,6 +383,7 @@
       <button class="navbtn" data-tab="tools"><span class="ico">🧩</span><span class="lbl">Tools</span></button>
       <button class="navbtn" data-tab="vrctools"><span class="ico">🧰</span><span class="lbl">VRChat Tools</span></button>
       <button class="navbtn" data-tab="oscapps"><span class="ico">🔌</span><span class="lbl">OSC Apps</span></button>
+      <button class="navbtn" data-tab="facetracking"><span class="ico">🙂</span><span class="lbl">Face, Hands &amp; Body</span></button>
       <button class="navbtn" data-tab="audio"><span class="ico">🔊</span><span class="lbl">AudioLink</span></button>
       <div class="navlabel">Integrations</div>
       <button class="navbtn" data-tab="live"><span class="ico">📡</span><span class="lbl">Live</span></button>
@@ -444,6 +446,7 @@
 
       <!-- HOME DASHBOARD -->
       <section id="home" class="tabpanel active">
+        <div id="vrcStatusBanner" class="card" style="display:none;border-left:4px solid #f59e0b;padding:10px 14px;margin-bottom:12px;cursor:pointer" title="Open status.vrchat.com"></div>
         <div class="home-hero">
           <span class="halloween-specter halloween-specter-home" aria-hidden="true"></span>
           <span class="halloween-ghostface-bubble halloween-ghostface-home" aria-hidden="true"></span>
@@ -1028,8 +1031,8 @@
           </div>
           <div class="card">
             <h3>KitsuNexus Desktop HUD <span class="pill" id="desktopHudState">off</span></h3>
-            <div class="muted" style="font-size:.72rem;margin-bottom:8px">Separate lightweight, transparent desktop overlay. Move and resize it freely; it works without SteamVR.</div>
-            <button class="btn" id="desktopHudToggle">Start desktop HUD</button>
+            <div class="muted" style="font-size:.72rem;margin-bottom:8px">Game-attached HUD for windowed or borderless VRChat. Follows the game and hides when you switch away.</div>
+            <button class="btn" id="desktopHudEdit">Open HUD controls</button><button class="btn" id="desktopHudToggle">Start desktop HUD</button>
             <label style="display:block;margin-top:8px"><input type="checkbox" id="desktopHudClickThrough"> Click-through (disable to move or resize)</label>
             <div style="margin-top:8px"><button class="btn" id="hudExportJson">Export world JSON</button> <button class="btn" id="hudExportCsv">Export world CSV</button></div>
             <div id="desktopHudOut" class="muted" style="margin-top:8px">Stopped</div>
@@ -1481,6 +1484,13 @@
           </div>
           <div class="muted" id="qlLaunchOut" style="margin-top:6px;font-size:.78rem"></div>
         </div>
+        <div class="card">
+          <h3>🧩 Start apps with VRChat</h3>
+          <div class="muted" style="font-size:.75rem;margin-bottom:8px">When VRChat starts, KitsuNexus starts these programs too — always, or only in VR / only in Desktop mode — and can close them again when VRChat exits. Programs that are already running aren't started twice.</div>
+          <div class="row"><button class="btn" id="alAdd">+ Add program…</button></div>
+          <div id="alList" class="muted" style="margin-top:10px;font-size:.82rem">No programs yet.</div>
+          <div class="muted" id="alLog" style="margin-top:6px;font-size:.75rem"></div>
+        </div>
       </section>
 
       <!-- RADAR -->
@@ -1507,6 +1517,100 @@
       </section>
 
       <!-- OSC APPS -->
+      <!-- FACE & HAND TRACKING (webcam -> OSC, VRCFaceTracking-compatible) -->
+      <section id="facetracking" class="tabpanel">
+        <div class="card">
+          <h3>🙂 Face, Hand &amp; Body Tracking <span class="pill" id="ftState">off</span></h3>
+          <div class="section-note">Webcam face + hand tracking sent to VRChat over OSC — built in, no VRCFaceTracking needed. One camera drives both. Face uses the VRCFaceTracking <code>FT/v2/…</code> parameters, so avatars made for VRCFT just work; avatars without them get VRChat's native eye tracking. Hands drive <code>HT/…</code> avatar parameters. Everything is processed on your PC — this window has no network access.</div>
+          <div class="row" style="flex-wrap:wrap;gap:8px;margin-top:10px">
+            <div style="flex:1;min-width:220px"><label>Camera</label><select id="ftCamera"><option value="">Default camera</option></select></div>
+            <div><label>Resolution</label><select id="ftRes"><option value="auto">Auto</option></select></div>
+            <div><label>FPS</label><select id="ftFps"><option value="0">Auto</option></select></div>
+            <button class="btn ghost" id="ftCamRefresh" style="margin-top:20px" title="Re-scan cameras">↻</button>
+          </div>
+          <div class="muted" id="ftCamInfo" style="margin-top:4px;font-size:.76rem">Reading camera…</div>
+          <div class="row" style="margin-top:10px;gap:8px">
+            <button class="btn" id="ftStart">▶ Start tracking</button>
+            <button class="btn ghost" id="ftStop">■ Stop</button>
+            <label class="switch" style="margin-left:auto"><input type="checkbox" id="ftAutoStart"> Start with KitsuNexus</label>
+          </div>
+          <div class="muted" id="ftOut" style="margin-top:6px;font-size:.78rem">—</div>
+        </div>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3>📷 Preview</h3>
+            <img id="ftPreview" alt="" style="width:100%;max-width:420px;aspect-ratio:4/3;background:#0006;border-radius:10px;object-fit:cover;display:block">
+            <div class="muted" id="ftStats" style="margin-top:6px;font-size:.78rem">Not running</div>
+            <div id="ftBars" style="margin-top:8px;display:grid;grid-template-columns:110px 1fr;gap:3px 8px;font-size:.74rem"></div>
+          </div>
+          <div class="card">
+            <h3>⚙️ What to track</h3>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <label class="switch"><input type="checkbox" id="ftFace" checked> Face expressions (mouth, brows, cheeks…)</label>
+              <label class="switch"><input type="checkbox" id="ftEyes" checked> Eyes (gaze + blinking)</label>
+              <label class="switch"><input type="checkbox" id="ftHead" checked> Head rotation / position parameters</label>
+              <label class="switch"><input type="checkbox" id="ftHands" checked> Hands (finger curls + gestures)</label>
+              <label class="switch"><input type="checkbox" id="ftNativeEyes" checked> VRChat native eye tracking when the avatar has no FT eye parameters</label>
+              <label class="switch"><input type="checkbox" id="ftMirror"> Camera image is already mirrored</label>
+              <label class="switch"><input type="checkbox" id="ftGpu" checked> Use GPU (falls back to CPU)</label>
+              <label class="switch" title="Ignores the avatar's parameter list — only for testing"><input type="checkbox" id="ftSendAll"> Send every parameter (testing)</label>
+            </div>
+            <label style="margin-top:10px">Expression strength: <span id="ftIntensityV">1.0</span>×</label><input type="range" id="ftIntensity" min="0.5" max="2.5" step="0.1" value="1">
+            <label>Smoothing: <span id="ftSmoothV">medium</span></label><input type="range" id="ftSmooth" min="0" max="4" step="1" value="2">
+            <label>Hand tracking runs every <span id="ftHandsNV">1</span> frame(s)</label><input type="range" id="ftHandsN" min="1" max="4" step="1" value="1">
+          </div>
+        </div>
+        <div class="card">
+          <h3>🧍 Body tracking (full body from the same camera)</h3>
+          <div class="section-note">Your whole body from the same webcam. Stand back so the camera sees you head to toe for legs. <b>VRChat only uses OSC trackers in VR mode</b> (PC VR, or Quest over Wi-Fi) — on desktop it ignores them, so desktop users get <b>body parameters</b> (<code>BT/…</code>) that an avatar animator can use to pose legs, spine and arms instead.</div>
+          <div class="grid cols-2" style="margin-top:8px">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <label class="switch"><input type="checkbox" id="ftBody"> Body tracking</label>
+              <label class="switch"><input type="checkbox" id="ftBodyTrackers" checked> VRChat OSC trackers (full-body IK — VR mode)</label>
+              <div class="row" style="flex-wrap:wrap;gap:4px 12px;padding-left:22px;font-size:.8rem" id="ftParts">
+                <label><input type="checkbox" data-part="hip"> Hip</label>
+                <label><input type="checkbox" data-part="chest"> Chest</label>
+                <label><input type="checkbox" data-part="feet"> Feet</label>
+                <label><input type="checkbox" data-part="knees"> Knees</label>
+                <label><input type="checkbox" data-part="elbows"> Elbows</label>
+                <label title="Lets VRChat line the trackers up with your head"><input type="checkbox" data-part="head"> Head alignment</label>
+              </div>
+              <label class="switch"><input type="checkbox" id="ftBodyParams" checked> Desktop body parameters — BT/… (works without VR)</label>
+              <label style="margin-top:6px">Your height: <span id="ftHeightV">1.70</span> m</label><input type="range" id="ftHeight" min="1.2" max="2.2" step="0.01" value="1.7">
+              <label>Body tracking runs every <span id="ftPoseNV">1</span> frame(s)</label><input type="range" id="ftPoseN" min="1" max="4" step="1" value="1">
+            </div>
+            <div>
+              <div class="muted" id="ftBodyStats" style="font-size:.78rem">Body tracking off</div>
+              <div id="ftBodyBars" style="margin-top:6px;display:grid;grid-template-columns:110px 1fr;gap:3px 8px;font-size:.74rem"></div>
+              <div class="muted" style="font-size:.74rem;margin-top:10px;line-height:1.45"><b>In VRChat (VR):</b> Action Menu → Options → OSC → Enabled, then Quick Menu → Tracking &amp; IK → Calibrate FBT and stand in a T-pose. Fewer trackers (hip + feet) usually look better than all eight with a webcam.</div>
+            </div>
+          </div>
+        </div>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3>🎯 Calibration</h3>
+            <div class="muted" style="font-size:.78rem">Look at the camera with a relaxed, neutral face and press Calibrate. It records your resting face and head position so small resting movements don't show on the avatar.</div>
+            <div class="row" style="margin-top:8px;gap:8px"><button class="btn" id="ftCalibrate">Calibrate (hold still 2 s)</button><button class="btn ghost" id="ftCalReset">Reset</button></div>
+            <div class="muted" id="ftCalOut" style="margin-top:6px;font-size:.78rem"></div>
+          </div>
+          <div class="card">
+            <h3>🧍 Avatar &amp; models</h3>
+            <div id="ftAvatar" class="muted" style="font-size:.8rem">No avatar yet — change or reset your avatar in VRChat (with OSC on).</div>
+            <div class="row" style="margin-top:6px"><button class="btn ghost" id="ftReloadAvatar">Re-read avatar</button></div>
+            <div class="um-sec" style="margin-top:10px">Tracking models (Google MediaPipe, downloaded once)</div>
+            <div id="ftModels" style="font-size:.8rem"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>🧩 Avatar parameters</h3>
+          <div class="muted" style="font-size:.78rem;line-height:1.5">
+            <b>Face:</b> the VRCFaceTracking v2 set (e.g. <code>FT/v2/JawOpen</code>, <code>FT/v2/EyeLidLeft</code>, <code>FT/v2/SmileFrownLeft</code>), as Float, Bool or binary (<code>…1</code>, <code>…2</code>, <code>…4</code>, <code>…Negative</code>), plus <code>EyeTrackingActive</code> / <code>ExpressionTrackingActive</code> / <code>LipTrackingActive</code>.<br>
+            <b>Hands</b> (add these to your avatar to use them): <code>HT/LeftThumbCurl</code> … <code>HT/LeftPinkyCurl</code> (Float 0–1), <code>HT/LeftSpread</code> (Float), <code>HT/LeftGesture</code> (Int, same numbers as VRChat's GestureLeft: 1 fist, 2 open, 3 point, 4 victory, 5 rock, 6 gun, 7 thumbs up), <code>HT/LeftDetected</code> (Bool), <code>HT/LeftX</code>/<code>HT/LeftY</code> (Float −1…1) — and the same with <code>Right</code>. VRChat doesn't accept finger bones over OSC, so hands work through avatar parameters.<br>
+            <b>Body</b> (desktop; add to your avatar and drive leg/spine/arm muscle animations from them): <code>BT/LeftUpperLegX</code> / <code>…Z</code> (Float −1…1, leg forward / out to the side), <code>BT/LeftKnee</code> (Float 0–1 bend), <code>BT/LeftUpperArmX</code> / <code>…Z</code>, <code>BT/LeftElbow</code> — and the same with <code>Right</code> — plus <code>BT/SpineBend</code>, <code>BT/SpineSide</code>, <code>BT/SpineTwist</code> (Float −1…1), <code>BT/Crouch</code> (Float 0–1), <code>BT/Detected</code> and <code>BT/LegsVisible</code> (Bool). In VR the OSC trackers (<code>/tracking/trackers/1–8</code> + head) drive VRChat's real full-body IK instead.
+          </div>
+        </div>
+      </section>
+
       <section id="oscapps" class="tabpanel">
         <div class="card">
           <h3>OSC companion apps</h3>
@@ -1835,6 +1939,7 @@
               <option value="video">Videos</option>
               <option value="portal">Portals</option>
               <option value="name_change">Name changes</option>
+              <option value="trust_change">Trust rank changes</option>
               <option value="alert">Alerts</option>
               <option value="group">Group</option>
             </select>
@@ -1844,6 +1949,46 @@
           </div>
           <div id="histHeatmap" style="margin:12px 0"></div>
           <div id="histList" class="muted" style="margin-top:10px;max-height:520px;overflow:auto;font-size:.82rem">Loading…</div>
+        </div>
+        <div class="card">
+          <h3>🗺️ Instances <span class="muted" style="font-size:.72rem">(from the VRChat log — click one for its player timeline)</span></h3>
+          <div class="row">
+            <input id="instSearch" placeholder="Search world…" style="max-width:220px">
+            <button class="btn" id="instRefresh">Refresh</button>
+          </div>
+          <div id="instList" class="muted" style="margin-top:10px;max-height:360px;overflow:auto;font-size:.82rem">Loading…</div>
+          <div id="instTimeline" style="margin-top:12px"></div>
+        </div>
+        <div class="card">
+          <h3>👥 Players Met <span class="muted" style="font-size:.72rem">(times met, time together, last seen)</span></h3>
+          <div class="row">
+            <input id="metSearch" placeholder="Search name…" style="max-width:220px">
+            <button class="btn" id="metRefresh">Refresh</button>
+          </div>
+          <div id="metList" class="muted" style="margin-top:10px;max-height:420px;overflow:auto;font-size:.82rem">Loading…</div>
+        </div>
+      </section>
+
+      <!-- FEED (live friend activity from VRChat's pipeline websocket) -->
+      <section id="feed" class="tabpanel">
+        <div class="card">
+          <h3>📡 Friend Feed <span class="muted" style="font-size:.72rem" id="feedPipeline">live feed: …</span></h3>
+          <p class="muted" style="font-size:.8rem;margin-top:0">Friends coming online / going offline, changing world, status, avatar or bio — live from VRChat while you're logged in (saved locally).</p>
+          <div class="row">
+            <select id="feedType" style="max-width:160px">
+              <option value="">All</option>
+              <option value="gps">World changes</option>
+              <option value="online">Online</option>
+              <option value="offline">Offline</option>
+              <option value="status">Status</option>
+              <option value="avatar">Avatar</option>
+              <option value="bio">Bio</option>
+            </select>
+            <input id="feedSearch" placeholder="Search name / world…" style="max-width:220px">
+            <button class="btn" id="feedRefresh">Refresh</button>
+            <button class="btn danger" id="feedClear">Clear</button>
+          </div>
+          <div id="feedList" class="muted" style="margin-top:10px;max-height:560px;overflow:auto;font-size:.82rem">Loading…</div>
         </div>
       </section>
 
@@ -2167,7 +2312,7 @@
           <div class="muted" style="font-size:.75rem;margin-bottom:8px">Independent of VRChat's own favorites — works for non-friends, supports notes, and is stored in its own file you can relocate (e.g. onto a synced drive).</div>
           <div class="muted" id="localFavPath" style="font-size:.75rem;word-break:break-all;margin-bottom:6px">Loading path…</div>
           <div class="row"><button class="btn ghost" id="localFavChoosePath">Change storage location…</button></div>
-          <div class="row" style="margin-top:8px"><button class="btn ghost" id="localFavExport">Export Local Favorites</button><button class="btn ghost" id="localFavImport">Import Local Favorites</button></div>
+          <div class="row" style="margin-top:8px"><button class="btn ghost" id="localFavExport">Export Local Favorites</button><button class="btn ghost" id="localFavImport">Import Local Favorites</button><button class="btn ghost" id="localFavImportVrcx" title="Import the local avatar / world / friend favourites from your VRCX install">Import from VRCX</button></div>
           <div class="muted" id="localFavOut" style="margin-top:4px;font-size:.75rem"></div>
         </div>
         <div class="card" id="cloudSyncPanel">
@@ -2592,6 +2737,7 @@
     </div>
   </div>
 
+  <script src="modules/vrchat/tracking/cameraModes.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

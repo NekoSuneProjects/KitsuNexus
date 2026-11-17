@@ -2694,7 +2694,7 @@ async function refreshDesktopHud () {
     setPill('desktopHudState', !!state.running, 'on')
     if (state.options) $('desktopHudClickThrough').checked = !!state.options.clickThrough
     $('desktopHudToggle').textContent = state.running ? 'Stop desktop HUD' : 'Start desktop HUD'
-    setText('desktopHudOut', state.running ? 'Running — drag to move, resize from window edges.' : 'Stopped')
+    setText('desktopHudOut', state.running ? 'Armed — ' + (state.interactionHotkeys?.length ? state.interactionHotkeys.join(' / ') + ' to edit' : 'No shortcut registered. Use Open HUD controls.') : 'Stopped')
   } catch (err) { setText('desktopHudOut', String(err.message || err)) }
 }
 $('desktopHudToggle').addEventListener('click', async () => {
@@ -4003,7 +4003,7 @@ $('searchQuery').addEventListener('keydown', e => { if (e.key === 'Enter') doSea
 $('searchResults').addEventListener('click', e => { const c = e.target.closest('.mini-card[data-kind="user"]'); if (c) openUserModal(c.dataset.id) })
 
 /* ---------------- History page ---------------- */
-const HIST_ICON = { join: '➡️', leave: '⬅️', friend_add: '➕', friend_remove: '➖', name_change: '✏️', world: '🌐', video: '🎬', portal: '🌀', alert: '🔔', group: '👥' }
+const HIST_ICON = { join: '➡️', leave: '⬅️', friend_add: '➕', friend_remove: '➖', name_change: '✏️', trust_change: '🛡️', world: '🌐', video: '🎬', portal: '🌀', alert: '🔔', group: '👥' }
 function renderHeatmap (rows) {
   const el = $('histHeatmap'); if (!el) return
   const grid = Array.from({ length: 7 }, () => Array(24).fill(0))
@@ -4032,7 +4032,7 @@ async function loadHistory () {
   }).join('')
 }
 // History event types whose `name` is a person (so the name resolves to a profile).
-const HIST_PERSON_TYPES = new Set(['join', 'leave', 'friend_add', 'friend_remove', 'name_change', 'alert'])
+const HIST_PERSON_TYPES = new Set(['join', 'leave', 'friend_add', 'friend_remove', 'name_change', 'trust_change', 'alert'])
 // History only stores display names, not user ids — resolve the name via search,
 // then open the profile (exact match preferred, else the first result).
 async function openUserByName (name, anchorEl) {
@@ -4079,6 +4079,98 @@ $('histImport').addEventListener('click', async () => {
   if (r.ok) { setText('histList', `✅ Imported ${r.imported} VRCX events.`); loadHistory() } else setText('histList', 'Import failed: ' + (r.error || ''))
 })
 document.querySelector('[data-tab="history"]').addEventListener('click', loadHistory)
+
+/* ---------------- Instances, timeline chart, players met ---------------- */
+const fmtWhen = ts => new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+const fmtSpan = ms => fmtDuration(Math.max(0, Math.round(ms / 1000)))
+async function loadInstances () {
+  const el = $('instList'); el.textContent = 'Loading…'
+  const rows = await api.instancesList({ search: $('instSearch').value.trim() || undefined, limit: 200 })
+  if (!rows || !rows.length) { el.textContent = 'No instances yet — they are recorded from the VRChat log while the app is open.'; return }
+  el.innerHTML = rows.map(r => {
+    const dur = (r.leftAt || Date.now()) - r.joinedAt
+    return `<div class="inst-row" data-id="${Number(r.id)}" style="display:flex;gap:8px;padding:5px 0;border-top:1px solid var(--border);cursor:pointer"><span>${r.leftAt ? '🌐' : '🟢'}</span><div class="grow" style="min-width:0"><div><b>${esc(r.worldName || r.worldId)}</b> <span class="muted">${Number(r.players) || 0} players · ${fmtSpan(dur)}${r.leftAt ? '' : ' (now)'}</span></div><div class="muted" style="font-size:.72rem">${fmtWhen(r.joinedAt)}</div></div></div>`
+  }).join('')
+}
+// Player timeline for one instance: one bar per stay, across the visit.
+async function showInstanceTimeline (id) {
+  const box = $('instTimeline'); box.textContent = 'Loading timeline…'
+  const t = await api.instanceTimeline(id)
+  if (!t) { box.textContent = ''; return }
+  const start = t.joinedAt; const end = Math.max(t.leftAt || Date.now(), start + 1000)
+  const span = end - start
+  const pct = v => (((Math.min(Math.max(v, start), end) - start) / span) * 100).toFixed(2)
+  // one row per player, stays merged onto the same row
+  const byName = new Map()
+  for (const p of t.players) { if (!byName.has(p.name)) byName.set(p.name, []); byName.get(p.name).push(p) }
+  const rowsHtml = [...byName].map(([name, stays]) => {
+    const total = stays.reduce((a, s) => a + ((s.leftAt || end) - s.joinedAt), 0)
+    const bars = stays.map(s => { const l = pct(s.joinedAt); const w = Math.max(0.6, pct(s.leftAt || end) - l); return `<div title="${esc(name)}: ${esc(fmtWhen(s.joinedAt))} → ${s.leftAt ? esc(fmtWhen(s.leftAt)) : 'now'}" style="position:absolute;left:${l}%;width:${w}%;top:3px;bottom:3px;border-radius:3px;background:var(--accent)"></div>` }).join('')
+    return `<div style="display:grid;grid-template-columns:150px 1fr 60px;gap:8px;align-items:center;font-size:.76rem"><span class="hist-user" data-name="${esc(name)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" title="${esc(name)}">${esc(name)}</span><div style="position:relative;height:16px;background:var(--border);border-radius:3px">${bars}</div><span class="muted">${fmtSpan(total)}</span></div>`
+  }).join('')
+  box.innerHTML = `<div class="um-sec">${esc(t.worldName || t.worldId)} — ${esc(fmtWhen(start))} → ${t.leftAt ? esc(fmtWhen(t.leftAt)) : 'now'} (${fmtSpan(span)})</div>` +
+    `<div style="display:flex;flex-direction:column;gap:3px;max-height:420px;overflow:auto">${rowsHtml || '<span class="muted">No players recorded.</span>'}</div>`
+}
+async function loadPlayersMet () {
+  const el = $('metList'); el.textContent = 'Loading…'
+  const rows = await api.playersMet({ search: $('metSearch').value.trim() || undefined, limit: 300 })
+  if (!rows || !rows.length) { el.textContent = 'Nobody yet — players are recorded from the VRChat log while the app is open.'; return }
+  el.innerHTML = rows.map(r => `<div style="display:flex;gap:8px;padding:5px 0;border-top:1px solid var(--border)"><span>👤</span><div class="grow" style="min-width:0"><div><b class="hist-user" data-name="${esc(r.name)}" style="cursor:pointer;text-decoration:underline dotted">${esc(r.name)}</b> <span class="muted">met ${Number(r.timesMet) || 0}× · ${fmtSpan(r.totalMs || 0)} together</span></div><div class="muted" style="font-size:.72rem">last seen ${esc(fmtWhen(r.lastSeen))}${r.lastWorld ? ' · ' + esc(r.lastWorld) : ''}</div></div></div>`).join('')
+}
+$('instRefresh').addEventListener('click', loadInstances)
+$('instSearch').addEventListener('keydown', e => { if (e.key === 'Enter') loadInstances() })
+$('instList').addEventListener('click', e => { const r = e.target.closest('.inst-row'); if (r) showInstanceTimeline(Number(r.dataset.id)) })
+$('instTimeline').addEventListener('click', e => { const u = e.target.closest('.hist-user'); if (u && u.dataset.name) openUserByName(u.dataset.name, u) })
+$('metRefresh').addEventListener('click', loadPlayersMet)
+$('metSearch').addEventListener('keydown', e => { if (e.key === 'Enter') loadPlayersMet() })
+$('metList').addEventListener('click', e => { const u = e.target.closest('.hist-user'); if (u && u.dataset.name) openUserByName(u.dataset.name, u) })
+document.querySelector('[data-tab="history"]').addEventListener('click', () => { loadInstances(); loadPlayersMet() })
+// "Last seen" block for the user modal (by user id, falling back to name).
+async function lastSeenBlock (u) {
+  if (!u || !u.id) return ''
+  let r = []
+  try { r = await api.playersMet({ userId: u.id, limit: 1 }); if (!r.length && u.displayName) r = await api.playersMet({ name: u.displayName, limit: 1 }) } catch (_) { return '' }
+  const m = r[0]; if (!m) return ''
+  return `<div class="um-sec">Met in VRChat</div><div class="muted" style="font-size:.8rem">${Number(m.timesMet) || 0}× · ${esc(fmtSpan(m.totalMs || 0))} together · last seen ${esc(fmtWhen(m.lastSeen))}${m.lastWorld ? ' in ' + esc(m.lastWorld) : ''}</div>`
+}
+
+/* ---------------- Friend Feed (live pipeline) ---------------- */
+const FEED_ICON = { gps: '🌐', online: '🟢', offline: '⚫', status: '💬', avatar: '🧍', bio: '📝' }
+const FEED_STATUS_DOT = { 'join me': '🔵', active: '🟢', 'ask me': '🟠', busy: '🔴' }
+const PIPELINE_LABEL = { connected: '🟢 live', connecting: '🟡 connecting…', reconnecting: '🟡 reconnecting…', 'no-auth': '⚪ log into VRChat for the live feed', 'auth-failed': '🔴 VRChat login expired — log in again', stopped: '⚪ off', error: '🔴 error' }
+function feedRowHtml (r) {
+  const when = new Date(r.ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  let what = ''
+  if (r.type === 'gps') what = r.world ? `→ ${esc(r.world)}` : 'changed world'
+  else if (r.type === 'online') what = 'came online'
+  else if (r.type === 'offline') what = 'went offline'
+  else if (r.type === 'status') what = `${FEED_STATUS_DOT[r.status || r.location] || ''} ${esc(r.detail || '')}`
+  else if (r.type === 'avatar') what = 'changed avatar'
+  else if (r.type === 'bio') what = `bio: ${esc(String(r.detail || '').slice(0, 140))}`
+  return `<div style="display:flex;gap:8px;padding:5px 0;border-top:1px solid var(--border);align-items:center"><span>${FEED_ICON[r.type] || '•'}</span><div class="grow" style="min-width:0"><div><b class="hist-user" data-name="${esc(r.name || '')}" style="cursor:pointer;text-decoration:underline dotted">${esc(r.name || '')}</b> <span class="muted">${what}</span></div><div class="muted" style="font-size:.72rem">${when}</div></div></div>`
+}
+async function loadFeed () {
+  const el = $('feedList'); el.textContent = 'Loading…'
+  api.feedPipelineStatus().then(s => setText('feedPipeline', 'live feed: ' + (PIPELINE_LABEL[s] || s))).catch(() => {})
+  const rows = await api.feedList({ type: $('feedType').value || undefined, search: $('feedSearch').value.trim() || undefined, limit: 400 })
+  el.innerHTML = rows && rows.length ? rows.map(feedRowHtml).join('') : 'No friend activity yet — log into VRChat and keep the app open.'
+}
+$('feedRefresh').addEventListener('click', loadFeed)
+$('feedType').addEventListener('change', loadFeed)
+$('feedSearch').addEventListener('keydown', e => { if (e.key === 'Enter') loadFeed() })
+$('feedClear').addEventListener('click', async () => { await api.feedClear(); loadFeed() })
+$('feedList').addEventListener('click', e => { const u = e.target.closest('.hist-user'); if (u && u.dataset.name) openUserByName(u.dataset.name, u) })
+document.querySelector('[data-tab="feed"]').addEventListener('click', loadFeed)
+api.on('vrchat:pipeline', ({ status }) => setText('feedPipeline', 'live feed: ' + (PIPELINE_LABEL[status] || status)))
+// Prepend live rows while the Feed tab is open (if they match the filter).
+api.on('vrchat:feed', e => {
+  if (!$('feed').classList.contains('active')) return
+  const t = $('feedType').value; const q = $('feedSearch').value.trim().toLowerCase()
+  if (t && e.type !== t) return
+  if (q && ![e.name, e.worldName, e.detail].some(v => String(v || '').toLowerCase().includes(q))) return
+  const el = $('feedList'); if (!el.querySelector('div')) el.innerHTML = ''
+  el.insertAdjacentHTML('afterbegin', feedRowHtml({ ...e, world: e.worldName }))
+})
 
 /* ---------------- Auto-Greeter ---------------- */
 function greeterCfg () { return { enabled: $('greeterEnable').checked, mode: $('greeterMode').value, allow: $('greeterAllow').value.split(',').map(s => s.trim()).filter(Boolean) } }
@@ -4652,12 +4744,14 @@ async function renderMTab (tab) {
       : ''
     // Previous display names, reconstructed from the local name-change history.
     const pastBlock = await pastNamesBlock(u.displayName)
+    const seenBlock = (u.id !== myUserId) ? await lastSeenBlock(u) : ''
     body.innerHTML =
       `<div class="rb-card">${umLocationLine(u)}${umJoinActions(u)}</div>` +
       (u.bio ? `<div class="um-bio">${esc(u.bio)}</div>` : '') +
       (links ? `<div class="row" style="flex-wrap:wrap;gap:8px">${links}</div>` : '') +
       (badges ? `<div class="um-sec">Badges</div><div class="badge-grid">${badges}</div>` : '') +
       pastBlock +
+      seenBlock +
       trustLadder +
       `<div class="um-sec">Info</div><div class="um-info">${rows.map(r => `<div><span>${esc(r[0])}</span><b>${esc(r[1])}</b></div>`).join('')}</div>` +
       noteBlock
@@ -5462,6 +5556,12 @@ $('localFavExport').addEventListener('click', async () => {
 $('localFavImport').addEventListener('click', async () => {
   const r = await api.localFavImport()
   setText('localFavOut', r.ok ? `✅ Imported ${r.imported} favorite(s).` : (r.error === 'cancelled' ? 'Cancelled' : 'Error: ' + r.error))
+})
+
+$('localFavImportVrcx').addEventListener('click', async () => {
+  setText('localFavOut', 'Importing from VRCX…')
+  const r = await api.localFavImportVrcx()
+  setText('localFavOut', r.ok ? `✅ Imported ${r.imported} from VRCX (${r.avatar} avatars, ${r.world} worlds, ${r.friend} friends${r.skipped ? `, ${r.skipped} already here` : ''}).` : (r.error === 'cancelled' ? 'Cancelled' : 'Error: ' + r.error))
 })
 
 /* ---------------- Cloud Sync (optional, self-hosted kitsunexus-server) ---------------- */
@@ -6882,3 +6982,239 @@ if ($('qlProfiles')) {
     }
   })
 }
+
+$('desktopHudEdit').addEventListener('click', async () => {
+  try {
+    const result = await api.hudEdit()
+    setText('desktopHudOut', result.ok ? 'HUD editor opened. Escape returns to VRChat.' : result.inputError || 'Could not open HUD editor')
+  } catch (error) { setText('desktopHudOut', String(error.message || error)) }
+})
+
+/* ---------------- Start apps with VRChat (auto-launch) ---------------- */
+function renderAutoLaunch (apps) {
+  const el = $('alList'); if (!el) return
+  if (!apps || !apps.length) { el.textContent = 'No programs yet.'; return }
+  el.innerHTML = apps.map(a => {
+    const name = String(a.path || '').split(/[\\/]/).pop()
+    const opt = (v, label) => `<option value="${v}"${a.mode === v ? ' selected' : ''}>${label}</option>`
+    return `<div class="al-row" data-id="${esc(a.id)}" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--border)">
+      <label class="switch" title="Enabled"><input type="checkbox" class="al-enabled"${a.enabled !== false ? ' checked' : ''}></label>
+      <div class="grow" style="min-width:160px"><b>${esc(name)}</b><div class="muted" style="font-size:.7rem;overflow:hidden;text-overflow:ellipsis" title="${esc(a.path)}">${esc(a.path)}</div></div>
+      <select class="al-mode" style="max-width:120px">${opt('always', 'Always')}${opt('vr', 'VR only')}${opt('desktop', 'Desktop only')}</select>
+      <input class="al-args" placeholder="arguments" value="${esc((a.args || []).map(x => /\s/.test(x) ? `"${x}"` : x).join(' '))}" style="max-width:160px">
+      <label class="switch" title="Close it when VRChat exits (programs started from a shortcut can't be closed)"><input type="checkbox" class="al-close"${a.closeWithVRChat ? ' checked' : ''}> close with VRChat</label>
+      <button class="btn ghost al-test" title="Start it now">▶</button>
+      <button class="btn danger al-remove" title="Remove">✕</button>
+    </div>`
+  }).join('')
+}
+async function loadAutoLaunch () { try { renderAutoLaunch(await api.autoLaunchList()) } catch (_) {} }
+$('alAdd').addEventListener('click', async () => renderAutoLaunch(await api.autoLaunchAdd()))
+$('alList').addEventListener('change', async e => {
+  const row = e.target.closest('.al-row'); if (!row) return
+  const id = row.dataset.id
+  if (e.target.classList.contains('al-enabled')) renderAutoLaunch(await api.autoLaunchUpdate(id, { enabled: e.target.checked }))
+  else if (e.target.classList.contains('al-close')) renderAutoLaunch(await api.autoLaunchUpdate(id, { closeWithVRChat: e.target.checked }))
+  else if (e.target.classList.contains('al-mode')) renderAutoLaunch(await api.autoLaunchUpdate(id, { mode: e.target.value }))
+  else if (e.target.classList.contains('al-args')) renderAutoLaunch(await api.autoLaunchUpdate(id, { args: e.target.value }))
+})
+$('alList').addEventListener('click', async e => {
+  const row = e.target.closest('.al-row'); if (!row) return
+  if (e.target.closest('.al-remove')) renderAutoLaunch(await api.autoLaunchRemove(row.dataset.id))
+  else if (e.target.closest('.al-test')) api.autoLaunchTest(row.dataset.id)
+})
+api.on('autolaunch:log', m => setText('alLog', String(m || '')))
+document.querySelector('[data-tab="quicklaunch"]').addEventListener('click', loadAutoLaunch)
+
+/* ---------------- VRChat server status banner (status.vrchat.com) ---------------- */
+function renderVrcServerStatus (st) {
+  const el = $('vrcStatusBanner'); if (!el) return
+  if (!st || st.ok) { el.style.display = 'none'; return }
+  const what = [...(st.components || []), ...(st.incidents || [])]
+  el.style.borderLeftColor = st.indicator === 'critical' || st.indicator === 'major' ? '#ef4444' : '#f59e0b'
+  el.innerHTML = `<b>⚠️ VRChat: ${esc(st.description || 'Service issue')}</b>${what.length ? `<div class="muted" style="font-size:.78rem;margin-top:2px">${esc(what.join(', '))}</div>` : ''}`
+  el.style.display = ''
+}
+$('vrcStatusBanner').addEventListener('click', () => api.openExternal ? api.openExternal('https://status.vrchat.com') : window.open('https://status.vrchat.com'))
+api.on('vrcServerStatus', renderVrcServerStatus)
+api.vrcServerStatusGet().then(renderVrcServerStatus).catch(() => {})
+
+/* ---------------- Face & Hand Tracking (webcam -> OSC) ---------------- */
+const FT_SMOOTH = [{ label: 'off', minCutoff: 10, beta: 0 }, { label: 'low', minCutoff: 4, beta: 0.5 }, { label: 'medium', minCutoff: 1.5, beta: 0.3 }, { label: 'high', minCutoff: 0.8, beta: 0.1 }, { label: 'max', minCutoff: 0.3, beta: 0.05 }]
+const FT_GESTURE = ['neutral', 'fist', 'open', 'point', 'victory', 'rock', 'gun', 'thumbs up']
+const FT_STATE = { stopped: 'off', starting: 'starting…', running: 'running', error: 'error' }
+let ftLast = null
+async function ftLoadCameras () {
+  const sel = $('ftCamera'); if (!sel) return
+  let devs = []
+  try { devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput') } catch (_) {}
+  const cur = (ftLast && ftLast.camera && ftLast.camera.deviceId) || ''
+  sel.innerHTML = '<option value="">Default camera</option>' + devs.map((d, i) => `<option value="${esc(d.deviceId)}">${esc(d.label || 'Camera ' + (i + 1))}</option>`).join('')
+  sel.value = devs.some(d => d.deviceId === cur) ? cur : ''
+  ftProbeCamera(sel.value)
+}
+// What the selected camera supports (MediaStreamTrack.getCapabilities()).
+// While tracking runs, the tracker window reports it (no second camera open).
+const ftCamCaps = new Map() // deviceId ('' = default) -> { caps, label }
+let ftProbing = null
+async function ftProbeCamera (deviceId) {
+  const t = ftLast && ftLast.tracker
+  if (ftLast && ftLast.running && t && t.caps && (!deviceId || deviceId === t.deviceId)) { ftCamCaps.set(deviceId, { caps: t.caps, label: t.camera }); ftFillModes(); return }
+  if (ftCamCaps.has(deviceId)) { ftFillModes(); return }
+  if (ftProbing === deviceId) return
+  ftProbing = deviceId
+  setText('ftCamInfo', 'Reading camera…')
+  let stream = null
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: deviceId ? { deviceId: { exact: deviceId } } : true })
+    const track = stream.getVideoTracks()[0]
+    const k = track && track.getCapabilities ? track.getCapabilities() : {}
+    ftCamCaps.set(deviceId, { caps: { width: k.width, height: k.height, frameRate: k.frameRate }, label: track ? track.label : '' })
+  } catch (err) {
+    ftCamCaps.set(deviceId, { caps: null, label: '', error: (err && err.name === 'NotReadableError') ? 'camera is busy in another app' : (err && err.message) || 'camera unavailable' })
+  } finally {
+    if (stream) stream.getTracks().forEach(tr => tr.stop())
+    ftProbing = null
+  }
+  ftFillModes()
+}
+// Fill Resolution / FPS with only the modes this camera has, plus Auto.
+function ftFillModes () {
+  const M = window.KnCameraModes; if (!M) return
+  const cam = (ftLast && ftLast.camera) || {}
+  const deviceId = $('ftCamera').value || ''
+  const info = ftCamCaps.get(deviceId) || { caps: null }
+  const caps = info.caps
+  const auto = M.autoMode(caps)
+  const resList = M.resolutionsFor(caps)
+  const fpsList = M.fpsFor(caps)
+  const curRes = cam.width ? `${cam.width}x${cam.height}` : 'auto'
+  let resHtml = `<option value="auto">Auto — ${auto.width}×${auto.height} (recommended)</option>` + resList.map(r => `<option value="${r.width}x${r.height}">${esc(M.label(r))}</option>`).join('')
+  if (curRes !== 'auto' && !resList.some(r => `${r.width}x${r.height}` === curRes)) resHtml += `<option value="${esc(curRes)}">${esc(curRes.replace('x', '×'))} (not reported by this camera)</option>`
+  let fpsHtml = `<option value="0">Auto — ${auto.fps} fps</option>` + fpsList.map(f => `<option value="${f}">${f} fps</option>`).join('')
+  if (cam.fps && !fpsList.includes(cam.fps)) fpsHtml += `<option value="${cam.fps}">${cam.fps} fps (not reported by this camera)</option>`
+  if (document.activeElement !== $('ftRes')) { $('ftRes').innerHTML = resHtml; $('ftRes').value = curRes }
+  if (document.activeElement !== $('ftFps')) { $('ftFps').innerHTML = fpsHtml; $('ftFps').value = String(cam.fps || 0) }
+  ftCamInfoText()
+}
+function ftCamInfoText () {
+  const cam = (ftLast && ftLast.camera) || {}
+  const t = (ftLast && ftLast.tracker) || {}
+  const info = ftCamCaps.get($('ftCamera').value || '') || {}
+  const caps = info.caps
+  const max = caps && caps.width && caps.width.max ? `up to ${caps.width.max}×${caps.height.max}${caps.frameRate && caps.frameRate.max ? ` @ ${Math.round(caps.frameRate.max)} fps` : ''}` : ''
+  let text = info.error ? `⚠️ Couldn't read this camera's modes (${info.error}) — showing common ones.` : max ? `This camera supports ${max}.` : ''
+  if (ftLast && ftLast.running && t.width) {
+    const want = cam.width ? `${cam.width}×${cam.height}` : 'Auto'
+    const got = `${t.width}×${t.height}${t.frameRate ? ' @ ' + t.frameRate + ' fps' : ''}`
+    const differs = cam.width && (cam.width !== t.width || cam.height !== t.height)
+    text += ` Now running at ${got}${differs ? ` (asked for ${want}; the camera picked its closest mode)` : ''}.`
+  }
+  if (cam.width && cam.width > 1280) text += ' Higher than 720p doesn\'t improve tracking much — it mainly costs CPU.'
+  setText('ftCamInfo', text.trim() || '—')
+}
+function ftBar (label, v, signed) {
+  const n = Math.max(signed ? -1 : 0, Math.min(1, Number(v) || 0))
+  const left = signed ? (n < 0 ? 50 + n * 50 : 50) : 0; const width = signed ? Math.abs(n) * 50 : n * 100
+  return `<span class="muted">${esc(label)}</span><div style="position:relative;height:10px;background:var(--border);border-radius:5px;overflow:hidden"><div style="position:absolute;left:${left}%;width:${width}%;top:0;bottom:0;background:var(--accent)"></div></div>`
+}
+function ftRender (s) {
+  if (!s) return
+  ftLast = s
+  const t = s.tracker || {}
+  setText('ftState', s.running ? (FT_STATE[t.state] || t.state || 'running') : (t.state === 'error' ? 'error' : 'off'))
+  setText('ftOut', t.state === 'error' ? '⚠️ ' + (t.error || 'Error') : s.running ? `${t.camera ? '📷 ' + t.camera + ' · ' : ''}${t.width ? t.width + '×' + t.height : ''}` : 'Stopped')
+  const hands = s.hands || {}
+  setText('ftStats', s.running ? `${s.fps || 0} fps · face ${s.face ? '✅' : '—'} · hands ${hands.Left ? 'L' : '–'}${hands.Right ? 'R' : '–'} · ${s.sent || 0} values sent` : 'Not running')
+  const v = s.values || {}
+  let bars = ''
+  if (s.face) bars += ftBar('Jaw open', v.JawOpen) + ftBar('Smile L / R', ((v.SmileLeft || 0) + (v.SmileRight || 0)) / 2) + ftBar('Eye open L', v.EyeOpenLeft) + ftBar('Eye open R', v.EyeOpenRight) + ftBar('Brow up', v.BrowUp) + ftBar('Pucker', v.Pucker) + ftBar('Look X', v.EyeX, true) + ftBar('Head yaw', v.HeadYaw, true)
+  for (const side of ['Left', 'Right']) {
+    const c = (s.curls || {})[side]; if (!c) continue
+    bars += `<span class="muted"><b>${side} hand</b></span><span class="muted">${esc(FT_GESTURE[c.gesture] || '')}</span>`
+    for (const f of ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky']) bars += ftBar(`${f}`, c[f])
+  }
+  $('ftBars').innerHTML = bars
+  const a = s.avatar
+  $('ftAvatar').innerHTML = a
+    ? `<b>${esc(a.name || a.id)}</b><br>${a.fullFaceTracking ? 'Avatar uses its own face tracking — no FT parameters sent.<br>' : ''}${Number(s.faceParams) || 0} face parameters · ${Number(s.handParams) || 0} hand parameters${s.nativeEyes && (s.nativeEyes.gaze || s.nativeEyes.lid) ? ' · VRChat native eye tracking' : ''}`
+    : 'No avatar yet — change or reset your avatar in VRChat (with OSC on).'
+  const m = s.models || {}
+  $('ftModels').innerHTML = ['face', 'hand', 'pose'].map(k => `<div class="row" style="gap:6px;align-items:center;margin-top:4px"><span style="min-width:90px">${{ face: '🙂 Face', hand: '✋ Hands', pose: '🧍 Body' }[k]}</span><span class="muted">${m[k] && m[k].ready ? `✅ ready (${(m[k].size / 1048576).toFixed(1)} MB)` : 'not downloaded'}</span><button class="btn ghost ft-dl" data-kind="${k}" style="margin-left:auto;padding:3px 8px;font-size:.75rem">${m[k] && m[k].ready ? 'Re-download' : 'Download'}</button><button class="btn ghost ft-import" data-kind="${k}" style="padding:3px 8px;font-size:.75rem">From file…</button></div>`).join('')
+  const c = s.config || {}
+  ftRenderBody(s)
+  for (const [id, key] of [['ftBody', 'body'], ['ftBodyTrackers', 'bodyTrackers'], ['ftBodyParams', 'bodyParams'], ['ftFace', 'face'], ['ftEyes', 'eyes'], ['ftHead', 'head'], ['ftHands', 'hands'], ['ftNativeEyes', 'nativeEyes'], ['ftMirror', 'mirror'], ['ftSendAll', 'sendAll']]) if ($(id) && document.activeElement !== $(id)) $(id).checked = !!c[key]
+  if (document.activeElement !== $('ftIntensity')) { $('ftIntensity').value = c.intensity || 1; setText('ftIntensityV', Number(c.intensity || 1).toFixed(1)) }
+  const smooth = FT_SMOOTH.findIndex(p => p.minCutoff === c.minCutoff && p.beta === c.beta)
+  if (smooth >= 0 && document.activeElement !== $('ftSmooth')) { $('ftSmooth').value = smooth; setText('ftSmoothV', FT_SMOOTH[smooth].label) }
+  const cam = s.camera || {}
+  // tracker reported this camera's capabilities: use them for the lists
+  const tr = s.tracker || {}
+  if (s.running && tr.caps) ftCamCaps.set($('ftCamera').value || '', { caps: tr.caps, label: tr.camera })
+  ftFillModes()
+  $('ftGpu').checked = cam.gpu !== false; $('ftAutoStart').checked = !!cam.autoStart
+  $('ftHandsN').value = cam.handsEveryN || 1; setText('ftHandsNV', cam.handsEveryN || 1)
+  $('ftPoseN').value = cam.poseEveryN || 1; setText('ftPoseNV', cam.poseEveryN || 1)
+  if (document.activeElement !== $('ftHeight')) { $('ftHeight').value = c.height || 1.7; setText('ftHeightV', Number(c.height || 1.7).toFixed(2)) }
+  const parts = c.trackerParts || {}
+  document.querySelectorAll('#ftParts input[data-part]').forEach(i => { i.checked = !!parts[i.dataset.part] })
+  if (s.calibrating) setText('ftCalOut', '⏳ Calibrating — hold still…')
+  else if (s.calibrated && /Calibrating/.test($('ftCalOut').textContent)) setText('ftCalOut', '✅ Calibrated')
+  else if (!$('ftCalOut').textContent) setText('ftCalOut', s.calibrated ? '✅ Calibrated' : 'Not calibrated')
+}
+function ftRenderBody (s) {
+  const c = s.config || {}; const b = s.body
+  if (!c.body) { setText('ftBodyStats', 'Body tracking off'); $('ftBodyBars').innerHTML = ''; return }
+  if (!s.running) { setText('ftBodyStats', 'Not running'); $('ftBodyBars').innerHTML = ''; return }
+  if (!b || !b.detected) { setText('ftBodyStats', 'No body in view — step back from the camera'); $('ftBodyBars').innerHTML = ''; return }
+  setText('ftBodyStats', `Body ✅ · legs ${b.legsVisible ? '✅' : '— (out of view)'}${c.bodyTrackers ? ' · trackers: ' + (b.trackers.length ? b.trackers.join(', ') : 'none') : ''}${c.bodyParams ? ` · ${Number(s.bodyParams) || 0} BT params on avatar` : ''}`)
+  const v = b.values || {}
+  let bars = ''
+  for (const [label, key, signed] of [['L leg fwd', 'BT/LeftUpperLegX', true], ['R leg fwd', 'BT/RightUpperLegX', true], ['L knee', 'BT/LeftKnee'], ['R knee', 'BT/RightKnee'], ['Crouch', 'BT/Crouch'], ['Lean fwd', 'BT/SpineBend', true], ['Lean side', 'BT/SpineSide', true], ['L arm up', 'BT/LeftUpperArmZ', true], ['R arm up', 'BT/RightUpperArmZ', true]]) {
+    if (key in v) bars += ftBar(label, v[key], signed)
+  }
+  $('ftBodyBars').innerHTML = bars
+}
+for (const [id, key] of [['ftBody', 'body'], ['ftBodyTrackers', 'bodyTrackers'], ['ftBodyParams', 'bodyParams']]) $(id).addEventListener('change', e => ftCfg({ [key]: e.target.checked }))
+$('ftParts').addEventListener('change', e => { const i = e.target.closest('input[data-part]'); if (i) ftCfg({ trackerParts: { [i.dataset.part]: i.checked } }) })
+$('ftHeight').addEventListener('input', e => setText('ftHeightV', Number(e.target.value).toFixed(2)))
+$('ftHeight').addEventListener('change', e => ftCfg({ height: Number(e.target.value) }))
+$('ftPoseN').addEventListener('input', e => setText('ftPoseNV', e.target.value))
+$('ftPoseN').addEventListener('change', e => ftCam({ poseEveryN: Number(e.target.value) }))
+async function ftRefresh () { try { ftRender(await api.trackingStatus()) } catch (_) {} }
+const ftCfg = patch => api.trackingConfig(patch).then(ftRender)
+for (const [id, key] of [['ftFace', 'face'], ['ftEyes', 'eyes'], ['ftHead', 'head'], ['ftHands', 'hands'], ['ftNativeEyes', 'nativeEyes'], ['ftMirror', 'mirror'], ['ftSendAll', 'sendAll']]) $(id).addEventListener('change', e => ftCfg({ [key]: e.target.checked }))
+$('ftIntensity').addEventListener('input', e => setText('ftIntensityV', Number(e.target.value).toFixed(1)))
+$('ftIntensity').addEventListener('change', e => ftCfg({ intensity: Number(e.target.value) }))
+$('ftSmooth').addEventListener('input', e => setText('ftSmoothV', FT_SMOOTH[e.target.value].label))
+$('ftSmooth').addEventListener('change', e => { const p = FT_SMOOTH[e.target.value]; ftCfg({ minCutoff: p.minCutoff, beta: p.beta }) })
+const ftCam = patch => api.trackingCamera(patch).then(ftRender)
+$('ftCamera').addEventListener('change', async e => { await ftCam({ deviceId: e.target.value }); ftProbeCamera(e.target.value) })
+$('ftRes').addEventListener('change', e => { const v = e.target.value; if (v === 'auto') ftCam({ width: 0, height: 0 }); else { const [w, h] = v.split('x').map(Number); ftCam({ width: w, height: h }) } })
+$('ftFps').addEventListener('change', e => ftCam({ fps: Number(e.target.value) }))
+$('ftGpu').addEventListener('change', e => ftCam({ gpu: e.target.checked }))
+$('ftAutoStart').addEventListener('change', e => ftCam({ autoStart: e.target.checked }))
+$('ftHandsN').addEventListener('input', e => setText('ftHandsNV', e.target.value))
+$('ftHandsN').addEventListener('change', e => ftCam({ handsEveryN: Number(e.target.value) }))
+$('ftCamRefresh').addEventListener('click', () => { ftCamCaps.clear(); ftLoadCameras() })
+$('ftStart').addEventListener('click', async () => {
+  setText('ftOut', 'Starting…')
+  const r = await api.trackingStart()
+  if (!r.ok) setText('ftOut', '⚠️ ' + (r.error || 'Could not start'))
+  ftRefresh()
+})
+$('ftStop').addEventListener('click', async () => { await api.trackingStop(); $('ftPreview').removeAttribute('src'); ftRefresh() })
+$('ftCalibrate').addEventListener('click', async () => { if (!(ftLast && ftLast.running)) { setText('ftCalOut', 'Start tracking first'); return } setText('ftCalOut', '⏳ Calibrating — hold still…'); await api.trackingCalibrate(2) })
+$('ftCalReset').addEventListener('click', async () => { setText('ftCalOut', 'Not calibrated'); ftRender(await api.trackingResetCalibration()) })
+$('ftReloadAvatar').addEventListener('click', async () => ftRender(await api.trackingReloadAvatar()))
+$('ftModels').addEventListener('click', async e => {
+  const dl = e.target.closest('.ft-dl'); const im = e.target.closest('.ft-import')
+  if (dl) { dl.disabled = true; dl.textContent = 'Downloading…'; const r = await api.trackingDownloadModel(dl.dataset.kind); if (!r.ok) setText('ftOut', '⚠️ ' + r.error); ftRefresh() }
+  if (im) { const r = await api.trackingImportModel(im.dataset.kind); if (!r.ok && r.error !== 'cancelled') setText('ftOut', '⚠️ ' + r.error); ftRefresh() }
+})
+api.on('tracking:modelProgress', ({ kind, progress }) => { const b = document.querySelector(`.ft-dl[data-kind="${kind}"]`); if (b) b.textContent = `Downloading… ${Math.round(progress * 100)}%` })
+api.on('tracking:status', s => { if ($('facetracking').classList.contains('active')) ftRender(s); else ftLast = s })
+api.on('tracking:preview', img => { if ($('facetracking').classList.contains('active')) $('ftPreview').src = img })
+// Preview frames only while this tab is open.
+document.querySelectorAll('.navbtn').forEach(b => b.addEventListener('click', () => api.trackingPreview(b.dataset.tab === 'facetracking')))
+document.querySelector('[data-tab="facetracking"]').addEventListener('click', () => { ftRefresh(); ftLoadCameras() })

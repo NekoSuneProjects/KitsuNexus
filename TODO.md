@@ -137,6 +137,24 @@ category's section below.
   user-editable — disabled the Discord Application ID field in the Discord tab and force the
   fixed ID in `renderer.js` and `main.js`'s `discord:start` handler regardless of saved config.
 - [x] DiscordOSC, Discord voice bot
+- [x] **World media in Rich Presence** — Popcorn Palace, VR Dancing, LS Media, ProTV `nowplaying` (PyPyDance etc.) and YouTube titles, poster as the big icon + elapsed/remaining bar (`worldMedia.js` → `vrchatWorld.js` → `discord.js`). No UI toggle yet (`showWorldMedia` config defaults on) — add a switch to the Discord card.
+- [x] **Rich Presence party size / instance type / VR-Desktop label + hide world in private instances** (`worldPresenceContext` in `main.js`, `vrMode.js`). No UI toggles yet for `showPartySize`, `showPlatform`, `hidePrivateInstances` — add to the Discord card.
+- [x] **Live Friend Feed** (pipeline websocket → 📡 Feed tab) + Friend Log trust rank changes + persisted friend snapshot (`pipeline.js`, `friendFeed.js`).
+- [ ] Feed: optional desktop/VR notifications for chosen friends coming online or joining your world.
+- [x] **Instance history + player timeline chart + Players Met + last seen in profile** (`instances` / `instance_players` tables in `gamelog.js`, events from `vrchatWorld.js`).
+- [ ] **Linux: app startup aborts at the tray icon.** `createTray()` loads `assets/icon.ico`, which Electron can't load on Linux, so `new Tray()` throws and the rest of the `whenReady` startup (world tracker, Discord, history, etc.) never runs. Needs a PNG tray icon on non-Windows (or a try/catch). Found while testing under Linux; not fixed here.
+- [x] **Start apps with VRChat** (auto-launch, VR/Desktop/always, close on exit) — `autoLaunch.js`, card in Quick Launch. Needs a real-Windows check of spawn/close.
+- [x] **VRChat server status banner + outage/recovery alerts** (`serverStatus.js`). No UI toggle yet for `vrcServerStatusAlerts`; couldn't test the live status.vrchat.com fetch from the dev sandbox.
+- [x] **Import VRCX local favourites** (avatars / worlds / friends → Local Favorites, `importVrcx` in `localFavoritesDb.js`).
+- [ ] History "Import VRCX" (`gamelog.importVrcx`) reports success with 0 events for a file that isn't a database — sql.js opens any bytes lazily and the per-table errors are swallowed. Validate the file first like `localFavoritesDb.importVrcx` now does. Also its VRCX table names look outdated (`gamelog_join_leave` etc.) — check against current VRCX.
+- [x] **Face & Hand Tracking over OSC** (built-in VRCFT-compatible face + webcam hands, one camera) — `modules/vrchat/tracking/`, 🙂 Face & Hands tab. Tested with a real face image + Google's face model under Linux; **needs a real-webcam check on Windows, and the hand model was never run** (couldn't download it in the dev sandbox; hand maths is unit-tested only).
+- [x] **Body tracking** (VRChat OSC trackers for VR + `BT/…` desktop body parameters, same camera) — `bodyTracking.js`. **Pose and hand models never ran for real** (Google's model storage is blocked in the dev sandbox and the legacy networks from PyPI are rejected by the web runtime); maths, OSC wire format and UI are tested. Needs a Windows test: stand in view, check trackers in VR (Calibrate FBT) and BT params on desktop.
+- [ ] Body tracking: example avatar animator / prefab for the `BT/…` desktop parameters (leg/spine/arm muscle blend trees) so users don't have to build one.
+- [ ] Body tracking: VRChat may add desktop OSC full-body later (feedback.vrchat.com "Fullbody tracking in desktop mode with osc") — if it does, the trackers already work there.
+- [x] Face, Hands & Body: camera resolution / FPS detected from the camera (4K/1080p/720p…, up to 120 fps) with Auto + manual choice (`cameraModes.js`).
+- [ ] Face & Hands: tongue tracking (FoxyFace has an extra ONNX tongue model), per-shape calibration UI, and an avatar setup guide / example animator for the `HT/` hand parameters.
+- [ ] Face & Hands: MediaPipe 1.x sends usage metrics to Google — stay on 0.10.x (pinned 0.10.35) or keep the tracker session's network block if upgrading.
+- [ ] `modules/integrations/discord/discordRpc.js` looks like an unused older Rich Presence module (nothing requires it; `discord.js` is the live one) — confirm and remove.
 
 ### Media
 - [x] Photo Relay (screenshots→Discord), Soundpad
@@ -1052,3 +1070,43 @@ e.g. the TTS engine fields, which already save correctly through `TTS_ALL_FIELD_
   global-hotkey approach was switched from a third-party key-listener package (flagged by
   antivirus) to a PowerShell-based `WH_KEYBOARD_LL` hook (`modules/vrchat/osc/keyHook.ps1` +
   `keyHookPs.js`), matching the existing shell-out pattern already used by `mediaKeys.js`.
+
+- [x] Enforce local-history expiry on reads and CSV exports; add validated retention configuration method.
+- [ ] Wire retention configuration into HUD and complete remaining VRChat roadmap.
+
+- [x] Wire HUD history retention, local search, CSV/JSON export, and trusted-window access checks.
+
+- [ ] Investigate HUD that loads its accessibility tree but is absent from fallback desktop capture during local runtime validation.
+
+- [x] Use solid desktop/pop-out HUD surfaces with software compositing and allow panel scrolling.
+
+- [x] Add --desktop-hud launch option for direct desktop testing.
+
+- [x] Visually confirm solid desktop HUD over live VRChat, current world/player feed, keyboard panel scrolling and CSV save dialog.
+
+- [x] Redesign desktop HUD with compact game controls and expandable settings; attach visibility and bounds to focused VRChat.
+
+- [ ] Validate attached HUD on mixed-DPI monitors, game resizing/minimization and restored relative positions; test independent pop-out placement.
+
+- [x] Add desktop activity cards for log-based joins, leaves, portals, avatar loads/changes and world transitions, with filters and startup replay suppression.
+
+- [x] Add Ctrl+Shift+F9 HUD interaction mode, Escape/back-to-game, click-through play mode, corner docking and persistent independent panel positions.
+- [x] Add alerts-only mode with ten-second independently expiring cards, downward stacking and automatic idle hiding.
+
+- [x] Recognize current PortalManager request-fulfilled log format in HUD activity and local portal history; avoid attributing a creator or claiming confirmed placement.
+
+- [ ] Other-player portal placement alerts: live partner test logs inventory lookups and portal-destroy events only, with no explicit placement message. Do not infer creation from generic inventory requests or claim reliable detection.
+
+- [x] Harden HUD focus transitions, restore full editor size, report shortcut-registration failures, add Ctrl+Alt+F9 fallback and main-window Open HUD controls button.
+- [x] Keep activity notifications independent of HUD live/player snapshot toggles; support observed portal removal/expiry log events without claiming placement.
+
+- [x] Add independent music and heart overlays with draggable headers, resizing, restored game-relative geometry, media controls, and close buttons.
+- [x] Add independently idle-hiding native notices window, synchronize HUD preferences/pins/notice pause, and stop HUD-specific music queries when disabled.
+- [ ] Finish shared collector ownership before stopping world/player or heart providers from HUD toggles; add verified FPS/lyrics providers, explicit monitor choice and packaged tests.
+
+- [x] Stop local test app/child processes on user report; prevent duplicate launches from continuing initialization and explicitly close HUD/VR surfaces on quit.
+- [ ] Verify duplicate launch/quit cleanup and final independent overlays in a single live instance when user resumes testing; leave app stopped after cleanup.
+
+- [x] Add actual Electron renderer smoke coverage for visible music/heart text and join/leave/avatar card rendering, expiration and reappearance.
+- [x] Prevent blank duplicate alerts-only main HUD when notices are detached; keep pop-outs unthrottled and scope widget selectors to actual panels.
+- [x] Add log-tail integration coverage and opt-in HUD diagnostics to distinguish collector delivery from rendering.

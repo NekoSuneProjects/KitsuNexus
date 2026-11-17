@@ -52,6 +52,15 @@ Windows media session locally to display it. This information is only sent where
 direct it (your VRChat chatbox / KAT / overlay / Discord presence) and is never sent
 to us.
 
+## 5a. Face, Hand & Body Tracking (webcam)
+Face & Hand Tracking reads your webcam **only while you have it switched on**. Every frame
+is processed on your own PC by Google's MediaPipe models, and only the resulting numbers
+(expression, finger and body-pose values) are sent — to VRChat on your own computer, over OSC. No
+images, video or tracking data are stored or sent anywhere. The tracking runs in a
+separate window that is **blocked from all network access**, and the bundled MediaPipe
+version has no usage-metrics code. The model files are downloaded once from Google's
+official MediaPipe storage (or picked from your disk) and checked before use.
+
 ## 6. No selling of data
 We do not sell, share, or monetize any data. We have none to sell.
 

@@ -5,6 +5,88 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.82] - 2026-11-17
+
+### Fixed
+- **`npm install` EBADENGINE warning for `node-notifier@11`; CI on an unsupported Node.** `@nekosuneprojects/vrnotications` depends on `node-notifier@11`, which needs Node `^22.22.2 || >=24.15.0`, but the build and test workflows ran on Node 20 (end-of-life) and the security audit on 22. Workflows now use Node 24, and `package.json` declares `engines` with the same range so an older local Node gives one clear message. On a dev PC, update Node to 24.15 or newer. The other two install warnings are upstream and harmless: `rimraf@2.6.3` comes from electron-builder → electron-winstaller → `temp` (build-time only; newer rimraf would break `temp`), and `gitignore-fallback` comes from `discord-rpc`'s `register-scheme`, which is installed from GitHub.
+- **Face, Hands & Body tracking: camera resolution / FPS now come from the camera.** The tab used to offer a fixed 320×240 / 640×480 / 1280×720 and 15–60 fps list and capped everything at 1080p/60, whatever the webcam could actually do. It now reads the selected camera's real capabilities (`MediaStreamTrack.getCapabilities()`, or from the tracker while it's running) and lists only the modes it supports — 4K, 1440p, 1080p, 720p … down to 240p, plus the camera's own maximum if it's an unusual size — and only the frame rates it reports (up to 120 fps). New **Auto** (default) picks 720p @ 30 or the closest the camera has, which is plenty for tracking. The tab shows what the camera supports and what it's actually running at, and says so when the camera picked a different mode than asked. Changing camera, resolution or FPS while tracking reopens the camera straight away.
+- **Blank and stale overlay content.** Detached notices no longer leave an empty main alerts-only box; pop-out renderers keep processing while hidden. Widget selectors target panel elements rather than the document body, keeping media controls inside their overlay. Identical feed settings no longer invalidate in-flight music detection.
+### Added
+- **Body tracking (full body) from the same webcam — VRChat OSC trackers + desktop body parameters.** The Face & Hands tab is now *Face, Hands & Body*: a third MediaPipe model (Pose, 33 landmarks) runs on the same single camera stream as face and hands.
+  - **VRChat OSC trackers** (`/tracking/trackers/1–8` + head alignment): hip, chest, feet, knees and optionally elbows, in VRChat's format (metres, Unity left-handed Y-up space, Euler degrees applied Z-X-Y), with the floor found from your feet (or your height when they're out of view), streamed every frame. **VRChat only enables full-body tracking in VR mode** (PC VR, or Quest over the network) — on desktop it ignores OSC trackers; VRChat's docs and settings mark FBT as VR-only and there's an open feature request for desktop OSC FBT.
+  - **Desktop body parameters** (`BT/…`, works without VR, OSC only): leg forward/sideways and knee bend, arm forward/raise and elbow bend, spine bend/side/twist, crouch, detected / legs-visible — joint angles an avatar animator can turn into leg, spine and arm poses. Like the hand parameters, only the ones the avatar has are sent, and only when they change.
+  - Controls: body on/off, trackers vs. parameters, which trackers, your height, run body every N frames; live body status and bars; pose skeleton in the preview. Turning a model on or off while tracking restarts it automatically. The pose model (`pose_landmarker_full.task`) downloads once from Google's MediaPipe storage like the others.
+  - Researched XR Animator (ButzYung/SystemAnimatorOnline) for camera body tracking. It sends VMC to VSeeFace / Warudo / VNyan rather than VRChat OSC, and its code is CC BY-NC-SA 4.0, which isn't compatible with the KitsuNexus licence — so nothing was copied; this is a separate implementation on MediaPipe Pose (Apache-2.0).
+- **Renderer and event delivery checks.** An isolated Electron smoke check exercises actual music/heart content, activity cards, expiry and reappearance. A log-tail integration test verifies startup suppression and subsequent joins/avatar changes/leaves. Optional `--hud-diagnostics` records local delivery/visibility metadata for troubleshooting.
+
+
+### Fixed
+- **Duplicate launch and overlay cleanup.** Single-instance rejection now exits before loading collectors or creating windows. Quit explicitly closes HUD, pop-outs and VR surfaces. Local test processes were stopped following the user’s resource-pressure report; live validation remains pending.
+
+
+### Added
+- **Independent music and heart overlays.** Each has a draggable header, resizable native window, saved position/size and close control; music retains media buttons. Player search/pins work in the player overlay. Native notices hide between alerts.
+### Fixed
+- **Overlay feed synchronization.** Preferences, pins and notice pause synchronize between windows. Dedicated HUD music collection skips queries while disabled or the HUD is closed and discards results from older preference revisions. Shared log/heart collectors remain active for their other app consumers.
+
+
+### Fixed
+- **HUD controls recovery.** Explicit editor requests locate the VRChat window even during an app switch, tolerate a brief focus transition, and restore usable editor height. Shortcut failures are logged; Ctrl+Alt+F9 and a Stats-page Open HUD controls button provide alternatives.
+- **Activity alerts survive disabled HUD snapshots.** Live/player-monitoring toggles no longer suppress activity notifications. Portal removal/expiry messages from the local log now create honest portal activity alerts; other-player creation remains unconfirmed.
+
+
+### Fixed
+- **Portal alerts recognize current VRChat logs.** The live log emits `PortalManager: Pending portal request fulfilled` rather than a named portal-drop message. HUD activity and portal history now share detection, reporting request completion without inventing a creator or placement confirmation. Inventory requests and portal settings do not trigger alerts.
+
+
+### Added
+- **HUD interaction shortcut and positioning.** Ctrl+Shift+F9 focuses the HUD while VRChat stays visible; Escape or Back to game returns focus. Play mode passes clicks through. Drag headers or use corner docking; detached panels retain game-relative positions.
+- **Alerts-only overlay.** Hide the main HUD while keeping transient activity cards. Notifications stack downward, expire individually after ten seconds, and the window hides when empty. The interaction shortcut restores controls.
+
+
+### Added
+- **Desktop HUD activity feed.** Timestamped cards show joins, leaves, explicit portal drops, avatar loads/switches and world transitions from local logs. Category filters, pause, clear, fade and bounded history are supported. Startup log replay is suppressed and join/leave events within one poll are preserved. Avatar/portal reporting depends on VRChat emitting a recognized log line.
+
+
+### Added
+- **Game-attached desktop HUD.** The HUD follows the VRChat client area and hides on app switching or minimization. Read-only Win32 inspection uses the existing Koffi dependency. Windowed/borderless mode is supported; exclusive fullscreen is not guaranteed.
+- **Redesigned desktop HUD.** Dark teal cards, mint accents, consistent controls, and expandable player/layout/history panels keep the game view uncluttered.
+
+
+### Added
+- **Direct desktop HUD startup.** Launch with `npm start -- --desktop-hud` to open an interactive desktop HUD alongside the main window.
+
+
+### Fixed
+- **Desktop HUD rendering and reachable controls.** Desktop and pop-out surfaces use a solid window background to avoid invisible layered windows with software compositing. The HUD panel scrolls so quick actions and settings remain reachable at smaller sizes.
+
+
+### Added
+- **HUD history privacy controls and export.** Search saved encounters, retain 1–365 days, and export JSON or formula-safe CSV through a save dialog. Recording opt-out keeps existing records browsable. History requests require a live HUD window.
+
+
+### Fixed
+- **Local history expiry on reads.** Expired encounters are now pruned when browsing or exporting, even when recording is off. Added validated retention configuration for future HUD controls.
+
+### Added
+- **Face & Hand Tracking over OSC — a built-in VRCFaceTracking with webcam hands.** New 🙂 Face & Hands tab (OSC section). One webcam stream feeds both Google MediaPipe models (face landmarker with 52 blendshapes + head pose, hand landmarker with 21 points per hand), like VRChat's own webcam "selfie" tracking but sent over OSC.
+  - **Face:** MediaPipe blendshapes are mapped to VRCFaceTracking Unified Expressions (mapping, eye gaze and head pose ported from FoxyFace), then sent as the VRCFT **v2** parameter set (`FT/v2/JawOpen`, `EyeLidLeft`, `SmileFrownLeft`, … with VRCFT's Float / Bool / binary + `Negative` variants and `*TrackingActive` bools, ported from VRCFaceTracking), so avatars built for VRCFT work unchanged. Only parameters the current avatar has are sent (read from VRChat's OSC avatar config, updated on `/avatar/change`), only when they change, in ≤4 KB OSC bundles. Avatars with no FT eye parameters get VRChat's native `/tracking/eye/LeftRightPitchYaw` + `EyesClosedAmount`.
+  - **Hands:** finger curls, spread, VRChat-numbered gestures (fist, open, point, victory, rock, gun, thumbs up), detected flag and position as `HT/Left…` / `HT/Right…` avatar parameters (VRChat doesn't accept finger bones over OSC).
+  - **Controls:** camera / resolution / FPS, face / eyes / head / hands toggles, mirrored-camera option, expression strength, One Euro smoothing presets, hands every N frames, GPU with automatic CPU fallback, neutral-face calibration, start with KitsuNexus, live preview with landmarks and value bars.
+  - **Privacy:** runs in a hidden window whose session cancels every network request; MediaPipe pinned to 0.10.35 (1.x added usage metrics sent to Google). Models are downloaded once from Google's official MediaPipe storage and verified (size, bundle contents, SHA-256 for the face model), or picked from disk.
+- **Import favourites from VRCX.** New "Import from VRCX" button in Local Favorites reads your VRCX database (`%AppData%\VRCX\VRCX.sqlite3`, or pick the file) and imports VRCX's local avatar, world and friend favourites, with names and thumbnails from VRCX's cache. Each VRCX group becomes a "VRCX: <group>" collection. Things you've already favourited here are left alone (notes kept), so importing again is safe.
+- **VRChat server status alerts.** KitsuNexus checks status.vrchat.com every 5 minutes (the same Statuspage API VRCX uses). When VRChat has an outage or degraded service, a banner appears at the top of Home with the affected parts and open incidents (click it to open the status page), and you get an alert through the existing VR/desktop notification system (XSOverlay / OVR Toolkit / Windows). Another alert says when it's back to normal. Setting: `vrcServerStatusAlerts` (on by default).
+- **Start apps with VRChat.** New card in Quick Launch (like VRCX's auto app launcher): pick programs or shortcuts and KitsuNexus starts them when VRChat.exe starts, always or only in VR / Desktop mode (from VRChat's `--no-vr` flag), with optional arguments. It can close them again when VRChat exits (not possible for shortcuts, which have no process id), and won't start a program that's already running. Programs can only be added through the file picker, so the UI can't make the app run an arbitrary path. Windows only.
+- **Instance history, player timeline chart, Players Met and "last seen".** Every instance visit and every player's join/leave is now recorded from the VRChat log using the log's own timestamps (so re-reading the log on startup doesn't duplicate anything, and visits from a log written while KitsuNexus was closed are filled in). History gets an 🗺️ Instances list (searchable by world, with player count and duration); clicking one shows a VRCX-style timeline chart with a bar for each player's stay. 👥 Players Met lists everyone you've shared an instance with: times met, total time together, last seen and where. A friend's profile now shows "Met in VRChat: N× · time together · last seen … in …".
+- **Live Friend Feed (VRChat pipeline websocket) and a fuller Friend Log.** New 📡 Feed tab: friends coming online / going offline, changing world (with the world name), status, avatar and bio, live from VRChat's `wss://pipeline.vrchat.cloud` feed (the same one VRCX uses) while you're logged in, saved to its own capped table in the local history DB, with type filter and search. Reconnects with backoff and stops after repeated auth failures until you log in again. The Friend Log in History now also records **trust rank changes**, and the friend snapshot is saved between launches, so friends added/removed/renamed while KitsuNexus was closed are logged on the next start. The live feed and the existing 2-minute poll share one snapshot, so nothing is logged twice.
+- **Discord Rich Presence: party size, instance type and VR/Desktop.** Shows "N of M" players in your instance as a Discord party (M = world capacity when logged into VRChat; lifted if the instance is over cap) and the instance type next to the world ("In The Black Cat (Friends+)"). The status line gets "(VR)" or "(Desktop)", read from VRChat.exe's `--no-vr` command-line flag like VRCX does. New `hidePrivateInstances` setting (on by default) also hides the world, party and Join button in Invite, Invite+ and Group-members instances, whatever your status. The party id sent to Discord is a hash, not the raw instance id. Toggles: `showPartySize`, `showPlatform`, `hidePrivateInstances`.
+- **More world media in Discord Rich Presence: dance worlds, LS Media, ProTV and YouTube titles.** The Popcorn Palace parser is now a general `worldMedia.js` tracker (same log sources as VRCX). It also reads VR Dancing's `[VRCX] VideoPlay(VRDancing)` line, LS Media's `[VRCX] LSMedia` line, and ProTV's `nowplaying {json}` events (also used by PyPyDance-style worlds, with multiple screens and play/pause/seek/stop). Plain video player URLs on YouTube get their title and thumbnail from YouTube oEmbed (no API key); other URLs are never shown, since they can be private streams. Dance worlds read "💃 <song> · Dancing in <world>", cinemas "🍿 <movie>", other videos "🎬 <title>". Videos of unknown length drop off after 30 minutes. The config flag is now `showWorldMedia`.
+- **Popcorn Palace in Discord Rich Presence, with the movie poster as the big icon.** The VRChat log tracker now reads the `[VRCX] VideoPlay(PopcornPalace) {json}` line the Popcorn Palace worlds write (the same source VRCX uses) and keeps the current movie name, poster URL, position, length and paused state. While you're watching, the presence shows `🍿 <movie>` on the top line, "Watching in <world>" (or "⏸ Paused in") underneath, the poster as the large image (KitsuNexus logo moves to the small image; falls back to the logo when the world gives no poster), and a movie elapsed/remaining bar instead of app uptime. The movie shows on every status; Ask Me / Do Not Disturb only hide the world name and join button (state reads "Watching a movie" instead). Clears on leaving or switching instance, ignores stale log lines from finished movies, and re-pushes once after the movie ends so the presence drops back to normal.
+
+### Fixed
+- **Friend added/removed/renamed events were lost across restarts.** The friend-diff baseline was only kept in memory, so every launch started a fresh baseline and anything that changed while the app was closed was never logged. The snapshot is now persisted.
+- **Video links from SDK2, USharpVideo and AVPro players were missing from the media-link history.** The old regex only matched `resolve URL '…'` and `added URL '…'` with quotes, but SDK2 logs `User X added URL https://…` without quotes, USharpVideo logs `Started video load for URL: …` and AVPro logs `Resolving URL '…'`. All four formats are now picked up.
+
 ## [1.0.81] - 2026-11-01
 
 ### Added

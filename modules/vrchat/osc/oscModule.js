@@ -58,6 +58,17 @@ function sendBufferToTargets (buffer, label) {
   })
 }
 
+// Send many { address, type: 'float'|'int'|'bool'|'floats', value } messages as
+// OSC bundles (≤4096 bytes each) to every target — used by face/hand tracking.
+function sendMessages (messages) {
+  const { createOscBundles } = require('./oscEncode')
+  const toArgs = m => m.type === 'floats' ? m.value.map(v => ({ type: 'float', value: Number(v) || 0 }))
+    : [{ type: m.type === 'bool' ? 'bool' : m.type === 'int' ? 'int' : 'float', value: m.type === 'int' ? (parseInt(m.value, 10) || 0) : m.type === 'bool' ? !!m.value : (Number(m.value) || 0) }]
+  const bundles = createOscBundles(messages.map(m => ({ address: m.address, args: toArgs(m) })))
+  for (const b of bundles) sendBufferToTargets(b, 'OSC tracking')
+  return bundles.length
+}
+
 function setOscReceiverPort (port) {
   if (!Number.isFinite(port) || receiverPort === port) return
 
@@ -321,6 +332,7 @@ module.exports = {
   setExtraOscReceiverPorts,
   sendOsc,
   sendParam,
+  sendMessages,
   sendBeat,
   sendChatboxMessage,
   startOscReceiver,
