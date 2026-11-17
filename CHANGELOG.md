@@ -5,6 +5,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.82] - 2026-11-17
+
 ### Fixed
 - **`npm install` EBADENGINE warning for `node-notifier@11`; CI on an unsupported Node.** `@nekosuneprojects/vrnotications` depends on `node-notifier@11`, which needs Node `^22.22.2 || >=24.15.0`, but the build and test workflows ran on Node 20 (end-of-life) and the security audit on 22. Workflows now use Node 24, and `package.json` declares `engines` with the same range so an older local Node gives one clear message. On a dev PC, update Node to 24.15 or newer. The other two install warnings are upstream and harmless: `rimraf@2.6.3` comes from electron-builder → electron-winstaller → `temp` (build-time only; newer rimraf would break `temp`), and `gitignore-fallback` comes from `discord-rpc`'s `register-scheme`, which is installed from GitHub.
 - **Face, Hands & Body tracking: camera resolution / FPS now come from the camera.** The tab used to offer a fixed 320×240 / 640×480 / 1280×720 and 15–60 fps list and capped everything at 1080p/60, whatever the webcam could actually do. It now reads the selected camera's real capabilities (`MediaStreamTrack.getCapabilities()`, or from the tracker while it's running) and lists only the modes it supports — 4K, 1440p, 1080p, 720p … down to 240p, plus the camera's own maximum if it's an unusual size — and only the frame rates it reports (up to 120 fps). New **Auto** (default) picks 720p @ 30 or the closest the camera has, which is plenty for tracking. The tab shows what the camera supports and what it's actually running at, and says so when the camera picked a different mode than asked. Changing camera, resolution or FPS while tracking reopens the camera straight away.
