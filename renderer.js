@@ -5558,6 +5558,12 @@ $('localFavImport').addEventListener('click', async () => {
   setText('localFavOut', r.ok ? `✅ Imported ${r.imported} favorite(s).` : (r.error === 'cancelled' ? 'Cancelled' : 'Error: ' + r.error))
 })
 
+$('localFavImportVrcx').addEventListener('click', async () => {
+  setText('localFavOut', 'Importing from VRCX…')
+  const r = await api.localFavImportVrcx()
+  setText('localFavOut', r.ok ? `✅ Imported ${r.imported} from VRCX (${r.avatar} avatars, ${r.world} worlds, ${r.friend} friends${r.skipped ? `, ${r.skipped} already here` : ''}).` : (r.error === 'cancelled' ? 'Cancelled' : 'Error: ' + r.error))
+})
+
 /* ---------------- Cloud Sync (optional, self-hosted kitsunexus-server) ---------------- */
 let cloudSyncPollTimer = null
 async function refreshCloudSyncUi () {

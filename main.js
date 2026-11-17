@@ -1719,6 +1719,17 @@ ipcMain.handle('localfav:export', async () => {
     return { ok: true, path: r.filePath }
   } catch (err) { return { ok: false, error: err.message } }
 })
+// Import VRCX's local favourites: uses the default VRCX database if it exists,
+// otherwise asks for VRCX.sqlite3.
+ipcMain.handle('localfav:importVrcx', async () => {
+  let p = path.join(app.getPath('appData'), 'VRCX', 'VRCX.sqlite3')
+  if (!fs.existsSync(p)) {
+    const r = await dialog.showOpenDialog(mainWindow, { title: 'Find VRCX.sqlite3 (usually %AppData%\\VRCX)', properties: ['openFile'], filters: [{ name: 'VRCX database', extensions: ['sqlite3', 'sqlite', 'db'] }] })
+    if (r.canceled || !r.filePaths[0]) return { ok: false, error: 'cancelled' }
+    p = r.filePaths[0]
+  }
+  try { return localFavoritesDb.importVrcx(fs.readFileSync(p)) } catch (err) { return { ok: false, error: err.message } }
+})
 ipcMain.handle('localfav:import', async () => {
   const r = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] })
   if (r.canceled || !r.filePaths[0]) return { ok: false, error: 'cancelled' }

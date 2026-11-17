@@ -202,6 +202,51 @@ function importAll (data) {
   return { ok: true, imported }
 }
 
+// Import VRCX's own local favourites (VRCX.sqlite3): favorite_avatar / favorite_world
+// (names + thumbnails from cache_avatar / cache_world) and favorite_friend (names from
+// the <user>_friend_log_current tables). Each VRCX group becomes a "VRCX: <group>"
+// collection. Re-importing is safe: existing entries keep their notes and collection.
+function importVrcx (bytes) {
+  if (!db || !SQL) return { ok: false, error: 'Local favorites not initialised' }
+  let src
+  try { src = new SQL.Database(bytes) } catch (e) { return { ok: false, error: 'Could not open VRCX database: ' + e.message } }
+  const all = (sql) => { try { const st = src.prepare(sql); const out = []; while (st.step()) out.push(st.getAsObject()); st.free(); return out } catch (_) { return [] } }
+  const has = name => all(`SELECT name FROM sqlite_master WHERE type='table' AND name='${name}'`).length > 0
+  // sql.js opens any bytes lazily; the first real query tells us if it's a database.
+  try { src.exec('SELECT count(*) FROM sqlite_master') } catch (_) { try { src.close() } catch (_) {} return { ok: false, error: 'Not a VRCX database' } }
+  if (!['favorite_avatar', 'favorite_world', 'favorite_friend'].some(has)) { try { src.close() } catch (_) {} return { ok: false, error: 'No VRCX favourites in this file' } }
+  const counts = { avatar: 0, world: 0, friend: 0, skipped: 0 }
+  const put = (type, id, name, image, group, createdAt) => {
+    if (!id) return
+    if (findByTarget(type, id)) { counts.skipped++; return }
+    const ts = Date.parse(createdAt)
+    const now = Date.now()
+    db.run('INSERT INTO local_favorites (id,type,vrchat_id,display_name,image_url,note,collection,added_at,updated_at,deleted_at) VALUES (?,?,?,?,?,?,?,?,?,NULL)',
+      [crypto.randomUUID(), type, id, name || '', image || '', '', `VRCX: ${group || 'default'}`.slice(0, 80), Number.isFinite(ts) ? ts : now, now])
+    counts[type]++
+  }
+  if (has('favorite_avatar')) {
+    const cached = has('cache_avatar')
+    for (const r of all(`SELECT f.avatar_id AS id, f.group_name AS g, f.created_at AS c${cached ? ', a.name AS n, a.thumbnail_image_url AS i' : ''} FROM favorite_avatar f${cached ? ' LEFT JOIN cache_avatar a ON a.id = f.avatar_id' : ''}`)) put('avatar', r.id, r.n, r.i, r.g, r.c)
+  }
+  if (has('favorite_world')) {
+    const cached = has('cache_world')
+    for (const r of all(`SELECT f.world_id AS id, f.group_name AS g, f.created_at AS c${cached ? ', w.name AS n, w.thumbnail_image_url AS i' : ''} FROM favorite_world f${cached ? ' LEFT JOIN cache_world w ON w.id = f.world_id' : ''}`)) put('world', r.id, r.n, r.i, r.g, r.c)
+  }
+  if (has('favorite_friend')) {
+    const names = new Map()
+    for (const t of all("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%_friend_log_current'")) {
+      if (!/^[\w]+$/.test(t.name)) continue
+      for (const r of all(`SELECT user_id, display_name FROM "${t.name}"`)) if (r.user_id && r.display_name) names.set(r.user_id, r.display_name)
+    }
+    for (const r of all('SELECT user_id AS id, group_name AS g, created_at AS c FROM favorite_friend')) put('friend', r.id, names.get(r.id), '', r.g, r.c)
+  }
+  try { src.close() } catch (_) {}
+  persist()
+  const imported = counts.avatar + counts.world + counts.friend
+  return { ok: true, imported, ...counts }
+}
+
 function close () { flush() }
 
-module.exports = { init, getPath, defaultPath, list, add, update, remove, isFavorited, exportAll, importAll, close, listChangedSince, mergeRemote }
+module.exports = { init, getPath, defaultPath, list, add, update, remove, isFavorited, exportAll, importAll, importVrcx, close, listChangedSince, mergeRemote }

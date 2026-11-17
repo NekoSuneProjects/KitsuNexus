@@ -145,6 +145,8 @@ category's section below.
 - [ ] **Linux: app startup aborts at the tray icon.** `createTray()` loads `assets/icon.ico`, which Electron can't load on Linux, so `new Tray()` throws and the rest of the `whenReady` startup (world tracker, Discord, history, etc.) never runs. Needs a PNG tray icon on non-Windows (or a try/catch). Found while testing under Linux; not fixed here.
 - [x] **Start apps with VRChat** (auto-launch, VR/Desktop/always, close on exit) — `autoLaunch.js`, card in Quick Launch. Needs a real-Windows check of spawn/close.
 - [x] **VRChat server status banner + outage/recovery alerts** (`serverStatus.js`). No UI toggle yet for `vrcServerStatusAlerts`; couldn't test the live status.vrchat.com fetch from the dev sandbox.
+- [x] **Import VRCX local favourites** (avatars / worlds / friends → Local Favorites, `importVrcx` in `localFavoritesDb.js`).
+- [ ] History "Import VRCX" (`gamelog.importVrcx`) reports success with 0 events for a file that isn't a database — sql.js opens any bytes lazily and the per-table errors are swallowed. Validate the file first like `localFavoritesDb.importVrcx` now does. Also its VRCX table names look outdated (`gamelog_join_leave` etc.) — check against current VRCX.
 - [ ] `modules/integrations/discord/discordRpc.js` looks like an unused older Rich Presence module (nothing requires it; `discord.js` is the live one) — confirm and remove.
 
 ### Media

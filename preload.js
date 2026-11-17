@@ -263,6 +263,7 @@ window.electronAPI = {
   localFavGetPath: () => ipcRenderer.invoke('localfav:getPath'),
   localFavExport: () => ipcRenderer.invoke('localfav:export'),
   localFavImport: () => ipcRenderer.invoke('localfav:import'),
+  localFavImportVrcx: () => ipcRenderer.invoke('localfav:importVrcx'),
   localFavChoosePath: () => ipcRenderer.invoke('localfav:choosePath'),
   cloudSyncStatus: () => ipcRenderer.invoke('cloudsync:status'),
   cloudSyncStartPairing: (baseUrl, deviceName) => ipcRenderer.invoke('cloudsync:startPairing', { baseUrl, deviceName }),
