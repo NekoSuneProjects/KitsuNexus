@@ -92,6 +92,13 @@
           "filter": [
             "**/*"
           ]
+        },
+        {
+          "from": "unity/KitsuNexusTracking",
+          "to": "unity/KitsuNexusTracking",
+          "filter": [
+            "**/*"
+          ]
         }
       ]
     },
@@ -138,7 +145,16 @@
     },
     "portable": {
       "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "unity/KitsuNexusTracking",
+        "to": "unity/KitsuNexusTracking",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ]
   },
   "keywords": [
     "vrchat",

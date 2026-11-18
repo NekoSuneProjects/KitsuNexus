@@ -149,3 +149,21 @@ test('OSC bundles stay under 4096 bytes and decode', () => {
   const first = decodeOscMessage(bundles[0].subarray(20, 20 + firstLen))
   assert.equal(first.address, '/avatar/parameters/FT/v2/Param0')
 })
+
+test('"Send every parameter (testing)" still drives the avatar\'s real (prefixed / binary) parameters', () => {
+  const FT = require('../modules/vrchat/tracking/ftParams')
+  const HT = require('../modules/vrchat/tracking/handParams')
+  const P = '/avatar/parameters/'
+  const avatar = [
+    { address: P + 'EchoFT/v2/JawOpen', type: 'Float' },
+    ...[1, 2, 4, 8].map(n => ({ address: P + `OSCm/Binary/EchoFT/v2/JawOpen${n}`, type: 'Bool' })),
+    { address: P + 'Tracking/HT/LeftIndexCurl', type: 'Float' }
+  ]
+  const plan = FT.planForAvatar(avatar, { sendAll: true })
+  const jaw = plan.floats.find(f => f.def.name === 'v2/JawOpen')
+  assert.equal(jaw.address, P + 'EchoFT/v2/JawOpen', 'uses the avatar\'s own address, not /avatar/parameters/v2/JawOpen')
+  assert.equal(plan.binaries.find(b => b.def.name === 'v2/JawOpen').bits.length, 4, 'binary bits still sent')
+  assert.ok(plan.floats.some(f => f.generic && f.address === P + 'v2/MouthClosed'), 'params the avatar lacks still go out generically')
+  const hands = HT.planHands(avatar, { sendAll: true })
+  assert.equal(hands.find(h => h.name === 'HT/LeftIndexCurl').address, P + 'Tracking/HT/LeftIndexCurl')
+})

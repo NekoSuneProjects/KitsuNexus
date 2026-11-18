@@ -299,6 +299,17 @@ jobs:
             if [ -s vt-notes.md ]; then printf "\n"; cat vt-notes.md; fi
           } >> NOTES.md
           echo "----- release notes -----"; cat NOTES.md
+      # Unity avatar setup tool (unity/KitsuNexusTracking) as a VRChat Creator Companion
+      # package with the same version as the app, plus a VPM listing (vpm.json) that VCC
+      # reads from the latest release. Standard-library Python only.
+      - name: Package Unity avatar tool (VCC / VPM)
+        run: |
+          python3 scripts/build-vpm.py "$RELEASE_TAG" "$GITHUB_REPOSITORY" artifacts/unity-tool
+          {
+            printf "\n## 🧩 Unity avatar tool (desktop hand & body tracking)\n"
+            printf -- "- **VRChat Creator Companion:** Settings → Packages → Add Repository → \`https://github.com/%s/releases/latest/download/vpm.json\`\n" "$GITHUB_REPOSITORY"
+            printf -- "- Or download \`com.nekosuneprojects.kitsunexus.tracking-%s.zip\`, unzip it and use Package Manager → *Add package from disk* (pick its package.json).\n" "${RELEASE_TAG#v}"
+          } >> NOTES.md
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -342,6 +353,8 @@ jobs:
             case "$name" in
               *.exe)              label="🪟 Windows Installer (.exe)" ;;
               *.msi)              label="🪟 Windows Installer (.msi)" ;;
+              com.nekosuneprojects.kitsunexus.tracking-*.zip) label="🧩 Unity avatar tool (VCC package)" ;;
+              *.json)             continue ;;
               *.zip)              label="🪟 Windows App ZIP" ;;
               *arm64*.AppImage)   label="🐧 Linux ARM64 (.AppImage)" ;;
               *aarch64*.AppImage) label="🐧 Linux ARM64 (.AppImage)" ;;

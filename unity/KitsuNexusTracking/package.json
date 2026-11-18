@@ -1,0 +1,11 @@
+{
+  "name": "com.nekosuneprojects.kitsunexus.tracking",
+  "displayName": "KitsuNexus Hand & Body Tracking Setup",
+  "version": "1.0.0",
+  "unity": "2022.3",
+  "description": "Editor tools for KitsuNexus webcam tracking: one-click avatar setup that turns the HT/ (fingers) and BT/ (body) OSC parameters into Gesture/Action layers next to an existing face-tracking setup, plus a live OSC preview in the Scene view. Needs the VRChat Avatars SDK 3.",
+  "author": { "name": "NekoSuneVR", "url": "https://github.com/NekoSuneProjects/KitsuNexus" },
+  "license": "SEE LICENSE IN https://github.com/NekoSuneProjects/KitsuNexus/blob/main/LICENSE",
+  "keywords": ["vrchat", "osc", "hand tracking", "body tracking", "kitsunexus"],
+  "vpmDependencies": { "com.vrchat.avatars": ">=3.5.0" }
+}

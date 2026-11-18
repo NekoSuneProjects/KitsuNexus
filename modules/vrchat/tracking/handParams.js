@@ -121,9 +121,9 @@ function planHands (avatarParams, { sendAll = false } = {}) {
   const params = Array.isArray(avatarParams) ? avatarParams : []
   const plan = []
   for (const p of HAND_PARAMS) {
-    if (sendAll) { plan.push({ ...p, address: '/avatar/parameters/' + p.name }); continue }
     const hit = params.find(a => a.type === p.type && (a.address.endsWith('/' + p.name) || a.address === p.name))
     if (hit) plan.push({ ...p, address: hit.address })
+    else if (sendAll) plan.push({ ...p, address: '/avatar/parameters/' + p.name }) // testing: only for params the avatar lacks
   }
   return plan
 }

@@ -119,3 +119,119 @@ test('knee tracker keeps a valid orientation when the thigh points straight forw
   near(Math.abs(T.leftKnee.rot[0]), 90, 1e-3)
   assert.ok(T.leftKnee.rot.every(Number.isFinite))
 })
+
+test('desktop BT params: lying down -> BT/Lying with how the body lies, straight limbs, hysteresis', () => {
+  // whole skeleton tipped onto its side (rotate about Z: up -> wearer's right)
+  const tip = (pts, deg) => { const t = deg * Math.PI / 180; return pts.map(([x, y, z]) => [x * Math.cos(t) + y * Math.sin(t), -x * Math.sin(t) + y * Math.cos(t), z]) }
+  // whole skeleton tipped onto its back (rotate about X: up -> toward the camera, face up)
+  const back = pts => pts.map(([x, y, z]) => [x, z, -y]) // face up, head away from the camera
+  const front = pts => pts.map(([x, y, z]) => [x, -z, y]) // face down
+  const st = {}
+  const up = BT.computeBodyParams(BT.readPose(pose(skeletonVrc())), st)
+  assert.equal(up['BT/Lying'], 0); assert.equal(up['BT/Detected'], true)
+  const side = BT.computeBodyParams(BT.readPose(pose(tip(skeletonVrc(), 90))), st)
+  assert.equal(side['BT/Detected'], true); assert.equal(side['BT/Lying'], 1)
+  near(side['BT/LieRoll'], -0.5, 1e-6); near(side['BT/LiePitch'], 0, 1e-6) // on the right side: roll -90°
+  for (const k of ['BT/LeftUpperLegX', 'BT/LeftKnee', 'BT/Crouch', 'BT/SpineBend', 'BT/LeftUpperArmZ']) assert.equal(side[k], 0, k)
+  // 55°: still lying (hysteresis), 40°: upright again
+  assert.equal(BT.computeBodyParams(BT.readPose(pose(tip(skeletonVrc(), 55))), st)['BT/Lying'], 1)
+  assert.equal(BT.computeBodyParams(BT.readPose(pose(tip(skeletonVrc(), 40))), st)['BT/Lying'], 0)
+  // a normal 45° lean from upright is not lying
+  assert.equal(BT.computeBodyParams(BT.readPose(pose(tip(skeletonVrc(), 45))), {})['BT/Lying'], 0)
+  // on the back: pitch -90° (face up)
+  const onBack = BT.computeBodyParams(BT.readPose(pose(back(skeletonVrc()))), {})
+  assert.equal(onBack['BT/Lying'], 1); near(onBack['BT/LiePitch'], -1, 1e-6); near(onBack['BT/LieRoll'], 0, 1e-6)
+  near(BT.computeBodyParams(BT.readPose(pose(front(skeletonVrc()))), {})['BT/LiePitch'], 1, 1e-6)
+})
+
+test('desktop BT params: arms out of view go back to the default hanging pose', () => {
+  const sk = skeletonVrc({ 14: [0.45, 0.5, 0], 16: [0.45, 0.75, 0] }) // right arm raised
+  const mp = toMp(sk)
+  const seenAll = BT.computeBodyParams(BT.readPose({ world: mp, image: mp.map(() => [0.5, 0.5, 0, 1]) }), {})
+  assert.ok(seenAll['BT/RightUpperArmZ'] > 0.4)
+  const gone = new Set([14, 16]) // elbow + wrist below the picture
+  const out = BT.computeBodyParams(BT.readPose({ world: mp, image: mp.map((_, i) => [0.5, gone.has(i) ? 1.4 : 0.5, 0, 1]) }), {})
+  for (const k of ['BT/RightUpperArmX', 'BT/RightUpperArmZ', 'BT/RightElbow', 'BT/RightUpperArmTwist']) assert.equal(out[k], 0, k)
+})
+
+// Image landmarks (0..1, y down) for a person standing in view; `lift` moves everything up.
+function img ({ lift = 0, hipLift = lift, ankLift = lift, scale = 1 } = {}) {
+  const p = Array.from({ length: 33 }, () => [0.5, 0.5, 0, 1])
+  const at = (i, x, y) => { p[i] = [0.5 + (x - 0.5) * scale, 0.5 + (y - 0.5) * scale, 0, 1] }
+  at(11, 0.45, 0.30 - lift); at(12, 0.55, 0.30 - lift)
+  at(23, 0.47, 0.55 - hipLift); at(24, 0.53, 0.55 - hipLift)
+  at(27, 0.47, 0.90 - ankLift); at(28, 0.53, 0.90 - ankLift)
+  return p
+}
+
+test('jump detection: hips + feet rising together fires once per jump', () => {
+  const st = {}; let t = 0; const step = (o) => BT.detectJump(img(o), st, (t += 33))
+  for (let i = 0; i < 10; i++) assert.equal(step({}), false) // standing: learn the base
+  assert.equal(step({ lift: 0.03 }), false) // small bob: no
+  assert.equal(step({ lift: 0.08 }), true) // jump (0.32 torso lengths up)
+  assert.equal(step({ lift: 0.10 }), false) // still in the air: not again
+  for (let i = 0; i < 5; i++) assert.equal(step({}), false) // landed
+  for (let i = 0; i < 20; i++) step({}) // past the cooldown
+  assert.equal(step({ lift: 0.08 }), true) // second jump
+})
+
+test('jump detection ignores standing up from a crouch, stepping back, and missing feet', () => {
+  let st = {}; let t = 0
+  for (let i = 0; i < 10; i++) BT.detectJump(img({ hipLift: -0.1 }), st, (t += 33)) // crouched
+  assert.equal(BT.detectJump(img({}), st, (t += 33)), false, 'standing up: hips rise, feet stay')
+  st = {}; t = 0
+  for (let i = 0; i < 10; i++) BT.detectJump(img({}), st, (t += 33))
+  assert.equal(BT.detectJump(img({ scale: 0.75 }), st, (t += 33)), false, 'stepping back: torso shrinks')
+  st = {}; t = 0
+  for (let i = 0; i < 10; i++) BT.detectJump(img({}), st, (t += 33))
+  const noFeet = img({ lift: 0.08 }); noFeet[27][3] = 0.1; noFeet[28][3] = 0.1
+  assert.equal(BT.detectJump(noFeet, st, (t += 33)), false, 'feet not visible')
+})
+
+test('engine: jump presses and releases VRChat /input/Jump when enabled', async () => {
+  const sent = []
+  const eng = createTrackingEngine({ send: m => sent.push(...m) })
+  eng.setConfig({ body: true, jump: true, bodyTrackers: false })
+  const world = toMp(skeletonVrc())
+  let t = 1000
+  for (let i = 0; i < 10; i++) eng.onFrame({ t: (t += 33), pose: { world, image: img({}) } })
+  eng.onFrame({ t: (t += 33), pose: { world, image: img({ lift: 0.08 }) } })
+  const presses = sent.filter(m => m.address === '/input/Jump')
+  assert.deepEqual(presses.map(m => m.value), [1])
+  await new Promise(r => setTimeout(r, 200))
+  assert.deepEqual(sent.filter(m => m.address === '/input/Jump').map(m => m.value), [1, 0])
+  assert.equal(eng.status().jumps, 1)
+  eng.setConfig({ jump: false })
+  eng.onFrame({ t: (t += 2000), pose: { world, image: img({}) } })
+  eng.onFrame({ t: (t += 33), pose: { world, image: img({ lift: 0.08 }) } })
+  assert.equal(sent.filter(m => m.address === '/input/Jump').length, 2, 'off = no jumps')
+})
+
+test('desktop BT params: upper-arm twist — forearm up / forward / down, same meaning for both arms', () => {
+  const tw = (side, wrist) => {
+    const sh = side === 'L' ? [-0.2, 0.5, 0] : [0.2, 0.5, 0]; const el = side === 'L' ? [-0.45, 0.5, 0] : [0.45, 0.5, 0]
+    const w = [el[0] + wrist[0], el[1] + wrist[1], el[2] + wrist[2]]
+    const t = side === 'L' ? { 11: sh, 13: el, 15: w } : { 12: sh, 14: el, 16: w }
+    return BT.computeBodyParams(BT.readPose(pose(skeletonVrc(t))), {})[`BT/${side === 'L' ? 'Left' : 'Right'}UpperArmTwist`]
+  }
+  for (const s of ['L', 'R']) {
+    near(tw(s, [0, 0.25, 0]), 1, 1e-6) // hand raised: forearm straight up
+    near(tw(s, [0, 0, 0.25]), 0, 1e-6) // forearm forward
+    near(tw(s, [0, -0.25, 0]), -1, 1e-6) // forearm down
+    near(tw(s, [0, 0.25, 0.25]), 0.5, 1e-6) // 45° between forward and up
+  }
+  near(tw('L', [-0.25, 0, 0]), 0, 1e-6) // straight arm: no twist
+})
+
+test('desktop BT params: sitting at a desk — guessed legs/hips below the picture are ignored', () => {
+  // image y > 1 for hips, knees, ankles, heels, toes (out of the camera picture)
+  const below = new Set([23, 24, 25, 26, 27, 28, 29, 30, 31, 32])
+  const sk = skeletonVrc({ 25: [-0.1, 0, 0.45], 27: [-0.1, -0.4, 0.45], 12: [0.2, 0.45, 0] }) // "kneeling" guess + right shoulder lower
+  const mp = toMp(sk)
+  const p = { world: mp, image: mp.map((_, i) => [0.5, below.has(i) ? 1.3 : 0.5, 0, 0.9]) }
+  const out = BT.computeBodyParams(BT.readPose(p), {})
+  assert.equal(out['BT/Detected'], true)
+  for (const k of ['BT/LeftUpperLegX', 'BT/LeftKnee', 'BT/RightUpperLegX', 'BT/Crouch', 'BT/SpineBend']) assert.equal(out[k], 0, k)
+  assert.equal(out['BT/LegsVisible'], false)
+  assert.ok(out['BT/SpineSide'] > 0.1, 'side lean from the shoulders: ' + out['BT/SpineSide'])
+})

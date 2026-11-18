@@ -82,6 +82,7 @@ const { createFriendFeed } = require('./modules/vrchat/friends/friendFeed')
 const { createAutoLauncher } = require('./modules/vrchat/launcher/autoLaunch')
 const { createServerStatus } = require('./modules/vrchat/status/serverStatus')
 const { createTrackingEngine } = require('./modules/vrchat/tracking/trackingEngine')
+const { createKinect } = require('./modules/vrchat/tracking/kinect')
 const { createModelStore } = require('./modules/vrchat/tracking/models')
 const { createTrackerWindow } = require('./modules/vrchat/tracking/trackerWindow')
 const { startWeather, stopWeather, getWeather } = require('./modules/weather/weatherModule')
@@ -147,7 +148,16 @@ const { recognizeAudio, getProviderStatus } = require('./modules/integrations/os
 
 // The UI is lightweight; GPU compositing just wastes power. This drops the
 // "GPU Very high" usage to near zero. Must be called before app is ready.
-app.disableHardwareAcceleration()
+// Exception: "Use graphics card for tracking" (Face, Hands & Body). Without hardware
+// acceleration WebGL falls back to Chromium's software GPU (SwiftShader), which makes
+// MediaPipe's GPU mode slower than its CPU mode (~700 ms/frame measured), so face/hand/
+// body tracking needs the real GPU. Read once at startup; changing it needs a restart.
+// Default for people who never touched the new switch: on if they already use tracking
+// with "Use GPU" (the old checkbox, which was on by default), off for everyone else.
+const trackingCam = settings.get('faceTracking.camera', null)
+const HW_ACCEL_DEFAULT = !!(trackingCam && trackingCam.gpu !== false)
+const HW_ACCEL = settings.get('gpuAcceleration', HW_ACCEL_DEFAULT) === true
+if (!HW_ACCEL) app.disableHardwareAcceleration()
 
 function configurePortableMode () {
   const portableRoot = process.env.NEKOSUNE_PORTABLE_DIR ||
@@ -1719,8 +1729,14 @@ const trackerWin = createTrackerWindow({
   onPreview: img => { if (trackingPreview) push('tracking:preview', img) }
 })
 const getCameraSettings = () => ({ ...CAMERA_DEFAULTS, ...(settings.get('faceTracking.camera', {}) || {}) })
+// Kinect v1 body source (created on first use: it compiles a small bridge on this PC).
+let kinect = null
+function getKinect () {
+  if (!kinect) kinect = createKinect({ dataDir: app.getPath('userData'), onFrame: f => { if (trackingRunning) trackingEngine.onKinectFrame(f) }, onStatus: () => pushTrackingStatus(), log: (...a) => console.log(...a) })
+  return kinect
+}
 function trackingStatus () {
-  return { ...trackingEngine.status(), running: trackingRunning, tracker: trackerState, models: getTrackingModels().status(), camera: getCameraSettings() }
+  return { ...trackingEngine.status(), running: trackingRunning, tracker: trackerState, kinect: kinect ? kinect.status() : null, models: getTrackingModels().status(), camera: getCameraSettings(), hwAccel: HW_ACCEL, gpuSetting: settings.get('gpuAcceleration', HW_ACCEL_DEFAULT) === true }
 }
 function pushTrackingStatus () { push('tracking:status', trackingStatus()) }
 
@@ -1733,15 +1749,22 @@ async function startTracking () {
   try {
     if (wantFace) models.face = store.load('face')
     if (cfg.hands) models.hand = store.load('hand')
-    if (cfg.body) models.pose = store.load('pose')
+    // Kinect as the body source: no webcam pose model needed
+    if (cfg.body && cfg.bodySource !== 'kinect') models.pose = store.load('pose')
   } catch (err) { return { ok: false, error: err.code === 'ENOENT' ? 'Download the tracking models first' : err.message, needModels: true } }
-  if (!models.face && !models.hand && !models.pose) return { ok: false, error: 'Turn on face, hand or body tracking first' }
+  const kinectBody = !!(cfg.body && cfg.bodySource === 'kinect')
+  if (!models.face && !models.hand && !models.pose && !kinectBody) return { ok: false, error: 'Turn on face, hand or body tracking first' }
   osc.setOscPort(settings.get('oscPort', 9000))
   if (!trackingOscUnsub) trackingOscUnsub = osc.addOscListener((address, args) => trackingEngine.onOsc(address, args))
   if (!trackingEngine.status().avatar) trackingEngine.loadNewestAvatar()
   trackingRunning = true
   trackerState = { state: 'starting' }
-  await trackerWin.start({ ...cam, models, face: !!models.face, hands: !!models.hand, pose: !!models.pose, mirror: cfg.mirror, preview: trackingPreview })
+  // GPU mode only with real hardware acceleration; otherwise MediaPipe's CPU (WASM/XNNPACK)
+  // path, which is far faster than the software-emulated GPU.
+  if (models.face || models.hand || models.pose) await trackerWin.start({ ...cam, gpu: !!cam.gpu && HW_ACCEL, models, face: !!models.face, hands: !!models.hand, pose: !!models.pose, mirror: cfg.mirror, preview: trackingPreview })
+  else { trackerWin.stop(); trackerState = { state: 'running', note: 'Webcam off — Kinect body only' } }
+  if (kinectBody) getKinect().start({ seated: !!cfg.kinectSeated }).catch(e => console.warn('kinect:', e.message))
+  else if (kinect) kinect.stop()
   clearInterval(trackingStatusTimer); trackingStatusTimer = setInterval(pushTrackingStatus, 500)
   pushTrackingStatus()
   return { ok: true }
@@ -1751,6 +1774,7 @@ function stopTracking (opts = {}) {
   trackingRunning = false
   clearInterval(trackingStatusTimer); trackingStatusTimer = null
   trackerWin.stop()
+  if (kinect) kinect.stop()
   if (was) trackingEngine.stop()
   if (trackingOscUnsub) { trackingOscUnsub(); trackingOscUnsub = null }
   if (!opts.keepError) trackerState = { state: 'stopped' }
@@ -1760,7 +1784,7 @@ function stopTracking (opts = {}) {
 ipcMain.handle('tracking:status', () => trackingStatus())
 ipcMain.handle('tracking:start', () => startTracking())
 ipcMain.handle('tracking:stop', () => stopTracking())
-const neededModels = c => [(c.face || c.eyes || c.head) && 'face', c.hands && 'hand', c.body && 'pose'].filter(Boolean).join(',')
+const neededModels = c => [(c.face || c.eyes || c.head) && 'face', c.hands && 'hand', c.body && (c.bodySource === 'kinect' ? (c.kinectSeated ? 'kinect-seated' : 'kinect') : 'pose')].filter(Boolean).join(',')
 ipcMain.handle('tracking:config', async (e, patch = {}) => {
   const before = neededModels(trackingEngine.getConfig())
   const cfg = trackingEngine.setConfig(patch || {})
@@ -1770,7 +1794,7 @@ ipcMain.handle('tracking:config', async (e, patch = {}) => {
     if (!r.ok) { stopTracking(); trackerState = { state: 'error', error: r.error } }
     return trackingStatus()
   }
-  trackerWin.update({ face: cfg.face || cfg.eyes || cfg.head, hands: cfg.hands, pose: cfg.body, mirror: cfg.mirror })
+  trackerWin.update({ face: cfg.face || cfg.eyes || cfg.head, hands: cfg.hands, pose: cfg.body && cfg.bodySource !== 'kinect', mirror: cfg.mirror })
   return trackingStatus()
 })
 // Camera settings (device, resolution, fps, GPU, hands every N frames, auto-start).
@@ -1782,6 +1806,8 @@ ipcMain.handle('tracking:camera', async (e, patch = {}) => {
   for (const [k, lo, hi] of [['handsEveryN', 1, 4], ['poseEveryN', 1, 4]]) if (Number.isFinite(patch[k])) n[k] = Math.round(Math.min(hi, Math.max(lo, patch[k])))
   if ((n.width === 0) !== (n.height === 0)) { n.width = 0; n.height = 0 } // resolution is Auto as a pair
   for (const k of ['gpu', 'autoStart']) if (typeof patch[k] === 'boolean') n[k] = patch[k]
+  // the GPU checkbox also decides hardware acceleration at the next start
+  if (typeof patch.gpu === 'boolean') settings.set('gpuAcceleration', patch.gpu)
   settings.set('faceTracking.camera', n)
   // new camera / resolution / fps while running: reopen the camera with it
   if (trackingRunning && ['deviceId', 'width', 'height', 'fps'].some(k => n[k] !== cur[k])) startTracking().catch(() => {})
@@ -1791,6 +1817,15 @@ ipcMain.handle('tracking:preview', (e, on) => { trackingPreview = !!on; trackerW
 ipcMain.handle('tracking:calibrate', (e, seconds) => { trackingEngine.startCalibration(Math.min(10, Math.max(1, Number(seconds) || 2))); return true })
 ipcMain.handle('tracking:resetCalibration', () => { trackingEngine.resetCalibration(); return trackingStatus() })
 ipcMain.handle('tracking:reloadAvatar', () => { trackingEngine.loadNewestAvatar(); return trackingStatus() })
+// Unity avatar setup tool (unity/KitsuNexusTracking) — shipped as an extra resource in builds.
+ipcMain.handle('tracking:openUnityTool', async () => {
+  const dir = app.isPackaged
+    ? path.join(process.resourcesPath, 'unity', 'KitsuNexusTracking')
+    : path.join(__dirname, 'unity', 'KitsuNexusTracking')
+  if (!fs.existsSync(dir)) return { ok: false, error: 'Unity tool folder not found: ' + dir }
+  const err = await shell.openPath(dir)
+  return err ? { ok: false, error: err } : { ok: true, path: dir }
+})
 ipcMain.handle('tracking:downloadModel', async (e, kind) => {
   if (!['face', 'hand', 'pose'].includes(kind)) return { ok: false, error: 'Unknown model' }
   const r = await getTrackingModels().download(kind, p => push('tracking:modelProgress', { kind, progress: p }))
@@ -2153,8 +2188,14 @@ const pipeline = createPipeline({
 })
 
 let friendDiffTimer = null
+let lastFriendDiff = 0
 async function pollFriendDiff () {
   if (!vrchatApi.isLoggedIn() || vrchatApi.isRateLimited()) return
+  // The pipeline websocket already delivers friend online/offline/location/add/remove live,
+  // so while it's connected the full re-list (several paged requests) only runs every
+  // 10 minutes as a safety net instead of every 2.
+  if (pipeline.status() === 'connected' && Date.now() - lastFriendDiff < 600000) return
+  lastFriendDiff = Date.now()
   // Always fetch fresh: the paginated buckets can silently miss friends mid-transition,
   // causing spurious unfriend/refriend events. getAllFriends() reconciles against the
   // authoritative auth/user.friends id array so the list is stable and complete.
@@ -2168,6 +2209,7 @@ async function pollFriendDiff () {
 function startFriendDiff () { stopFriendDiff(); pollFriendDiff(); friendDiffTimer = setInterval(pollFriendDiff, 120000) }
 function stopFriendDiff () { if (friendDiffTimer) { clearInterval(friendDiffTimer); friendDiffTimer = null } }
 
+ipcMain.handle('vrchat:apiStats', () => vrchatApi.getApiStats())
 ipcMain.handle('history:list', (e, opts) => gamelog.list(opts || {}))
 ipcMain.handle('history:clear', () => { gamelog.clear(); return true })
 ipcMain.handle('history:log', (e, { type, name, detail, world } = {}) => { gamelog.log(type, name, detail, world); return true })

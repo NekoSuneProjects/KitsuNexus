@@ -3332,6 +3332,20 @@ $('vrc2faVerify').addEventListener('click', async () => {
     loadRightbar(); loadNotifications(); loadProfileEditor()
   } else setText('vrcAcctOut', 'Error: ' + (r.error || '2FA failed'))
 })
+// VRChat API traffic readout (VRChat tab) — what KitsuNexus has been asking VRChat for.
+async function renderApiTraffic () {
+  if (!$('vrcApiTraffic') || $('vrchat').offsetParent === null) return
+  const s = await api.vrchatApiStats().catch(() => null); if (!s) return
+  $('vrcApiTraffic').textContent = `— ${s.lastMinute}/min, ${s.last10Minutes} in 10 min${s.queued ? `, ${s.queued} queued` : ''}${s.rateLimited ? ` · ⏸ paused by VRChat for ${s.rateLimitedForSeconds}s` : ''}${s.times429 ? ` · ${s.times429}× told to slow down` : ''}`
+  const top = $('vrcApiTop'); top.textContent = ''
+  for (const t of s.topLast10Minutes) {
+    const a = document.createElement('span'); a.textContent = t.endpoint; a.style.fontFamily = 'monospace'
+    const b = document.createElement('span'); b.textContent = String(t.count)
+    top.append(a, b)
+  }
+  if (!s.topLast10Minutes.length) top.textContent = 'No requests in the last 10 minutes.'
+}
+setInterval(renderApiTraffic, 5000)
 $('vrcLogout').addEventListener('click', async () => { await api.vrchatLogout(); resetFriendsCache(); setAcctState(false, 'Logged out'); $('vrcAutoStatus').checked = false; api.saveSetting('vrcAutoStatus', false) })
 $('vrcAutoStatus').addEventListener('change', e => { api.saveSetting('vrcAutoStatus', e.target.checked); api.vrchatAutoStatus(e.target.checked); $('discordVrcStatus').disabled = e.target.checked })
 const STATUS_KEY = { 'join me': 'join', active: 'active', 'ask me': 'ask', busy: 'busy', offline: 'busy' }
@@ -7125,7 +7139,9 @@ function ftRender (s) {
   setText('ftState', s.running ? (FT_STATE[t.state] || t.state || 'running') : (t.state === 'error' ? 'error' : 'off'))
   setText('ftOut', t.state === 'error' ? '⚠️ ' + (t.error || 'Error') : s.running ? `${t.camera ? '📷 ' + t.camera + ' · ' : ''}${t.width ? t.width + '×' + t.height : ''}` : 'Stopped')
   const hands = s.hands || {}
-  setText('ftStats', s.running ? `${s.fps || 0} fps · face ${s.face ? '✅' : '—'} · hands ${hands.Left ? 'L' : '–'}${hands.Right ? 'R' : '–'} · ${s.sent || 0} values sent` : 'Not running')
+  const tk = s.tracker || {}; const tm = tk.ms || {}
+  const perf = tk.ms ? ` · ${tk.gpu === false ? 'CPU' : 'GPU'} · ${tm.frame || 0} ms/frame (face ${tm.face || 0}, hands ${tm.hands || 0}, body ${tm.pose || 0})` : ''
+  setText('ftStats', s.running ? `${s.fps || 0} fps · face ${s.face ? '✅' : '—'} · hands ${hands.Left ? 'L' : '–'}${hands.Right ? 'R' : '–'} · ${s.sent || 0} values sent${perf}` : 'Not running')
   const v = s.values || {}
   let bars = ''
   if (s.face) bars += ftBar('Jaw open', v.JawOpen) + ftBar('Smile L / R', ((v.SmileLeft || 0) + (v.SmileRight || 0)) / 2) + ftBar('Eye open L', v.EyeOpenLeft) + ftBar('Eye open R', v.EyeOpenRight) + ftBar('Brow up', v.BrowUp) + ftBar('Pucker', v.Pucker) + ftBar('Look X', v.EyeX, true) + ftBar('Head yaw', v.HeadYaw, true)
@@ -7143,7 +7159,19 @@ function ftRender (s) {
   $('ftModels').innerHTML = ['face', 'hand', 'pose'].map(k => `<div class="row" style="gap:6px;align-items:center;margin-top:4px"><span style="min-width:90px">${{ face: '🙂 Face', hand: '✋ Hands', pose: '🧍 Body' }[k]}</span><span class="muted">${m[k] && m[k].ready ? `✅ ready (${(m[k].size / 1048576).toFixed(1)} MB)` : 'not downloaded'}</span><button class="btn ghost ft-dl" data-kind="${k}" style="margin-left:auto;padding:3px 8px;font-size:.75rem">${m[k] && m[k].ready ? 'Re-download' : 'Download'}</button><button class="btn ghost ft-import" data-kind="${k}" style="padding:3px 8px;font-size:.75rem">From file…</button></div>`).join('')
   const c = s.config || {}
   ftRenderBody(s)
-  for (const [id, key] of [['ftBody', 'body'], ['ftBodyTrackers', 'bodyTrackers'], ['ftBodyParams', 'bodyParams'], ['ftFace', 'face'], ['ftEyes', 'eyes'], ['ftHead', 'head'], ['ftHands', 'hands'], ['ftNativeEyes', 'nativeEyes'], ['ftMirror', 'mirror'], ['ftSendAll', 'sendAll']]) if ($(id) && document.activeElement !== $(id)) $(id).checked = !!c[key]
+  if ($('ftJumpSens') && document.activeElement !== $('ftJumpSens') && c.jumpSensitivity) $('ftJumpSens').value = c.jumpSensitivity
+  if (document.activeElement !== $('ftBodySource')) $('ftBodySource').value = c.bodySource || 'camera'
+  $('ftKinectSeated').checked = !!c.kinectSeated
+  $('ftKinectRow').style.display = c.bodySource === 'kinect' ? '' : 'none'
+  const kn = s.kinect
+  const knText = !kn ? 'Starts with tracking. Needs the Kinect for Windows Runtime 1.8 and the Kinect\'s power adapter.'
+    : kn.state === 'running' ? `Kinect running${kn.mode === 'seated' ? ' (seated)' : ''} · ${kn.fps || 0} fps · ${kn.person ? 'you are tracked ✅' : 'step in front of the Kinect'}`
+      : kn.state === 'building' ? 'Preparing the Kinect bridge (first time only)…'
+        : kn.state === 'error' ? '⚠️ ' + (kn.error || 'Kinect error')
+          : kn.state === 'waiting' ? '⏳ ' + (kn.note || 'Waiting for the Kinect…')
+            : (kn.note || 'Kinect stopped')
+  setText('ftKinectOut', knText)
+  for (const [id, key] of [['ftBody', 'body'], ['ftBodyTrackers', 'bodyTrackers'], ['ftBodyParams', 'bodyParams'], ['ftJump', 'jump'], ['ftFace', 'face'], ['ftEyes', 'eyes'], ['ftHead', 'head'], ['ftHands', 'hands'], ['ftNativeEyes', 'nativeEyes'], ['ftMirror', 'mirror'], ['ftSendAll', 'sendAll']]) if ($(id) && document.activeElement !== $(id)) $(id).checked = !!c[key]
   if (document.activeElement !== $('ftIntensity')) { $('ftIntensity').value = c.intensity || 1; setText('ftIntensityV', Number(c.intensity || 1).toFixed(1)) }
   const smooth = FT_SMOOTH.findIndex(p => p.minCutoff === c.minCutoff && p.beta === c.beta)
   if (smooth >= 0 && document.activeElement !== $('ftSmooth')) { $('ftSmooth').value = smooth; setText('ftSmoothV', FT_SMOOTH[smooth].label) }
@@ -7152,7 +7180,10 @@ function ftRender (s) {
   const tr = s.tracker || {}
   if (s.running && tr.caps) ftCamCaps.set($('ftCamera').value || '', { caps: tr.caps, label: tr.camera })
   ftFillModes()
-  $('ftGpu').checked = cam.gpu !== false; $('ftAutoStart').checked = !!cam.autoStart
+  if (document.activeElement !== $('ftGpu')) $('ftGpu').checked = !!s.gpuSetting
+  $('ftAutoStart').checked = !!cam.autoStart
+  const gpuNote = s.gpuSetting === !!s.hwAccel ? '' : (s.gpuSetting ? '↻ Restart KitsuNexus to start using the graphics card.' : '↻ Restart KitsuNexus to switch the graphics card off again.')
+  $('ftGpuNote').textContent = gpuNote; $('ftGpuNote').style.display = gpuNote ? '' : 'none'
   $('ftHandsN').value = cam.handsEveryN || 1; setText('ftHandsNV', cam.handsEveryN || 1)
   $('ftPoseN').value = cam.poseEveryN || 1; setText('ftPoseNV', cam.poseEveryN || 1)
   if (document.activeElement !== $('ftHeight')) { $('ftHeight').value = c.height || 1.7; setText('ftHeightV', Number(c.height || 1.7).toFixed(2)) }
@@ -7167,7 +7198,7 @@ function ftRenderBody (s) {
   if (!c.body) { setText('ftBodyStats', 'Body tracking off'); $('ftBodyBars').innerHTML = ''; return }
   if (!s.running) { setText('ftBodyStats', 'Not running'); $('ftBodyBars').innerHTML = ''; return }
   if (!b || !b.detected) { setText('ftBodyStats', 'No body in view — step back from the camera'); $('ftBodyBars').innerHTML = ''; return }
-  setText('ftBodyStats', `Body ✅ · legs ${b.legsVisible ? '✅' : '— (out of view)'}${c.bodyTrackers ? ' · trackers: ' + (b.trackers.length ? b.trackers.join(', ') : 'none') : ''}${c.bodyParams ? ` · ${Number(s.bodyParams) || 0} BT params on avatar` : ''}`)
+  setText('ftBodyStats', `Body ✅ · legs ${b.legsVisible ? '✅' : '— (out of view)'}${c.bodyTrackers ? ' · trackers: ' + (b.trackers.length ? b.trackers.join(', ') : 'none') : ''}${c.bodyParams ? ` · ${Number(s.bodyParams) || 0} BT params on avatar` : ''}${c.jump ? ` · jumps: ${Number(s.jumps) || 0}` : ''}`)
   const v = b.values || {}
   let bars = ''
   for (const [label, key, signed] of [['L leg fwd', 'BT/LeftUpperLegX', true], ['R leg fwd', 'BT/RightUpperLegX', true], ['L knee', 'BT/LeftKnee'], ['R knee', 'BT/RightKnee'], ['Crouch', 'BT/Crouch'], ['Lean fwd', 'BT/SpineBend', true], ['Lean side', 'BT/SpineSide', true], ['L arm up', 'BT/LeftUpperArmZ', true], ['R arm up', 'BT/RightUpperArmZ', true]]) {
@@ -7175,7 +7206,10 @@ function ftRenderBody (s) {
   }
   $('ftBodyBars').innerHTML = bars
 }
-for (const [id, key] of [['ftBody', 'body'], ['ftBodyTrackers', 'bodyTrackers'], ['ftBodyParams', 'bodyParams']]) $(id).addEventListener('change', e => ftCfg({ [key]: e.target.checked }))
+for (const [id, key] of [['ftBody', 'body'], ['ftBodyTrackers', 'bodyTrackers'], ['ftBodyParams', 'bodyParams'], ['ftJump', 'jump']]) $(id).addEventListener('change', e => ftCfg({ [key]: e.target.checked }))
+$('ftJumpSens').addEventListener('change', e => ftCfg({ jumpSensitivity: e.target.value }))
+$('ftBodySource').addEventListener('change', e => ftCfg({ bodySource: e.target.value }))
+$('ftKinectSeated').addEventListener('change', e => ftCfg({ kinectSeated: e.target.checked }))
 $('ftParts').addEventListener('change', e => { const i = e.target.closest('input[data-part]'); if (i) ftCfg({ trackerParts: { [i.dataset.part]: i.checked } }) })
 $('ftHeight').addEventListener('input', e => setText('ftHeightV', Number(e.target.value).toFixed(2)))
 $('ftHeight').addEventListener('change', e => ftCfg({ height: Number(e.target.value) }))
@@ -7207,6 +7241,10 @@ $('ftStop').addEventListener('click', async () => { await api.trackingStop(); $(
 $('ftCalibrate').addEventListener('click', async () => { if (!(ftLast && ftLast.running)) { setText('ftCalOut', 'Start tracking first'); return } setText('ftCalOut', '⏳ Calibrating — hold still…'); await api.trackingCalibrate(2) })
 $('ftCalReset').addEventListener('click', async () => { setText('ftCalOut', 'Not calibrated'); ftRender(await api.trackingResetCalibration()) })
 $('ftReloadAvatar').addEventListener('click', async () => ftRender(await api.trackingReloadAvatar()))
+$('ftUnityTool').addEventListener('click', async () => {
+  const r = await api.trackingOpenUnityTool()
+  $('ftUnityToolOut').textContent = r && r.ok ? "Opened — copy the KitsuNexusTracking folder into your avatar project's Assets (see README.md)." : ("Couldn't open it: " + ((r && r.error) || 'unknown error'))
+})
 $('ftModels').addEventListener('click', async e => {
   const dl = e.target.closest('.ft-dl'); const im = e.target.closest('.ft-import')
   if (dl) { dl.disabled = true; dl.textContent = 'Downloading…'; const r = await api.trackingDownloadModel(dl.dataset.kind); if (!r.ok) setText('ftOut', '⚠️ ' + r.error); ftRefresh() }

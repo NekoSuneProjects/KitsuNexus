@@ -30,7 +30,11 @@ const DEFAULTS = {
   bodyTrackers: true, // VRChat OSC trackers (full-body IK; VR mode only)
   bodyParams: true, // BT/… avatar parameters (works on desktop)
   height: 1.7, // metres, used for tracker floor height when feet aren't visible
-  trackerParts: { hip: true, chest: true, feet: true, knees: true, elbows: false, head: true }
+  trackerParts: { hip: true, chest: true, feet: true, knees: true, elbows: false, head: true },
+  bodySource: 'camera', // 'camera' (webcam pose model) | 'kinect' (Kinect v1 skeleton)
+  kinectSeated: false, // Kinect seated mode (upper body only, for a desk)
+  jump: false, // press VRChat's Jump (/input/Jump over OSC) when you jump
+  jumpSensitivity: 'medium' // low | medium | high
 }
 const FLOAT_EPS = 0.002
 
@@ -131,13 +135,21 @@ function createTrackingEngine ({ send, onStatus, loadSettings, saveSettings, now
       stats.hands = { Left: !!hands.Left, Right: !!hands.Right }
       stats.curls = { Left: hands.Left && { ...hands.Left.curls, gesture: hands.Left.gesture }, Right: hands.Right && { ...hands.Right.curls, gesture: hands.Right.gesture } }
     }
-    if (cfg.body && frame.pose) {
+    // Body from the webcam's pose model (unless the Kinect is the body source)
+    if (cfg.body && cfg.bodySource !== 'kinect' && frame.pose !== undefined) processPose(frame.pose, t, cfg.mirror, msgs)
+    sendChanged(msgs)
+  }
+
+  // One body frame -> trackers / BT params / jump. `framePose` is { world: 33 x [x,y,z,vis]
+  // (MediaPipe world space), image: 33 x [u,v,z,vis] } or null when nobody was found.
+  function processPose (framePose, t, mirrored, msgs) {
+    if (framePose) {
       // smooth all 33 world points (x, y, z) before deriving anything
       const flat = {}
-      frame.pose.world.forEach((p, i) => { flat[i + 'x'] = p[0]; flat[i + 'y'] = p[1]; flat[i + 'z'] = p[2] })
+      framePose.world.forEach((p, i) => { flat[i + 'x'] = p[0]; flat[i + 'y'] = p[1]; flat[i + 'z'] = p[2] })
       const f = poseFilter.apply(flat, t)
-      const pose = { world: frame.pose.world.map((p, i) => [f[i + 'x'], f[i + 'y'], f[i + 'z'], p[3]]), image: frame.pose.image }
-      const body = BT.readPose(pose, { mirrored: cfg.mirror })
+      const pose = { world: framePose.world.map((p, i) => [f[i + 'x'], f[i + 'y'], f[i + 'z'], p[3]]), image: framePose.image }
+      const body = BT.readPose(pose, { mirrored })
       let trackers = {}
       if (cfg.bodyTrackers) {
         const r = BT.computeTrackers(body, { height: cfg.height, enabled: cfg.trackerParts }, bodyState)
@@ -147,13 +159,29 @@ function createTrackingEngine ({ send, onStatus, loadSettings, saveSettings, now
         if (tm.length && typeof send === 'function') { send(tm); stats.sent += tm.length }
       }
       const bp = cfg.bodyParams ? BT.computeBodyParams(body, bodyState) : {}
+      // Jump: raw image landmarks (no smoothing lag); never while lying down.
+      if (cfg.jump && !bodyState.lying && BT.detectJump(framePose.image, bodyState, t * 1000, cfg.jumpSensitivity) && typeof send === 'function') {
+        send([{ address: '/input/Jump', type: 'int', value: 1 }])
+        setTimeout(() => send([{ address: '/input/Jump', type: 'int', value: 0 }]), 150)
+        stats.jumps = (stats.jumps || 0) + 1
+      }
       if (cfg.bodyParams) msgs.push(...BT.evaluateBody(bodyPlan, bp))
-      stats.body = { detected: !!body, legsVisible: !!bp['BT/LegsVisible'], trackers: Object.keys(trackers), values: bp }
-    } else if (cfg.body && frame.pose === null && stats.body && stats.body.detected) {
-      // pose ran this frame but nobody was found
+      stats.body = { detected: !!body, legsVisible: !!bp['BT/LegsVisible'], trackers: Object.keys(trackers), values: bp, source: cfg.bodySource }
+    } else if (framePose === null && stats.body && stats.body.detected) {
+      // the body model ran but nobody was found
       msgs.push(...BT.evaluateBody(bodyPlan, { 'BT/Detected': false, 'BT/LegsVisible': false }))
-      stats.body = { detected: false, legsVisible: false, trackers: [], values: {} }
+      stats.body = { detected: false, legsVisible: false, trackers: [], values: {}, source: cfg.bodySource }
     }
+  }
+
+  // Kinect skeleton frames (kinect.js): { t, pose } with pose in the same 33-point layout
+  // (or null = no skeleton). Face / hands keep coming from the webcam.
+  function onKinectFrame (frame = {}) {
+    if (!cfg.body || cfg.bodySource !== 'kinect') return
+    const t = (frame.t || now()) / 1000
+    stats.kinectFrames = (stats.kinectFrames || 0) + 1
+    const msgs = []
+    processPose(frame.pose === undefined ? null : frame.pose, t, false, msgs)
     sendChanged(msgs)
   }
 
@@ -189,7 +217,9 @@ function createTrackingEngine ({ send, onStatus, loadSettings, saveSettings, now
 
   function setConfig (patch = {}) {
     const next = { ...cfg }
-    for (const k of ['face', 'eyes', 'head', 'hands', 'mirror', 'sendAll', 'nativeEyes', 'body', 'bodyTrackers', 'bodyParams']) if (typeof patch[k] === 'boolean') next[k] = patch[k]
+    for (const k of ['face', 'eyes', 'head', 'hands', 'mirror', 'sendAll', 'nativeEyes', 'body', 'bodyTrackers', 'bodyParams', 'jump', 'kinectSeated']) if (typeof patch[k] === 'boolean') next[k] = patch[k]
+    if (['low', 'medium', 'high'].includes(patch.jumpSensitivity)) next.jumpSensitivity = patch.jumpSensitivity
+    if (['camera', 'kinect'].includes(patch.bodySource)) next.bodySource = patch.bodySource
     if (Number.isFinite(patch.height)) next.height = Math.min(2.5, Math.max(1, patch.height))
     if (patch.trackerParts && typeof patch.trackerParts === 'object') {
       next.trackerParts = { ...cfg.trackerParts }
@@ -219,14 +249,14 @@ function createTrackingEngine ({ send, onStatus, loadSettings, saveSettings, now
       fps: stats.fps, face: stats.face, hands: stats.hands, values: stats.lastValues, curls: stats.curls, sent: stats.sent,
       calibrating: !!calibrating, calibrated: Object.keys(calibration).length > 0,
       avatar: avatar ? { id: avatar.id, name: avatar.name, fullFaceTracking: avatar.fullFaceTracking } : null,
-      faceParams: facePlan.count, nativeEyes: facePlan.native, handParams: handPlan.length, bodyParams: bodyPlan.length, body: stats.body,
+      faceParams: facePlan.count, nativeEyes: facePlan.native, handParams: handPlan.length, bodyParams: bodyPlan.length, body: stats.body, jumps: stats.jumps || 0,
       config: { ...cfg }
     }
   }
   function emitStatus (extra) { if (typeof onStatus === 'function') onStatus(status(extra)) }
 
   replan()
-  return { onFrame, onOsc, setAvatar, loadAvatarById, loadNewestAvatar, startCalibration, resetCalibration, setConfig, stop, status, emitStatus, getConfig: () => ({ ...cfg }) }
+  return { onFrame, onKinectFrame, onOsc, setAvatar, loadAvatarById, loadNewestAvatar, startCalibration, resetCalibration, setConfig, stop, status, emitStatus, getConfig: () => ({ ...cfg }) }
 }
 
 module.exports = { createTrackingEngine, DEFAULTS }

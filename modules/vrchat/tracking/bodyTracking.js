@@ -91,7 +91,12 @@ function readPose (pose, { mirrored = false } = {}) {
   const pts = pose.world.map(p => toVrc(p, mirrored))
   const vis = pose.world.map((p, i) => {
     const w = Number.isFinite(p[3]) ? p[3] : 1
-    const im = pose.image && pose.image[i] && Number.isFinite(pose.image[i][3]) ? pose.image[i][3] : w
+    const ip = pose.image && pose.image[i]
+    const im = ip && Number.isFinite(ip[3]) ? ip[3] : w
+    // Outside the camera picture = MediaPipe is guessing (e.g. legs under the desk, hips
+    // below the frame). Treat as not seen, whatever visibility it reports.
+    const OUT = 0.03
+    if (ip && Number.isFinite(ip[0]) && Number.isFinite(ip[1]) && (ip[0] < -OUT || ip[0] > 1 + OUT || ip[1] < -OUT || ip[1] > 1 + OUT)) return 0
     return Math.min(w, im)
   })
   // When the image is mirrored, MediaPipe's "left" landmarks are the wearer's right.
@@ -181,6 +186,35 @@ function trackerMessages (trackers) {
 }
 
 /* ---------- 2. Desktop body parameters (BT/…) ---------- */
+// How the body lies, from the torso basis (right/up/forward), as the pitch then roll that
+// tilt an upright body into it (Unity: AngleAxis(pitch, right) * AngleAxis(roll, forward)).
+// Which way it faces around the vertical is free, so only gravity in body space matters:
+// g = (worldUp·right, worldUp·up, worldUp·forward) = (cosθ sinφ, cosθ cosφ, −sinθ).
+// pitch −1 = on the back, +1 = face down; roll ±1 = ±180° (±0.5 = on a side).
+function lyingAngles (b) {
+  const gx = b.right[1]; const gy = b.up[1]; const gz = b.forward[1]
+  const pitch = Math.asin(clamp(-gz, -1, 1))
+  // near ±90° pitch the roll is undefined (any roll = a turn around the vertical): use 0
+  const roll = Math.abs(pitch) > 70 / DEG ? 0 : Math.atan2(gx, gy)
+  return { pitch: clamp(pitch / (Math.PI / 2), -1, 1), roll: clamp(roll / Math.PI, -1, 1) }
+}
+// Upper-arm twist from where the bent forearm points around the upper arm:
+// 0 = forearm forward, +1 = forearm up (hand raised, arm rolled out), −1 = forearm down.
+// Without it a raised hand bends the elbow forward instead of up. A straight arm has no
+// visible twist (and no reliable bend plane), so it reads 0.
+function armTwist (upper, fore, chestForward, outward, bend) {
+  if (!(bend > 25 / DEG)) return 0
+  const a = norm(upper)
+  let f0 = sub(chestForward, mul(a, dot(chestForward, a)))
+  if (len(f0) < 0.3) return 0 // upper arm points (nearly) straight forward: no reference
+  f0 = norm(f0)
+  const upRef = mul(cross(a, f0), -outward) // "up" side of the arm, same meaning for both arms
+  const fp = sub(fore, mul(a, dot(fore, a)))
+  return clamp(Math.atan2(dot(fp, upRef), dot(fp, f0)) / (Math.PI / 2), -1, 1)
+}
+// Torso more than 62° from vertical = lying down; back below 50° = upright again.
+const LYING_ENTER = Math.cos(62 / DEG)
+const LYING_EXIT = Math.cos(50 / DEG)
 function computeBodyParams (body, state = {}) {
   const out = { 'BT/Detected': !!body }
   if (!body) return out
@@ -188,6 +222,29 @@ function computeBodyParams (body, state = {}) {
   const hipC = mid(pts[P.leftHip], pts[P.rightHip])
   const shC = mid(pts[P.leftShoulder], pts[P.rightShoulder])
   const torsoUp = sub(shC, hipC)
+  // Lying down (e.g. in bed). The upright maths below (legs against a level pelvis, crouch
+  // against standing hip height) break on your side, so lying gets its own output: how the
+  // body lies (BT/LiePitch, BT/LieRoll) with straight limbs, and the avatar's Body Pose lays
+  // it on the floor. Torso direction from hips->shoulders, or from shoulders->ears when the
+  // hips are out of view (under a blanket). Hysteresis (62° in / 50° out) stops flicker.
+  const hipsSeen = seen(body, P.leftHip, P.rightHip, P.leftShoulder, P.rightShoulder)
+  const headSeen = seen(body, P.leftShoulder, P.rightShoulder, P.leftEar, P.rightEar)
+  const shoulderLine = sub(pts[P.rightShoulder], pts[P.leftShoulder])
+  let upVec = null
+  if (hipsSeen) upVec = torsoUp
+  else if (headSeen) upVec = sub(mid(pts[P.leftEar], pts[P.rightEar]), shC)
+  if (upVec) { const upY = norm(upVec)[1]; state.lying = state.lying ? upY < LYING_EXIT : upY < LYING_ENTER }
+  out['BT/Lying'] = state.lying ? 1 : 0
+  if (state.lying) {
+    const b = basisRightUp(shoulderLine, upVec || torsoUp)
+    const lie = lyingAngles(b)
+    out['BT/LiePitch'] = lie.pitch; out['BT/LieRoll'] = lie.roll
+    for (const side of ['Left', 'Right']) for (const n of ['UpperLegX', 'UpperLegZ', 'Knee', 'UpperArmX', 'UpperArmZ', 'Elbow', 'UpperArmTwist']) out[`BT/${side}${n}`] = 0
+    for (const n of ['SpineBend', 'SpineSide', 'SpineTwist', 'Crouch']) out[`BT/${n}`] = 0
+    out['BT/LegsVisible'] = false
+    return out
+  }
+  out['BT/LiePitch'] = 0; out['BT/LieRoll'] = 0
   // Level pelvis (gravity up, facing from the hips) so leaning the torso shows
   // up as spine bend instead of tilting the reference frame with it.
   const pelvis = basisRightUp(sub(pts[P.rightHip], pts[P.leftHip]), [0, 1, 0])
@@ -201,14 +258,17 @@ function computeBodyParams (body, state = {}) {
   for (const side of ['Left', 'Right']) {
     const s = side.toLowerCase()
     const outward = side === 'Right' ? 1 : -1 // +right component means "out" for the right limb
-    if (seen(body, P[s + 'Hip'], P[s + 'Knee'])) {
+    if (!seen(body, P[s + 'Hip'], P[s + 'Knee'])) {
+      // leg out of view: stand it straight rather than keep a guessed / old pose
+      out[`BT/${side}UpperLegX`] = 0; out[`BT/${side}UpperLegZ`] = 0; out[`BT/${side}Knee`] = 0
+    } else {
       const thigh = local(sub(pts[P[s + 'Knee']], pts[P[s + 'Hip']]), pelvis) // [right, up, forward]
       out[`BT/${side}UpperLegX`] = clamp(Math.atan2(thigh[2], -thigh[1] + 0) / (Math.PI / 2), -1, 1)
       out[`BT/${side}UpperLegZ`] = clamp(Math.atan2(thigh[0] * outward, -thigh[1] + 0) / (Math.PI / 2), -1, 1)
       if (seen(body, P[s + 'Ankle'])) {
         const bend = angleBetween(sub(pts[P[s + 'Knee']], pts[P[s + 'Hip']]), sub(pts[P[s + 'Ankle']], pts[P[s + 'Knee']]))
         out[`BT/${side}Knee`] = clamp(bend / (150 / DEG), 0, 1)
-      }
+      } else out[`BT/${side}Knee`] = 0
     }
     if (seen(body, P[s + 'Shoulder'], P[s + 'Elbow'])) {
       const arm = local(sub(pts[P[s + 'Elbow']], pts[P[s + 'Shoulder']]), chest)
@@ -218,7 +278,12 @@ function computeBodyParams (body, state = {}) {
       if (seen(body, P[s + 'Wrist'])) {
         const bend = angleBetween(sub(pts[P[s + 'Elbow']], pts[P[s + 'Shoulder']]), sub(pts[P[s + 'Wrist']], pts[P[s + 'Elbow']]))
         out[`BT/${side}Elbow`] = clamp(bend / (150 / DEG), 0, 1)
-      }
+        out[`BT/${side}UpperArmTwist`] = armTwist(sub(pts[P[s + 'Elbow']], pts[P[s + 'Shoulder']]), sub(pts[P[s + 'Wrist']], pts[P[s + 'Elbow']]), chest.forward, outward, bend)
+      } else { out[`BT/${side}Elbow`] = 0; out[`BT/${side}UpperArmTwist`] = 0 }
+    } else {
+      // arm out of view (hands down below the camera): back to the default hanging pose
+      // instead of keeping the last raised pose
+      out[`BT/${side}UpperArmX`] = 0; out[`BT/${side}UpperArmZ`] = 0; out[`BT/${side}Elbow`] = 0; out[`BT/${side}UpperArmTwist`] = 0
     }
   }
   // Spine relative to world vertical / to the hips.
@@ -228,6 +293,21 @@ function computeBodyParams (body, state = {}) {
     out['BT/SpineSide'] = clamp(Math.atan2(dot(up, pelvis.right), up[1]) / (45 / DEG), -1, 1)
     const twist = Math.atan2(dot(chest.right, pelvis.forward), dot(chest.right, pelvis.right)) // + = shoulders turned to own left
     out['BT/SpineTwist'] = clamp(twist / (60 / DEG), -1, 1)
+  } else if (seen(body, P.leftShoulder, P.rightShoulder)) {
+    // Hips out of view (sitting at a desk): side lean from the shoulder line's roll and
+    // twist from its depth, assuming the hips face the camera. Forward bend needs the hips.
+    const r = sub(pts[P.rightShoulder], pts[P.leftShoulder])
+    // Forward bend from the shoulders->ears line (the ears barely move when you only nod),
+    // measured against the most upright posture seen recently, so a natural forward neck
+    // angle isn't read as a bend.
+    if (headSeen) {
+      const u = norm(sub(mid(pts[P.leftEar], pts[P.rightEar]), shC))
+      const a = Math.atan2(u[2], u[1])
+      state.neckRef = state.neckRef == null ? a : Math.min(state.neckRef + 0.0005, a)
+      out['BT/SpineBend'] = clamp((a - state.neckRef) / (60 / DEG), 0, 1)
+    } else out['BT/SpineBend'] = 0
+    out['BT/SpineSide'] = clamp(Math.atan2(-r[1], Math.hypot(r[0], r[2])) / (45 / DEG), -1, 1) // right shoulder lower = lean right
+    out['BT/SpineTwist'] = clamp(Math.atan2(r[2], r[0]) / (60 / DEG), -1, 1)
   }
   // Crouch: hips lower than the standing hip height (learned as the max seen).
   if (legsSeen) {
@@ -235,14 +315,14 @@ function computeBodyParams (body, state = {}) {
     state.standingHip = Math.max(state.standingHip || 0, hipH)
     out['BT/Crouch'] = state.standingHip > 0.2 ? clamp(1 - hipH / state.standingHip, 0, 1) / 0.6 : 0
     out['BT/Crouch'] = clamp(out['BT/Crouch'], 0, 1)
-  }
+  } else out['BT/Crouch'] = 0 // feet out of view: no crouch from guessed feet
   return out
 }
 
 const BODY_PARAMS = (() => {
   const list = [{ name: 'BT/Detected', type: 'Bool' }, { name: 'BT/LegsVisible', type: 'Bool' }]
-  for (const side of ['Left', 'Right']) for (const n of ['UpperLegX', 'UpperLegZ', 'Knee', 'UpperArmX', 'UpperArmZ', 'Elbow']) list.push({ name: `BT/${side}${n}`, type: 'Float' })
-  for (const n of ['SpineBend', 'SpineSide', 'SpineTwist', 'Crouch']) list.push({ name: `BT/${n}`, type: 'Float' })
+  for (const side of ['Left', 'Right']) for (const n of ['UpperLegX', 'UpperLegZ', 'Knee', 'UpperArmX', 'UpperArmZ', 'Elbow', 'UpperArmTwist']) list.push({ name: `BT/${side}${n}`, type: 'Float' })
+  for (const n of ['SpineBend', 'SpineSide', 'SpineTwist', 'Crouch', 'Lying', 'LiePitch', 'LieRoll']) list.push({ name: `BT/${n}`, type: 'Float' })
   return list
 })()
 
@@ -250,9 +330,9 @@ function planBody (avatarParams, { sendAll = false } = {}) {
   const params = Array.isArray(avatarParams) ? avatarParams : []
   const plan = []
   for (const p of BODY_PARAMS) {
-    if (sendAll) { plan.push({ ...p, address: '/avatar/parameters/' + p.name }); continue }
     const hit = params.find(a => a.type === p.type && (a.address.endsWith('/' + p.name) || a.address === p.name))
     if (hit) plan.push({ ...p, address: hit.address })
+    else if (sendAll) plan.push({ ...p, address: '/avatar/parameters/' + p.name }) // testing: only for params the avatar lacks
   }
   return plan
 }
@@ -265,4 +345,43 @@ function evaluateBody (plan, values) {
   return out
 }
 
-module.exports = { P, TRACKER_SLOTS, BODY_PARAMS, toVrc, eulerFromBasis, readPose, computeTrackers, trackerMessages, computeBodyParams, planBody, evaluateBody }
+/* ---------- 3. Jump detection -> VRChat's /input/Jump ---------- */
+// MediaPipe's world landmarks are centred on the hips, so they can't show you leaving the
+// ground. This uses the IMAGE landmarks (0..1, y down) instead, measured in units of your
+// own torso length (shoulders to hips in the image) so distance to the camera doesn't
+// matter. A jump = hips AND both feet rise together by `sensitivity` torso lengths above
+// your learned standing position, while the torso stays the same size (it shrinks when you
+// step back from the camera instead). Fires once per jump, re-arms after landing.
+const JUMP_SENS = { low: 0.35, medium: 0.25, high: 0.18 }
+function detectJump (image, state, t, sensitivity = 'medium') {
+  if (!Array.isArray(image) || image.length < 33) return false
+  const ok = i => image[i] && (image[i][3] == null || image[i][3] >= MIN_VIS)
+  if (![11, 12, 23, 24, 27, 28].every(ok)) { state.jumpBase = null; return false }
+  const y = i => image[i][1]
+  const shY = (y(11) + y(12)) / 2; const hipY = (y(23) + y(24)) / 2; const ankY = (y(27) + y(28)) / 2
+  const torso = hipY - shY
+  if (!(torso > 0.04) || !(ankY > hipY)) { state.jumpBase = null; return false } // not upright in the image
+  const sens = typeof sensitivity === 'number' ? sensitivity : (JUMP_SENS[sensitivity] || JUMP_SENS.medium)
+  const b = state.jumpBase
+  if (!b) { state.jumpBase = { hip: hipY, ank: ankY, torso }; state.inAir = false; return false }
+  const up = (base, cur) => (base - cur) / b.torso // + = moved up, in torso lengths
+  const dh = up(b.hip, hipY); const da = up(b.ank, ankY)
+  const sameSize = Math.abs(torso - b.torso) / b.torso < 0.15
+  let fired = false
+  if (!state.inAir) {
+    if (dh > sens && da > sens * 0.7 && sameSize && !(t - (state.lastJump || -1e9) < 700)) {
+      state.inAir = true; state.lastJump = t; fired = true
+    } else if (Math.abs(dh) < 0.1 && Math.abs(da) < 0.1) {
+      // standing still: slowly follow small drifts (posture, camera shake)
+      b.hip += (hipY - b.hip) * 0.1; b.ank += (ankY - b.ank) * 0.1; b.torso += (torso - b.torso) * 0.1
+    } else if (!sameSize || Math.abs(da) > 0.6) {
+      // walked nearer / further or changed stance: start again from here
+      state.jumpBase = { hip: hipY, ank: ankY, torso }
+    }
+  } else if (dh < sens * 0.4 && da < sens * 0.4) {
+    state.inAir = false // landed
+  }
+  return fired
+}
+
+module.exports = { JUMP_SENS, detectJump, P, TRACKER_SLOTS, BODY_PARAMS, toVrc, eulerFromBasis, readPose, computeTrackers, trackerMessages, computeBodyParams, planBody, evaluateBody }

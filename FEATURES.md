@@ -43,7 +43,11 @@ program.**
   Processing is local, in a window with no network access.
   **Body:** the same camera also tracks your full body — VRChat OSC trackers (hip, chest,
   feet, knees, elbows) for full-body IK in VR, and `BT/…` leg/spine/arm parameters for
-  desktop avatars (VRChat only enables OSC full-body in VR mode).
+  desktop avatars (VRChat only enables OSC full-body in VR mode). Optional: jump in VRChat
+  when the camera sees you jump (`/input/Jump`). A Unity Editor tool
+  (`unity/KitsuNexusTracking/`) adds the hand and body layers to an avatar in one click,
+  next to an existing face-tracking setup, and a Live Preview poses the avatar in Unity from
+  live KitsuNexus OSC or sliders.
 - **OSC Apps** — SpotiOSC media controls and DiscordOSC voice controls, native Rusk
   Laserdome log-to-OSC compatibility, and Twitch command/reward mapping for Fooma's
   Twitch to VRChat Interaction System.

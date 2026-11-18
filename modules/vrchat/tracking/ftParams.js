@@ -138,7 +138,6 @@ function planForAvatar (avatarParams, opts = {}) {
   const usedNames = new Set()
   if (!opts.fullFaceTracking) {
     for (const def of DEFINITIONS) {
-      if (opts.sendAll) { floats.push({ address: PREFIX + def.name, def }); usedNames.add(def.name); continue }
       const ex = exactRe(def.name)
       const f = params.find(p => p.type === 'Float' && ex.test(p.address))
       if (f) { floats.push({ address: f.address, def }); usedNames.add(def.name) }
@@ -160,6 +159,10 @@ function planForAvatar (avatarParams, opts = {}) {
           usedNames.add(def.name)
         }
       }
+      // "Send every parameter (testing)": still use the avatar's real addresses (and
+      // binary bits) above; only parameters the avatar doesn't have go out under the
+      // generic "/avatar/parameters/v2/<Name>" so testing never breaks a real avatar.
+      if (opts.sendAll && !usedNames.has(def.name)) { floats.push({ address: PREFIX + def.name, def, generic: true }); usedNames.add(def.name) }
     }
   }
   const status = []

@@ -316,6 +316,7 @@ window.electronAPI = {
   trackingCalibrate: seconds => ipcRenderer.invoke('tracking:calibrate', seconds),
   trackingResetCalibration: () => ipcRenderer.invoke('tracking:resetCalibration'),
   trackingReloadAvatar: () => ipcRenderer.invoke('tracking:reloadAvatar'),
+  trackingOpenUnityTool: () => ipcRenderer.invoke('tracking:openUnityTool'),
   trackingDownloadModel: kind => ipcRenderer.invoke('tracking:downloadModel', kind),
   trackingImportModel: kind => ipcRenderer.invoke('tracking:importModel', kind),
   // VRChat server status
@@ -350,6 +351,7 @@ window.electronAPI = {
   mediaPhotos: () => ipcRenderer.invoke('media:photos'),
   mediaOpen: p => ipcRenderer.invoke('media:open', p),
   vrchatOnline: () => ipcRenderer.invoke('vrchat:online'),
+  vrchatApiStats: () => ipcRenderer.invoke('vrchat:apiStats'),
   vrchatNews: () => ipcRenderer.invoke('vrchat:news'),
   appsLaunch: (paths, withVrchat) => ipcRenderer.invoke('apps:launch', { paths, withVrchat }),
   quickLaunchResolveExe: () => ipcRenderer.invoke('quickLaunch:resolveExe'),

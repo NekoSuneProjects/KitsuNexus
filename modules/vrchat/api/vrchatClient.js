@@ -67,7 +67,8 @@ function buildClient () {
       if (response && response.status === 429) {
         const retry = parseInt(response.headers && response.headers.get && response.headers.get('retry-after'), 10)
         rateLimitedUntil = Date.now() + (retry ? retry * 1000 : 60000)
-        console.warn('[vrchat] 429 rate limited; backing off')
+        stats.limited()
+        console.warn(`[vrchat] 429 rate limited; pausing all VRChat API requests for ${retry || 60}s`)
       }
       try {
         const type = response && response.headers && response.headers.get && response.headers.get('content-type')
@@ -122,7 +123,108 @@ async function raw (method, url, query, body) {
   return client.client.request(options)
 }
 
+/* ---------------- request pacing ----------------
+ * VRChat asks third-party apps not to burst its API (other tools such as VRCX warn when
+ * one does). Every request (SDK method or raw) goes through this queue: at most
+ * MAX_CONCURRENT in flight, starts at least MIN_GAP_MS apart. While a 429 back-off is
+ * active nothing is sent: new and queued calls fail fast with a 429 result (callers
+ * using memo() get their cached value instead).
+ */
+const MAX_CONCURRENT = 2
+const MIN_GAP_MS = 350
+let active = 0
+let lastStart = 0
+let pumpTimer = null
+const queue = []
+
+function rateLimitedResult () {
+  const s = Math.max(1, Math.ceil((rateLimitedUntil - Date.now()) / 1000))
+  return { ok: false, status: 429, rateLimited: true, error: `VRChat asked KitsuNexus to slow down — try again in ${s}s` }
+}
+
+function schedule (label, fn) {
+  return new Promise(resolve => { queue.push({ label, fn, resolve }); pump() })
+}
+
+function pump () {
+  if (pumpTimer) return
+  if (isRateLimited()) { while (queue.length) queue.shift().resolve(rateLimitedResult()); return }
+  while (active < MAX_CONCURRENT && queue.length) {
+    const wait = lastStart + MIN_GAP_MS - Date.now()
+    if (wait > 0) { pumpTimer = setTimeout(() => { pumpTimer = null; pump() }, wait); return }
+    const job = queue.shift()
+    active++
+    lastStart = Date.now()
+    stats.record(job.label)
+    Promise.resolve().then(job.fn).then(job.resolve, e => job.resolve({ thrown: e })).finally(() => { active--; pump() })
+  }
+}
+
+/* ---------------- request stats (for debugging traffic) ---------------- */
+const stats = (() => {
+  const recent = [] // [ts, endpoint] for the last 10 minutes
+  const totals = new Map()
+  let total = 0
+  let limited = 0
+  let lastWarn = 0
+  // "GET /users/usr_abc/groups" -> "GET /users/:id/groups"
+  const norm = label => String(label || '?').split('?')[0]
+    .replace(/\/(usr|wrld|grp|avtr|file|not|inst|gpst|frq|ufav|fvgrp|prnt|inv|emj|stkr|grol)_[0-9a-zA-Z-]+/g, '/:id')
+    .replace(/\/wrld_[^/:]+:[^/]+/g, '/:location')
+    .replace(/\/\d+(?=\/|$)/g, '/:n')
+  return {
+    record (label) {
+      const ep = norm(label); const now = Date.now()
+      total++; totals.set(ep, (totals.get(ep) || 0) + 1)
+      recent.push([now, ep])
+      while (recent.length && now - recent[0][0] > 600000) recent.shift()
+      const lastMin = recent.filter(r => now - r[0] < 60000).length
+      if (lastMin > 60 && now - lastWarn > 60000) {
+        lastWarn = now
+        const top = {}; for (const [t, e] of recent) if (now - t < 60000) top[e] = (top[e] || 0) + 1
+        console.warn(`[vrchat] ${lastMin} API requests in the last minute:`, Object.entries(top).sort((a, b) => b[1] - a[1]).slice(0, 8))
+      }
+    },
+    limited () { limited++ },
+    snapshot () {
+      const now = Date.now()
+      const by = (ms) => { const m = {}; for (const [t, e] of recent) if (now - t < ms) m[e] = (m[e] || 0) + 1; return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([endpoint, count]) => ({ endpoint, count })) }
+      return {
+        total,
+        lastMinute: recent.filter(r => now - r[0] < 60000).length,
+        last10Minutes: recent.length,
+        topLast10Minutes: by(600000),
+        topAllTime: [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([endpoint, count]) => ({ endpoint, count })),
+        queued: queue.length,
+        inFlight: active,
+        rateLimited: isRateLimited(),
+        rateLimitedForSeconds: isRateLimited() ? Math.ceil((rateLimitedUntil - now) / 1000) : 0,
+        times429: limited,
+        pacing: { maxConcurrent: MAX_CONCURRENT, minGapMs: MIN_GAP_MS }
+      }
+    }
+  }
+})()
+function getStats () { return stats.snapshot() }
+
+// Pace any other request to VRChat's servers (e.g. auth-gated file/image downloads made
+// with axios) through the same queue. fn() should resolve to a result object.
+async function paced (label, fn) {
+  if (isRateLimited()) return rateLimitedResult()
+  const out = await schedule(label, fn)
+  if (out && out.thrown) throw out.thrown
+  return out
+}
+
 async function call (name, options, fallback, message) {
+  if (isRateLimited()) return rateLimitedResult()
+  const label = fallback && fallback.url ? `${fallback.method || 'GET'} ${fallback.url}` : String(name)
+  const out = await schedule(label, () => send(name, options, fallback, message))
+  if (out && out.thrown) throw out.thrown
+  return out
+}
+
+async function send (name, options, fallback, message) {
   try {
     let value
     if (name && typeof client[name] === 'function') value = await client[name](options || {})
@@ -146,12 +248,20 @@ async function request (method, url, query, body, message) {
   return call(null, null, { method, url, query, body }, message)
 }
 
-function memo (key, ttl, fn) {
+// Cached, de-duplicated call. `failTtl` (optional) also caches a failed result for that
+// long, so lookups that keep failing (deleted user, private world → 404) aren't re-sent
+// on every refresh. Rate-limit failures are never cached.
+function memo (key, ttl, fn, failTtl = 0) {
   const hit = cache.get(key)
-  if (hit && (Date.now() - hit.ts < ttl || isRateLimited())) return Promise.resolve(hit.value)
+  if (hit) {
+    const age = Date.now() - hit.ts
+    if (hit.value && hit.value.ok && (age < ttl || isRateLimited())) return Promise.resolve(hit.value)
+    if (hit.value && !hit.value.ok && age < hit.failTtl) return Promise.resolve(hit.value)
+  }
   if (inflight.has(key)) return inflight.get(key)
   const p = Promise.resolve().then(fn).then(value => {
     if (value && value.ok) cache.set(key, { ts: Date.now(), value })
+    else if (failTtl > 0 && value && !value.rateLimited && value.status !== 429 && !isRateLimited()) cache.set(key, { ts: Date.now(), value, failTtl })
     inflight.delete(key)
     return value
   }).catch(e => { inflight.delete(key); throw e })
@@ -161,6 +271,11 @@ function memo (key, ttl, fn) {
 
 function invalidate (prefix) { for (const key of cache.keys()) if (!prefix || key.startsWith(prefix)) cache.delete(key) }
 function isRateLimited () { return Date.now() < rateLimitedUntil }
+// For requests made outside the SDK client (axios) that got a 429.
+function noteRateLimit (retryAfterSeconds) {
+  rateLimitedUntil = Date.now() + (retryAfterSeconds > 0 ? retryAfterSeconds * 1000 : 60000)
+  stats.limited()
+}
 function getClient () { return client }
 function setCurrentUserId (id) { currentUserId = id || '' }
 function getCurrentUserId () { return currentUserId }
@@ -187,7 +302,7 @@ function logout () {
 }
 
 module.exports = {
-  APP, call, request, memo, invalidate, isRateLimited, getClient,
+  APP, call, request, memo, invalidate, isRateLimited, getClient, getStats, paced, noteRateLimit,
   setCurrentUserId, getCurrentUserId, getTwoFactorMethods, clearTwoFactorMethods,
   setLoggedIn, isLoggedIn, logout, persistedCookieHeader, getAuthToken
 }

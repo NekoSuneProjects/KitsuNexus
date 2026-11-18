@@ -29,6 +29,25 @@ let fileset = null
 let usingGpu = false
 let fallingBack = false
 
+// The models work on small images internally (~192-256 px), so handing each of them the
+// full camera frame (e.g. 1920x1080) only wastes time copying and converting it, three
+// times per frame. Scale each frame ONCE to at most WORK_MAX_W wide and give every model
+// that copy. Landmarks are normalised (0..1) / in metres, so results are unchanged.
+const WORK_MAX_W = 960
+const work = document.createElement('canvas')
+const workCtx = work.getContext('2d')
+function frameSource () {
+  const vw = video.videoWidth; const vh = video.videoHeight
+  if (!vw || !vh || vw <= WORK_MAX_W) return video
+  const w = WORK_MAX_W; const h = Math.round(vh * WORK_MAX_W / vw)
+  if (work.width !== w || work.height !== h) { work.width = w; work.height = h }
+  workCtx.drawImage(video, 0, 0, w, h)
+  return work
+}
+// Smoothed time per model (ms), reported in the status so slow parts are visible.
+const ms = { face: 0, hands: 0, pose: 0, frame: 0 }
+const timeIt = (k, fn) => { const t = performance.now(); const r = fn(); const d = performance.now() - t; ms[k] = ms[k] ? ms[k] * 0.8 + d * 0.2 : d; return r }
+
 const status = s => window.knTracker.status({ at: Date.now(), ...s })
 
 const FACE_OPTS = { numFaces: 1, outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true }
@@ -102,10 +121,12 @@ function processFrame () {
   if (!stream || video.readyState < 2) return
   let ts = performance.now(); if (ts <= lastTs) ts = lastTs + 1; lastTs = ts // MediaPipe needs increasing timestamps
   frameNo++
+  const tFrame = performance.now()
+  const src = frameSource()
   const frame = { t: Date.now(), face: null, hands: null, pose: null }
   let faceRes = null
   if (face && cfg.face !== false) {
-    faceRes = face.detectForVideo(video, ts)
+    faceRes = timeIt('face', () => face.detectForVideo(src, ts))
     if (faceRes.faceBlendshapes && faceRes.faceBlendshapes.length) {
       frame.face = {
         blendshapes: faceRes.faceBlendshapes[0].categories.map(c => ({ categoryName: c.categoryName, score: c.score })),
@@ -117,7 +138,7 @@ function processFrame () {
   // Hands can run every Nth frame to save CPU; the same camera frame is shared.
   const everyN = Math.max(1, (cfg && cfg.handsEveryN) || 1)
   if (hands && cfg.hands !== false && frameNo % everyN === 0) {
-    const r = hands.detectForVideo(video, ts)
+    const r = timeIt('hands', () => hands.detectForVideo(src, ts))
     const hd = r.handedness || r.handednesses || []
     frame.hands = (r.landmarks || []).map((lm, i) => ({
       handedness: hd[i] && hd[i][0] ? hd[i][0].categoryName : '',
@@ -130,7 +151,7 @@ function processFrame () {
   // Body pose on the same camera frame (every Nth frame).
   const poseN = Math.max(1, (cfg && cfg.poseEveryN) || 1)
   if (pose && cfg.pose !== false && frameNo % poseN === 0) {
-    const r = pose.detectForVideo(video, ts)
+    const r = timeIt('pose', () => pose.detectForVideo(src, ts))
     if (r.worldLandmarks && r.worldLandmarks[0] && r.landmarks && r.landmarks[0]) {
       frame.pose = {
         world: r.worldLandmarks[0].map(p => [p.x, p.y, p.z, p.visibility == null ? 1 : p.visibility]),
@@ -142,8 +163,9 @@ function processFrame () {
   window.knTracker.frame(frame)
 
   const now = performance.now()
+  ms.frame = ms.frame ? ms.frame * 0.8 + (now - tFrame) * 0.2 : now - tFrame
   fpsTimes.push(now); while (fpsTimes.length && fpsTimes[0] < now - 1000) fpsTimes.shift()
-  if (now - lastStatus > 1000) { lastStatus = now; status({ state: 'running', fps: fpsTimes.length, faceSeen: !!frame.face, handsSeen: (lastHands || []).length, poseSeen: !!lastPose }) }
+  if (now - lastStatus > 1000) { lastStatus = now; status({ state: 'running', fps: fpsTimes.length, faceSeen: !!frame.face, handsSeen: (lastHands || []).length, poseSeen: !!lastPose, gpu: usingGpu, workWidth: src === video ? video.videoWidth : work.width, ms: { face: Math.round(ms.face), hands: Math.round(ms.hands), pose: Math.round(ms.pose), frame: Math.round(ms.frame) } }) }
   if (cfg.preview && now - lastPreview > 200) { lastPreview = now; drawPreview(faceRes, lastHands, lastPose) }
 }
 

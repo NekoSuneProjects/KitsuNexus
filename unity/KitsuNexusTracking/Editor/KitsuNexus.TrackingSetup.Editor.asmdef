@@ -1,0 +1,16 @@
+{
+    "name": "KitsuNexus.TrackingSetup.Editor",
+    "rootNamespace": "KitsuNexus.TrackingSetup",
+    "references": [],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [
+        { "name": "com.vrchat.avatars", "expression": "3.0.0", "define": "KN_VRC_AVATARS" }
+    ],
+    "noEngineReferences": false
+}

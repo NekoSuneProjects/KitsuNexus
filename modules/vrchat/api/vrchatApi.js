@@ -216,7 +216,15 @@ function getUser (id) { return core.memo(`user:${id}`, 45000, async () => {
   if (!u.ok || !u.data || !u.data.id) return { ok: false, error: u.error || 'Could not load user' }
   const profile = p.ok ? p.profile : normalizePublicProfile({ id, displayName: u.data.displayName })
   return { ok: true, user: mergeUserProfile(u.data, profile), publicProfile: profile, publicProfileError: p.ok ? null : p.error }
-}) }
+}, 300000) }
+
+// One request (no public profile) and cached for a long time: used to fill in friends the
+// paginated friend lists don't return. Those are usually the same people every time
+// (deleted / banned / hidden accounts), so failures are remembered for 6 hours.
+function getUserBasic (id) { return core.memo(`userBasic:${id}`, 900000, async () => {
+  const r = await core.call('getUser', { path: { userId: id } }, { method: 'GET', url: `/users/${encodeURIComponent(id)}` }, 'Could not load user')
+  return r.ok && r.data && r.data.id ? { ok: true, user: r.data } : { ok: false, error: r.error || 'Could not load user', status: r.status }
+}, 21600000) }
 
 function getFriends (offline = false) { return core.memo(`friends:${!!offline}`, offline ? 300000 : 90000, async () => {
   const all = []
@@ -239,7 +247,7 @@ function getAllFriends () { return core.memo('friends:all', 120000, async () => 
   const missing = want.filter(id => !seen.has(id)); let recovered = 0
   for (const id of missing.slice(0, 60)) {
     try {
-      const r = await getUser(id); if (!r.ok || !r.user) continue
+      const r = await getUserBasic(id); if (!r.ok || !r.user) continue
       const f = pickFriend(r.user); const isOn = (f.location && !['offline', 'traveling'].includes(f.location)) || f.state === 'online' || f.state === 'active'
       ;(isOn ? online : offline).push({ ...f, online: isOn }); seen.add(id); recovered++
     } catch (_) {}
@@ -282,7 +290,17 @@ async function getPrints () { let id = core.getCurrentUserId(); if (!id) { const
 const imageCache = new Map()
 async function imageData (url) {
   if (!url) return { ok: false, error: 'no url' }; if (imageCache.has(url)) return { ok: true, data: imageCache.get(url) }
-  try { const r = await axios.get(url, { headers: { 'User-Agent': `${core.APP.name}/${core.APP.version} (${core.APP.contact})`, Cookie: core.persistedCookieHeader() }, responseType: 'arraybuffer', validateStatus: () => true, timeout: 20000 }); if (r.status !== 200) return { ok: false, error: `HTTP ${r.status}` }; const out = `data:${r.headers['content-type'] || 'image/png'};base64,${Buffer.from(r.data).toString('base64')}`; if (imageCache.size < 300) imageCache.set(url, out); return { ok: true, data: out } } catch (e) { return { ok: false, error: e.message || 'Image request failed' } }
+  // Only VRChat's own (auth-gated) file URLs go through the API pacer; CDN/other hosts don't.
+  const fetchIt = async () => {
+    try {
+      const r = await axios.get(url, { headers: { 'User-Agent': `${core.APP.name}/${core.APP.version} (${core.APP.contact})`, Cookie: core.persistedCookieHeader() }, responseType: 'arraybuffer', validateStatus: () => true, timeout: 20000 })
+      if (r.status === 429) { core.noteRateLimit(parseInt(r.headers['retry-after'], 10)); return { ok: false, error: 'HTTP 429', status: 429 } }
+      if (r.status !== 200) return { ok: false, error: `HTTP ${r.status}` }
+      const out = `data:${r.headers['content-type'] || 'image/png'};base64,${Buffer.from(r.data).toString('base64')}`; if (imageCache.size < 300) imageCache.set(url, out); return { ok: true, data: out }
+    } catch (e) { return { ok: false, error: e.message || 'Image request failed' } }
+  }
+  let host = ''; try { host = new URL(url).hostname } catch (_) {}
+  return /(^|\.)vrchat\.(cloud|com)$/.test(host) ? core.paced(`GET ${new URL(url).pathname.replace(/^\/api\/1/, '')}`, fetchIt) : fetchIt()
 }
 
 async function getAvatar (id) { const r = await core.request('GET', `/avatars/${encodeURIComponent(id)}`, undefined, undefined, 'Could not load avatar'); if (!r.ok || !r.data || !r.data.id) return { ok: false, error: r.error }; const a = r.data; return { ok: true, avatar: { id: a.id, name: a.name, description: a.description, image: a.thumbnailImageUrl || a.imageUrl, authorName: a.authorName, authorId: a.authorId, releaseStatus: a.releaseStatus, platforms: [...new Set((a.unityPackages || []).map(p => p.platform).filter(Boolean))], performance: [...new Set((a.unityPackages || []).map(p => p.performanceRating).filter(Boolean))], created: a.created_at, updated: a.updated_at } } }
@@ -310,8 +328,8 @@ async function groupInvite (groupId, userId) { const r = await simple('POST', `/
 async function searchUsers (q) { const r = await core.request('GET', '/users', { search: q, n: 24 }, undefined, 'User search failed'); return r.ok && Array.isArray(r.data) ? { ok: true, users: r.data.map(u => ({ id: u.id, displayName: u.displayName, statusDescription: u.statusDescription, status: u.status, image: u.userIcon || u.iconUrl || u.profilePicOverride || u.currentAvatarThumbnailImageUrl || '' })) } : { ok: false, error: r.error } }
 async function searchWorlds (q) { const r = await core.request('GET', '/worlds', { search: q, n: 24, sort: 'relevance', order: 'descending' }, undefined, 'World search failed'); return r.ok && Array.isArray(r.data) ? { ok: true, worlds: r.data.map(w => ({ id: w.id, name: w.name, image: w.thumbnailImageUrl || w.imageUrl, authorName: w.authorName, visits: w.visits, favorites: w.favorites, occupants: w.occupants })) } : { ok: false, error: r.error } }
 async function searchGroups (q) { const r = await core.request('GET', '/groups', { query: q, n: 24 }, undefined, 'Group search failed'); return r.ok && Array.isArray(r.data) ? { ok: true, groups: r.data.map(g => ({ id: g.id, name: g.name, shortCode: g.shortCode, icon: g.iconUrl || '', members: g.memberCount })) } : { ok: false, error: r.error } }
-function getWorld (id) { return core.memo(`world:${id}`, 300000, async () => { const r = await core.request('GET', `/worlds/${encodeURIComponent(id)}`, undefined, undefined, 'Could not load world'); return r.ok && r.data && r.data.id ? { ok: true, world: r.data } : { ok: false, error: r.error } }) }
-function getWorldName (id) { if (!id || !/^wrld_/.test(id)) return Promise.resolve({ ok: false, error: 'bad id' }); return core.memo(`worldName:${id}`, 1800000, async () => { const r = await getWorld(id); return r.ok ? { ok: true, name: r.world.name || '' } : r }) }
+function getWorld (id) { return core.memo(`world:${id}`, 300000, async () => { const r = await core.request('GET', `/worlds/${encodeURIComponent(id)}`, undefined, undefined, 'Could not load world'); return r.ok && r.data && r.data.id ? { ok: true, world: r.data } : { ok: false, error: r.error, status: r.status } }, 600000) }
+function getWorldName (id) { if (!id || !/^wrld_/.test(id)) return Promise.resolve({ ok: false, error: 'bad id' }); return core.memo(`worldName:${id}`, 1800000, async () => { const r = await getWorld(id); return r.ok ? { ok: true, name: r.world.name || '' } : r }, 600000) }
 function getGroup (id) { return core.memo(`group:${id}`, 300000, async () => { const r = await core.request('GET', `/groups/${encodeURIComponent(id)}`, undefined, undefined, 'Could not load group'); return r.ok && r.data && r.data.id ? { ok: true, group: r.data } : { ok: false, error: r.error } }) }
 function favTag (type) { return type === 'world' ? 'worlds1' : type === 'avatar' ? 'avatars1' : 'group_0' }
 async function addFavorite (type, id, group) { const r = await simple('POST', '/favorites', { type, favoriteId: id, tags: [group || favTag(type)] }, 'Add favorite failed'); return r.ok ? { ok: true } : r }
@@ -352,7 +370,7 @@ module.exports = {
   getFriends, getAllFriends, getUser, getPublicProfile, sendFriendRequest, requestInvite, unfriend, inviteUser, getUserGroups, getUserWorlds,
   getMutualFriends, getFavoriteWorlds, getFavoriteAvatars, getFavoriteGroups, sendBoop, getMyAvatars, getMyWorlds, addFavorite, removeFavorite,
   searchUsers, searchWorlds, searchGroups, getWorld, getWorldName, getGroup, parseInstance,
-  updateProfile, selectAvatar, deleteAvatar, createInstance, createGroupInstance, inviteSelf, groupInvite, isRateLimited: core.isRateLimited,
+  updateProfile, selectAvatar, deleteAvatar, createInstance, createGroupInstance, inviteSelf, groupInvite, isRateLimited: core.isRateLimited, getApiStats: core.getStats,
   setNote, moderate, unmoderate, getFavoriteFriendIds, getOnlineCount, getGroupPosts,
   getMessages, updateMessage, getGroupGalleries, getGroupGalleryImages,
   getAvatar, getGroupMembers, getGroupRoles, getModerations,
