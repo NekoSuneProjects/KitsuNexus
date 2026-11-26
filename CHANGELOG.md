@@ -5,6 +5,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.83] - 2026-11-26
+
 ### Added
 - **Kinect v1 (Xbox 360 Kinect / Kinect for Windows v1) as the body source, for desktop body tracking and VR FBT.** Face, Hands & Body → Body tracking → "Body from: Webcam / Kinect".
   - **Why use it:** the Kinect's depth skeleton (20 joints) doesn't need to see your face, and copes with distance and the dark. It feeds the same pipeline as the webcam pose model: VR OSC trackers for full-body IK, desktop `BT/…` parameters, lying detection and jump. Face and hands stay on the webcam.
