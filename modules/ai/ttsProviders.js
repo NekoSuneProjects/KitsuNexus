@@ -22,7 +22,8 @@ const { getTikTokTtsAudio } = require('../live/tiktokTts')
 const TTS_PROVIDERS = {
   sapi: { label: 'Windows built-in (SAPI)' },
   googletranslate: { label: 'Google Translate voice (free, no key)' },
-  tiktok: { label: 'TikTok TTS' },
+  tiktok: { label: 'TikTok TTS (free, 73 voices)' },
+  streamelements: { label: 'StreamElements (Brian etc., free account token)', needsKey: true },
   openaicompat: { label: 'OpenAI-compatible TTS (Groq free tier, Kokoro, LocalAI…)', needsEndpoint: true },
   geminitts: { label: 'Google Gemini TTS (free tier key)', needsKey: true },
   unrealspeech: { label: 'Unreal Speech (free monthly allowance)', needsKey: true },
@@ -501,6 +502,41 @@ async function speakMurf ({ text, apiKey, voice }) {
   return asAudio(await checkedFetch('Murf audio', j.audioFile, {}))
 }
 
+// ---- StreamElements ---------------------------------------------------------
+// The classic free "Brian" streamer voice. Checked 2026-11-27: the speech
+// endpoint now answers 401 "No API key was found" without a key, so it needs
+// the JWT token from a (free) StreamElements account; sent as a Bearer token,
+// per StreamElements' API docs. The voice list is still public.
+const SE_BASE = 'https://api.streamelements.com/kappa/v2/speech'
+let seVoiceCache = null
+let seVoiceCacheAt = 0
+async function listStreamElementsVoices () {
+  if (seVoiceCache && Date.now() - seVoiceCacheAt < 24 * 60 * 60 * 1000) return seVoiceCache
+  const res = await checkedFetch('StreamElements voices', `${SE_BASE}/voices`, {})
+  const j = await res.json()
+  const list = Object.values(j.voices || {}).map(v => ({
+    id: String(v.id || v.name || ''), name: String(v.name || v.id || ''), language: String(v.languageName || ''),
+    languageCode: String(v.languageCode || ''), gender: String(v.gender || ''), provider: String(v.provider || '')
+  })).filter(v => v.id)
+  list.sort((a, b) => a.languageCode.localeCompare(b.languageCode) || a.name.localeCompare(b.name))
+  seVoiceCache = list; seVoiceCacheAt = Date.now()
+  return list
+}
+
+// Without a token only audio StreamElements' CDN already has cached still plays
+// (checked 2026-11-27: "hello" = Cloudflare HIT, ~101 days old; any new text
+// = BYPASS → 401). So try anonymously when no token is set, and explain the
+// token when that's refused.
+const SE_TOKEN_HELP = 'StreamElements now needs your JWT token for new text (free account: StreamElements dashboard → account / channel settings → "Show secrets")'
+async function speakStreamElements ({ text, apiKey, voice }, fetchImpl = fetch) {
+  const token = String(apiKey || '').trim()
+  const q = new URLSearchParams({ voice: voice || 'Brian', text: String(text).slice(0, 500) })
+  const res = await fetchImpl(`${SE_BASE}?${q}`, token ? { headers: { Authorization: `Bearer ${token}` } } : {})
+  if (res.status === 401 || res.status === 403) throw new Error(token ? `StreamElements rejected the token (${res.status}) - copy the JWT token again from the dashboard` : SE_TOKEN_HELP)
+  if (!res.ok) throw new Error(`StreamElements request failed: ${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`.trim())
+  return asAudio(res)
+}
+
 // ---- Self-hosted voice servers (free, run on your PC / server) ---------------
 const trimBase = (u, def) => String(u || def).trim().replace(/\/+$/, '')
 
@@ -570,6 +606,7 @@ async function speak (opts = {}) {
     case 'speechify': return speakSpeechify({ ...opts, text: input })
     case 'hume': return speakHume({ ...opts, text: input })
     case 'murf': return speakMurf({ ...opts, text: input })
+    case 'streamelements': return speakStreamElements({ ...opts, text: input })
     case 'coqui': return speakCoqui({ ...opts, text: input })
     case 'piper': return speakPiper({ ...opts, text: input })
     case 'marytts': return speakMary({ ...opts, text: input })
@@ -577,4 +614,4 @@ async function speak (opts = {}) {
   }
 }
 
-module.exports = { speak, listSapiVoices, TTS_PROVIDERS, splitForTts, pcmToWav }
+module.exports = { speak, listSapiVoices, listStreamElementsVoices, speakStreamElements, TTS_PROVIDERS, splitForTts, pcmToWav }

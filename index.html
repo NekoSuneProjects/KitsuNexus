@@ -1021,7 +1021,12 @@
             <div><label>Source language</label><select id="sttSourceLang"><option value="auto">Auto-detect</option></select></div>
             <div><label>Clip length (s)</label><input type="number" id="sttClipSeconds" min="3" max="15" value="6" /></div>
           </div>
+          <div class="grid cols-2" style="margin-top:8px">
+            <div><label>Translate into</label><select id="sttTarget"></select></div>
+            <div style="display:flex;align-items:flex-end"><label class="switch" style="margin:0"><input type="checkbox" id="sttAutoTranslate" checked> Auto-translate (skips speech already in your language)</label></div>
+          </div>
           <div class="row" style="margin-top:8px;flex-wrap:wrap;gap:14px">
+            <label class="switch" style="margin:0"><input type="checkbox" id="sttToOverlay" checked> Show on desktop / VR overlay</label>
             <label class="switch" style="margin:0"><input type="checkbox" id="sttToChatbox"> Send to chatbox</label>
             <label class="switch" style="margin:0"><input type="checkbox" id="sttSpeakTranslation"> Speak the translation</label>
           </div>
@@ -1036,6 +1041,13 @@
           <div class="grid cols-2">
             <div><label>OCR language</label>
               <select id="ocrLang">
+                <optgroup label="Auto — reads several languages">
+                <option value="fast_latin">Fast: English + Spanish (also reads most Latin-alphabet languages) - recommended</option>
+                <option value="auto_latin">Auto: Latin (English, Spanish, French, German, Italian, Portuguese, Dutch, Polish)</option>
+                <option value="auto_latin_cyrillic">Auto: Latin + Cyrillic (adds Russian, Ukrainian)</option>
+                <option value="auto_asian">Auto: Asian (English, Japanese, Chinese, Korean)</option>
+                </optgroup>
+                <optgroup label="One language (most accurate)">
                 <option value="eng">English</option>
                 <option value="jpn">Japanese</option>
                 <option value="spa">Spanish</option>
@@ -1051,12 +1063,37 @@
                 <option value="pol">Polish</option>
                 <option value="ukr">Ukrainian</option>
                 <option value="vie">Vietnamese</option>
+                </optgroup>
               </select>
             </div>
             <div><label>Scan interval (ms)</label><input type="number" id="ocrInterval" min="1000" max="15000" step="500" value="3000" /></div>
           </div>
-          <label class="switch" style="margin-top:8px"><input type="checkbox" id="ocrToChatbox"> Send to chatbox</label>
+          <div class="grid cols-2" style="margin-top:8px">
+            <div><label>Translate into</label><select id="ocrTarget"></select></div>
+            <div><label>Text style</label>
+              <select id="ocrTextStyle">
+                <option value="light">Light text on dark (VRChat chatbox) - cleaner, faster</option>
+                <option value="any">Any text (documents, websites)</option>
+              </select>
+            </div>
+            <div><label>Read area</label>
+              <select id="ocrRegion">
+                <option value="full">Whole screen / window</option>
+                <option value="bottom_third">Bottom third (subtitles)</option>
+                <option value="bottom_half">Bottom half</option>
+                <option value="center">Centre</option>
+                <option value="top_half">Top half</option>
+              </select>
+            </div>
+          </div>
+          <div class="row" style="margin-top:8px;flex-wrap:wrap;gap:14px">
+            <label class="switch" style="margin:0"><input type="checkbox" id="ocrAutoTranslate" checked> Auto-translate (detects the language; skips text already in your language)</label>
+            <label class="switch" style="margin:0"><input type="checkbox" id="ocrScreenLabels" checked> Show the translation over the text on screen</label>
+            <label class="switch" style="margin:0"><input type="checkbox" id="ocrToOverlay" checked> Show on desktop / VR overlay (HUD cards)</label>
+            <label class="switch" style="margin:0"><input type="checkbox" id="ocrToChatbox"> Send to chatbox</label>
+          </div>
           <div class="row" style="margin-top:10px"><button class="btn" id="ocrToggle">Start reading</button></div>
+          <div class="muted" style="margin-top:6px;font-size:.72rem">On-screen labels: share the <b>entire screen</b> or the <b>VRChat window</b>, and run VRChat windowed / borderless (labels can't draw over exclusive fullscreen). The labels are hidden from the capture, so they're never re-read.</div>
           <div class="muted" id="ocrStatus" style="margin-top:8px;font-size:.78rem">Stopped</div>
           <div class="muted" id="ocrLastText" style="margin-top:4px;font-size:.78rem"></div>
         </div>
@@ -1086,20 +1123,6 @@
             <h3>🔋 VR gear battery <span class="pill" id="vrState">off</span></h3>
             <label class="switch"><input type="checkbox" id="enableVr"> Enable</label>
             <div id="vrOut" class="muted" style="margin-top:10px">Requires native OpenVR helper (see README).</div>
-          </div>
-          <div class="card">
-            <h3>KitsuNexus Desktop HUD <span class="pill" id="desktopHudState">off</span></h3>
-            <div class="muted" style="font-size:.72rem;margin-bottom:8px">Game-attached HUD for windowed or borderless VRChat. Follows the game and hides when you switch away.</div>
-            <button class="btn" id="desktopHudEdit">Open HUD controls</button><button class="btn" id="desktopHudToggle">Start desktop HUD</button>
-            <label style="display:block;margin-top:8px"><input type="checkbox" id="desktopHudClickThrough"> Click-through (disable to move or resize)</label>
-            <div style="margin-top:8px"><button class="btn" id="hudExportJson">Export world JSON</button> <button class="btn" id="hudExportCsv">Export world CSV</button></div>
-            <div id="desktopHudOut" class="muted" style="margin-top:8px">Stopped</div>
-          </div>
-          <div class="card">
-            <h3>🥽 VR Overlay <span class="pill" id="vrOverlayState">off</span> <span class="muted" style="font-size:.68rem">(experimental)</span></h3>
-            <div class="muted" style="font-size:.72rem;margin-bottom:6px">Displays a dedicated KitsuNexus HUD in your SteamVR headset, independently of the desktop app window. Windows + SteamVR only, needs your headset connected and powered on. First version: view-only (not yet clickable in VR).</div>
-            <button class="btn" id="vrOverlayToggle">Start VR overlay</button>
-            <div id="vrOverlayOut" class="muted" style="margin-top:10px">Stopped</div>
           </div>
           <div class="card">
             <h3>👻 Terrors of Nowhere <span class="pill" id="tonState">off</span></h3>
@@ -1426,30 +1449,46 @@
 
       <!-- OVERLAY -->
       <section id="overlay" class="tabpanel">
-        <div class="card">
-          <h3>🖥 OBS Overlay</h3>
-          <div id="overlayNotPaired" class="muted">
-            This overlay is hosted by your KitsuNexus server, not this app — pair a device in
-            <b>Settings ▸ Cloud Sync</b> first to get your overlay URL.
+        <div class="grid cols-2">
+          <div class="card">
+            <h3>KitsuNexus Desktop HUD <span class="pill" id="desktopHudState">off</span></h3>
+            <div class="muted" style="font-size:.72rem;margin-bottom:8px">Game-attached HUD for windowed or borderless VRChat. Follows the game and hides when you switch away.</div>
+            <button class="btn" id="desktopHudEdit">Open HUD controls</button><button class="btn" id="desktopHudToggle">Start desktop HUD</button>
+            <label style="display:block;margin-top:8px"><input type="checkbox" id="desktopHudClickThrough"> Click-through (disable to move or resize)</label>
+            <div style="margin-top:8px"><button class="btn" id="hudExportJson">Export world JSON</button> <button class="btn" id="hudExportCsv">Export world CSV</button></div>
+            <div id="desktopHudOut" class="muted" style="margin-top:8px">Stopped</div>
           </div>
-          <div id="overlayPaired" style="display:none">
-            <div class="grid cols-2">
-              <div><label>Style</label>
-                <select id="overlayStyleSelect">
-                  <option value="default">Default</option><option value="bash">Bash</option><option value="discord">Discord</option>
-                  <option value="macos">macOS</option><option value="windows">Windows</option><option value="soundcloud">SoundCloud</option><option value="youtube">YouTube</option>
-                </select>
-              </div>
-              <div><label>Box background</label>
-                <select id="overlayBgSelect">
-                  <option value="solid">Solid</option><option value="thin">Thin</option><option value="hidden">Hidden (text only)</option>
-                </select>
-              </div>
+          <div class="card">
+            <h3>🥽 VR Overlay <span class="pill" id="vrOverlayState">off</span> <span class="muted" style="font-size:.68rem">(experimental)</span></h3>
+            <div class="muted" style="font-size:.72rem;margin-bottom:6px">Displays a dedicated KitsuNexus HUD in your SteamVR headset, independently of the desktop app window. Windows + SteamVR only, needs your headset connected and powered on. First version: view-only (not yet clickable in VR).</div>
+            <button class="btn" id="vrOverlayToggle">Start VR overlay</button>
+            <div id="vrOverlayOut" class="muted" style="margin-top:10px">Stopped</div>
+          </div>
+          <div class="card">
+            <h3>🖥 OBS Overlay</h3>
+            <div id="overlayNotPaired" class="muted">
+              This overlay is hosted by your KitsuNexus server, not this app — pair a device in
+              <b>Settings ▸ Cloud Sync</b> first to get your overlay URL.
             </div>
-            <label style="margin-top:12px">OBS Browser Source URL</label>
-            <div class="row"><input type="text" id="overlayUrlInput" readonly style="flex:1" /><button class="btn ghost" id="overlayCopyUrl">Copy</button></div>
-            <div id="overlayStatus" class="muted" style="margin-top:8px">Overlay not checked yet</div>
-            <iframe id="overlayPreview" style="width:100%; height:220px; border:1px solid var(--border); border-radius:10px; margin-top:10px; background:transparent" title="overlay preview"></iframe>
+            <div id="overlayPaired" style="display:none">
+              <div class="grid cols-2">
+                <div><label>Style</label>
+                  <select id="overlayStyleSelect">
+                    <option value="default">Default</option><option value="bash">Bash</option><option value="discord">Discord</option>
+                    <option value="macos">macOS</option><option value="windows">Windows</option><option value="soundcloud">SoundCloud</option><option value="youtube">YouTube</option>
+                  </select>
+                </div>
+                <div><label>Box background</label>
+                  <select id="overlayBgSelect">
+                    <option value="solid">Solid</option><option value="thin">Thin</option><option value="hidden">Hidden (text only)</option>
+                  </select>
+                </div>
+              </div>
+              <label style="margin-top:12px">OBS Browser Source URL</label>
+              <div class="row"><input type="text" id="overlayUrlInput" readonly style="flex:1" /><button class="btn ghost" id="overlayCopyUrl">Copy</button></div>
+              <div id="overlayStatus" class="muted" style="margin-top:8px">Overlay not checked yet</div>
+              <iframe id="overlayPreview" style="width:100%; height:220px; border:1px solid var(--border); border-radius:10px; margin-top:10px; background:transparent" title="overlay preview"></iframe>
+            </div>
           </div>
         </div>
       </section>
@@ -2388,8 +2427,18 @@
             <label class="switch"><input type="checkbox" id="autoTikTokFollowers"> TikTok followers</label>
             <label class="switch"><input type="checkbox" id="autoTwitch"> 🟣 Twitch followers</label>
             <label class="switch"><input type="checkbox" id="autoKick"> 🟢 Kick followers</label>
+            <label class="switch"><input type="checkbox" id="autoChatbox"> 💬 Chatbox (status rotation)</label>
+            <label class="switch"><input type="checkbox" id="autoDesktopHud"> 🖥 Desktop HUD</label>
+            <label class="switch"><input type="checkbox" id="autoAssistant"> 🎙 Voice assistant (Jarvis)</label>
+            <label class="switch"><input type="checkbox" id="autoStt"> 🎧 Desktop Speech-to-Text</label>
+            <label class="switch"><input type="checkbox" id="autoOcr"> 🔎 OCR screen translate</label>
+            <label class="switch"><input type="checkbox" id="autoConfiguredStart"> 🚀 Configured Start apps (below)</label>
           </div>
-          <div class="muted" style="font-size:.75rem; margin-top:6px">Saved tokens/IDs are reused — no need to press Connect each launch.</div>
+          <div class="grid cols-2" style="margin-top:8px">
+            <div><label>Wait before auto-starting (seconds)</label><input type="number" id="autoDelay" min="0" max="120" step="1" value="0" /></div>
+          </div>
+          <div class="muted" style="font-size:.75rem; margin-top:6px">Saved tokens/IDs are reused — no need to press Connect each launch. Weather, Auto-AFK, the OSC avatar clock and screenshot metadata remember their own on/off and start by themselves. A delay helps with "Launch on system login", so the network and VRChat are ready first.</div>
+          <div class="muted" id="autoStartOut" style="font-size:.75rem; margin-top:6px"></div>
         </div>
         <div class="card">
           <h3>🚀 Configured Start</h3>
@@ -2475,9 +2524,15 @@
             <label data-i18n="translator.apiKey">API key</label>
             <input type="password" id="translatorApiKey" placeholder="key" />
           </div>
+          <div id="translatorRegionRow" style="margin-top:8px">
+            <label>Azure region <span class="muted" style="font-size:.7rem">(the Translator resource's location, e.g. westeurope; blank for global)</span></label>
+            <input type="text" id="translatorRegion" placeholder="westeurope" />
+          </div>
+          <div id="translatorAiRow" class="muted" style="margin-top:8px;font-size:.75rem">Uses the AI provider set in the AI tab (IntelliChat). Free options there: OpenRouter free models, Gemini, Groq, Pollinations…</div>
+          <div class="muted" id="translatorProviderNote" style="margin-top:6px;font-size:.75rem"></div>
           <div id="translatorDeeplTypeRow" style="margin-top:8px">
             <label data-i18n="translator.deeplType">DeepL account type</label>
-            <select id="translatorDeeplType"><option value="free">Free</option><option value="pro">Pro</option></select>
+            <select id="translatorDeeplType"><option value="auto">Detect from key</option><option value="free">Free</option><option value="pro">Pro</option></select>
           </div>
           <div class="grid cols-2" style="margin-top:8px">
             <div>

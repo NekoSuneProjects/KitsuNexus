@@ -131,3 +131,25 @@ test('self-hosted TTS servers (Coqui, Piper, MaryTTS) are called with their own 
     assert.match(hits[2].u, /^\/process\?INPUT_TEXT=hello\+there.*LOCALE=en_GB&VOICE=v1$/)
   } finally { srv.close() }
 })
+
+test('TikTok voice list is the verified set and StreamElements explains the token it now needs', async () => {
+  const { TIKTOK_VOICES } = require('../modules/live/tiktokTts')
+  assert.ok(TIKTOK_VOICES.length >= 70)
+  const ids = TIKTOK_VOICES.map(v => v.apiName)
+  assert.equal(new Set(ids).size, ids.length, 'no duplicate voices')
+  for (const id of ['en_us_001', 'en_us_ghostface', 'en_male_narration', 'jp_001']) assert.ok(ids.includes(id), id)
+  assert.ok(tts.TTS_PROVIDERS.streamelements)
+  // No network: a fake fetch stands in for StreamElements.
+  const calls = []
+  const fake = status => async (url, init) => {
+    calls.push({ url, auth: init && init.headers && init.headers.Authorization })
+    return new Response(status === 200 ? Buffer.from('ID3audio') : '{}', { status, headers: { 'Content-Type': status === 200 ? 'audio/mp3' : 'application/json' } })
+  }
+  await assert.rejects(() => tts.speakStreamElements({ text: 'new text', voice: 'Brian' }, fake(401)), /JWT token/)
+  assert.equal(calls[0].auth, undefined, 'no token: tried anonymously first (cached phrases still play)')
+  const ok = await tts.speakStreamElements({ text: 'hello', voice: 'Brian', apiKey: 'jwt123' }, fake(200))
+  assert.equal(calls[1].auth, 'Bearer jwt123')
+  assert.match(calls[1].url, /voice=Brian&text=hello$/)
+  assert.equal(Buffer.from(ok.audio, 'base64').toString(), 'ID3audio')
+  await assert.rejects(() => tts.speakStreamElements({ text: 'x', apiKey: 'bad' }, fake(401)), /rejected the token/)
+})

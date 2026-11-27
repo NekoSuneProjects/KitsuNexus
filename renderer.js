@@ -14,6 +14,7 @@ const { escapeHtml, safeHttpUrl, safeImageUrl, releaseNotesHtml } = require('./m
 const { LiveTypingSender } = require('./modules/vrchat/chatbox/liveTyping')
 const { DEFAULT_PRESETS } = require('./modules/vrchat/status/statusModule')
 const { seasonalTheme } = require('./modules/ui/seasonalTheme')
+const { mergeSidebarOrder } = require('./modules/ui/sidebarOrder')
 const { createHalloweenSpeech } = require('./modules/ui/halloweenPhrases')
 const { avatarUrls, loadProfileImages } = require('./modules/ui/profileImages')
 const { RealisticOscLeashController } = require('./modules/integrations/osc/leash/realisticOscLeash')
@@ -5895,6 +5896,39 @@ $('overlayCopyUrl').addEventListener('click', async () => {
 document.querySelector('.navbtn[data-tab="overlay"]').addEventListener('click', refreshOverlayUi)
 
 /* ---------------- boot ---------------- */
+// Startup auto-start (Settings → Startup). Each item reuses the feature's own
+// start control and saved settings; failures are reported, not fatal.
+async function runAutoStart (as = {}) {
+  const wanted = Object.keys(as).filter(k => k.startsWith('auto') && k !== 'autoMinimized' && k !== 'autoDelay' && as[k])
+  if (!wanted.length) return
+  const delay = Math.max(0, Math.min(120, Number(as.autoDelay) || 0))
+  if (delay) { setText('autoStartOut', `Auto-start in ${delay}s…`); await new Promise(r => setTimeout(r, delay * 1000)) }
+  const done = []; const failed = []
+  const step = async (key, label, fn) => {
+    if (!as[key]) return
+    try { const r = await fn(); if (r === false) failed.push(`${label} (not set up)`); else done.push(label) } catch (err) { failed.push(`${label} (${err.message || err})`) }
+  }
+  const fireToggle = id => { if (!$(id).checked) { $(id).checked = true; $(id).dispatchEvent(new Event('change')) } }
+  await step('autoDiscord', 'Discord', () => { if (!$('discordAppId').value) return false; $('discordStart').click() })
+  await step('autoHeartrate', 'Heart rate', () => { if (!($('hrProvider').value === 'device' || $('pulsoidToken').value || $('hyperateDevice').value)) return false; $('hrStart').click() })
+  await step('autoStats', 'Component stats', () => fireToggle('enableStats'))
+  await step('autoNet', 'Network stats', () => fireToggle('enableNet'))
+  await step('autoWindow', 'Window activity', () => fireToggle('enableWindow'))
+  await step('autoTon', 'Terrors of Nowhere', () => fireToggle('enableTon'))
+  await step('autoTikTokFollowers', 'TikTok', () => { if (!$('tiktokUser').value.trim()) return false; api.tiktokFollowersStart($('tiktokUser').value) })
+  await step('autoTwitch', 'Twitch', () => $('twitchConnect').click())
+  await step('autoKick', 'Kick', () => { if (!$('kickSlug').value.trim()) return false; $('kickConnect').click() })
+  await step('autoChatbox', 'Chatbox', () => { if (!composerRunning) $('composerToggle').click() })
+  await step('autoDesktopHud', 'Desktop HUD', async () => { const st = await api.hudStatus(); if (!st.running) await api.hudShow(); await refreshDesktopHud() })
+  await step('autoConfiguredStart', 'Configured Start apps', () => { if (!$('startApps').value.trim() && !$('startWithVrc').checked) return false; $('startLaunch').click() })
+  // setLive() reports problems (no API key, mic denied) by staying not-live
+  // with an error, rather than throwing - check, so the status line is honest.
+  await step('autoAssistant', 'Voice assistant', async () => { const c = ensureJarvisAssistant(); if (!c.live) await c.setLive(true); if (!c.live) throw new Error(c.error || 'could not start listening') })
+  await step('autoStt', 'Speech-to-Text', async () => { const c = ensureDesktopStt(); if (!c.live) await c.setLive(true); if (!c.live) throw new Error(c.error || 'could not start listening') })
+  await step('autoOcr', 'OCR screen translate', async () => { const c = ensureOcrTranslate(); if (!c.enabled) { await c.configure(await saveOcrConfig()); const s = await c.start(); if (!s.enabled) throw new Error(s.error || 'could not start') } })
+  setText('autoStartOut', [done.length ? '✓ Auto-started: ' + done.join(', ') : '', failed.length ? '✗ Not started: ' + failed.join(', ') : ''].filter(Boolean).join('  ·  '))
+}
+
 async function init () {
   await loadAudioDevices()
 
@@ -5904,7 +5938,9 @@ async function init () {
   if (Array.isArray(savedSidebarOrder) && savedSidebarOrder.length) {
     const sidebar = document.querySelector('.sidebar')
     const allBtns = [...sidebar.querySelectorAll('.navbtn[data-tab]')]
-    const orderMap = new Map(savedSidebarOrder.map((tab, i) => [tab, i]))
+    const mergedOrder = mergeSidebarOrder(savedSidebarOrder, allBtns.map(b => b.dataset.tab))
+    if (mergedOrder.join('|') !== savedSidebarOrder.join('|')) api.saveSetting('sidebarOrder', mergedOrder)
+    const orderMap = new Map(mergedOrder.map((tab, i) => [tab, i]))
     const sorted = allBtns.slice().sort((a, b) => {
       const ai = orderMap.has(a.dataset.tab) ? orderMap.get(a.dataset.tab) : Infinity
       const bi = orderMap.has(b.dataset.tab) ? orderMap.get(b.dataset.tab) : Infinity
@@ -6144,29 +6180,26 @@ async function init () {
 
   // ---- Startup / auto-start ----
   const as = await api.getSetting('autostart', {})
-  const AUTO_IDS = ['autoMinimized', 'autoDiscord', 'autoHeartrate', 'autoStats', 'autoNet', 'autoWindow', 'autoTon', 'autoTikTokFollowers', 'autoTwitch', 'autoKick']
+  const AUTO_IDS = ['autoMinimized', 'autoDiscord', 'autoHeartrate', 'autoStats', 'autoNet', 'autoWindow', 'autoTon', 'autoTikTokFollowers', 'autoTwitch', 'autoKick',
+    'autoChatbox', 'autoDesktopHud', 'autoAssistant', 'autoStt', 'autoOcr', 'autoConfiguredStart']
   AUTO_IDS.forEach(id => { $(id).checked = !!as[id] })
+  $('autoDelay').value = Math.max(0, Math.min(120, Number(as.autoDelay) || 0))
   try { $('autoLaunch').checked = await api.getLaunchOnLogin() } catch (_) {}
 
   const saveAutostart = () => {
     const out = {}
     AUTO_IDS.forEach(id => { out[id] = $(id).checked })
+    out.autoDelay = Math.max(0, Math.min(120, Number($('autoDelay').value) || 0))
     api.saveSetting('autostart', out)
   }
   AUTO_IDS.forEach(id => $(id).addEventListener('change', saveAutostart))
+  $('autoDelay').addEventListener('change', saveAutostart)
   $('autoLaunch').addEventListener('change', e => api.setLaunchOnLogin(e.target.checked))
 
   // Drive the existing controls so saved tokens/IDs are reused (no manual clicks).
-  const fireToggle = id => { if (!$(id).checked) { $(id).checked = true; $(id).dispatchEvent(new Event('change')) } }
-  if (as.autoDiscord && $('discordAppId').value) $('discordStart').click()
-  if (as.autoHeartrate && ($('hrProvider').value === 'device' || $('pulsoidToken').value || $('hyperateDevice').value)) $('hrStart').click()
-  if (as.autoStats) fireToggle('enableStats')
-  if (as.autoNet) fireToggle('enableNet')
-  if (as.autoWindow) fireToggle('enableWindow')
-  if (as.autoTon) fireToggle('enableTon')
-  if (as.autoTikTokFollowers && $('tiktokUser').value.trim()) api.tiktokFollowersStart($('tiktokUser').value)
-  if (as.autoTwitch) $('twitchConnect').click()
-  if (as.autoKick) $('kickConnect').click()
+  // Runs in the background (after the optional delay) and reports what
+  // actually started, so it's visible whether auto-start worked.
+  runAutoStart(as).catch(err => setText('autoStartOut', 'Auto-start error: ' + (err.message || err)))
 
   refreshNowPlaying()
 }
@@ -6255,7 +6288,7 @@ async function mountAiPicker (container, prefix, onChange) {
   return {
     get,
     set (cfg = {}) {
-      const key = cfg.provider && providers[cfg.provider] ? cfg.provider : 'nekosune_ollama'
+      const key = cfg.provider && providers[cfg.provider] ? cfg.provider : 'pollinations'
       el('Provider').value = key
       el('BaseUrl').value = cfg.baseUrl || providers[key].baseUrl || ''
       el('Model').value = cfg.model || providers[key].model || ''
@@ -6284,7 +6317,7 @@ async function setupAssistantAi () {
   const own = await mountAiPicker('aiPickerAssistant', 'asstAi', cfg => { state.primary = cfg; save() })
   const backup = await mountAiPicker('aiPickerBackup', 'asstAiBk', cfg => { state.backup = { ...cfg, enabled: $('assistantAiBackupEnable').checked }; save() })
   own.set(state.primary.provider ? state.primary : { provider: 'groq' })
-  backup.set(state.backup.provider ? state.backup : { provider: 'nekosune_ollama' })
+  backup.set(state.backup.provider ? state.backup : { provider: 'pollinations' })
   $('assistantAiMode').value = state.mode
   $('assistantAiBackupEnable').checked = !!state.backup.enabled
   const show = () => {
@@ -6297,23 +6330,45 @@ async function setupAssistantAi () {
 }
 
 const TRANSLATOR_ROWS = {
-  libretranslate: ['translatorEndpointRow'],
   libretranslate_custom: ['translatorEndpointRow', 'translatorKeyRow'],
+  libretranslate_com: ['translatorKeyRow'],
+  lingva: ['translatorEndpointRow'],
   deepl: ['translatorKeyRow', 'translatorDeeplTypeRow'],
-  google: ['translatorKeyRow']
+  google: ['translatorKeyRow'],
+  microsoft: ['translatorKeyRow', 'translatorRegionRow'],
+  ai: ['translatorAiRow']
+}
+const TRANSLATOR_NOTES = {
+  google_free: 'Free, no key. Rate-limited after bursts; KitsuNexus then falls back to the other free services automatically.',
+  mymemory: 'Free, no key (about 5,000 characters a day). The language is detected first, since MyMemory itself cannot auto-detect.',
+  deepl: 'Free key: 500,000 characters/month (keys ending in ":fx"). Best quality for European languages.',
+  microsoft: 'Free tier (F0): 2 million characters/month. Azure portal → create a Translator resource → Keys and Endpoint.',
+  google: 'Google Cloud Translation API key (free tier: 500,000 characters/month).',
+  ai: 'Translates with your AI provider; good with slang and names.',
+  libretranslate_com: 'Paid key from libretranslate.com.',
+  libretranslate_custom: 'Your own LibreTranslate server (e.g. docker run -p 5000:5000 libretranslate/libretranslate).',
+  lingva: 'Your own Lingva server (a private Google Translate front-end).'
 }
 function updateTranslatorRows () {
   const provider = $('translatorProvider').value
   const visible = new Set(TRANSLATOR_ROWS[provider] || [])
-  ;['translatorEndpointRow', 'translatorKeyRow', 'translatorDeeplTypeRow'].forEach(id => {
-    $(id).style.display = visible.has(id) ? '' : 'none'
+  ;['translatorEndpointRow', 'translatorKeyRow', 'translatorDeeplTypeRow', 'translatorRegionRow', 'translatorAiRow'].forEach(id => {
+    if ($(id)) $(id).style.display = visible.has(id) ? '' : 'none'
   })
+  setText('translatorProviderNote', TRANSLATOR_NOTES[provider] || '')
 }
 async function setupTranslator () {
   const providers = await api.translateProviders()
+  const tiers = await api.translateTiers().catch(() => ({}))
   const providerSel = $('translatorProvider')
   providerSel.innerHTML = ''
-  Object.entries(providers).forEach(([key, p]) => providerSel.appendChild(new Option(p.label, key)))
+  for (const tier of ['free', 'free-key', 'paid', 'selfhost']) {
+    const items = Object.entries(providers).filter(([, p]) => (p.tier || 'free') === tier)
+    if (!items.length) continue
+    const g = document.createElement('optgroup'); g.label = tiers[tier] || tier
+    items.forEach(([key, p]) => g.appendChild(new Option(p.label, key)))
+    providerSel.appendChild(g)
+  }
   const sourceSel = $('translatorSource')
   const targetSel = $('translatorTarget')
   LANGUAGES.forEach(({ code, name }) => {
@@ -6322,13 +6377,14 @@ async function setupTranslator () {
   })
 
   const saved = await api.getSetting('translator', {
-    provider: 'libretranslate', endpoint: providers.libretranslate?.endpoint || 'https://translator.nekosunevr.co.uk/translate', apiKey: '', apiType: 'free',
+    provider: 'google_free', endpoint: '', apiKey: '', apiType: 'auto', region: '',
     sourceLang: 'auto', targetLang: 'en', useAiGrammarFix: false
   })
-  $('translatorProvider').value = saved.provider || 'libretranslate'
+  $('translatorProvider').value = providers[saved.provider] ? saved.provider : 'google_free'
   $('translatorEndpoint').value = saved.endpoint || providers[$('translatorProvider').value]?.endpoint || ''
   $('translatorApiKey').value = saved.apiKey || ''
-  $('translatorDeeplType').value = saved.apiType || 'free'
+  $('translatorDeeplType').value = saved.apiType || 'auto'
+  if ($('translatorRegion')) $('translatorRegion').value = saved.region || ''
   $('translatorSource').value = saved.sourceLang || 'auto'
   $('translatorTarget').value = saved.targetLang || 'en'
   $('translatorAiGrammarFix').checked = !!saved.useAiGrammarFix
@@ -6340,7 +6396,7 @@ async function setupTranslator () {
     updateTranslatorRows()
     await saveTranslator()
   })
-  ;['translatorEndpoint', 'translatorApiKey', 'translatorDeeplType', 'translatorSource', 'translatorTarget', 'translatorAiGrammarFix']
+  ;['translatorEndpoint', 'translatorApiKey', 'translatorDeeplType', 'translatorSource', 'translatorTarget', 'translatorAiGrammarFix', 'translatorRegion']
     .forEach(id => $(id).addEventListener('change', saveTranslator))
 }
 async function saveTranslator () {
@@ -6348,7 +6404,7 @@ async function saveTranslator () {
     provider: $('translatorProvider').value,
     endpoint: $('translatorEndpoint').value,
     apiKey: $('translatorApiKey').value,
-    apiType: $('translatorDeeplType').value,
+    apiType: $('translatorDeeplType').value, region: $('translatorRegion') ? $('translatorRegion').value.trim() : '',
     sourceLang: $('translatorSource').value,
     targetLang: $('translatorTarget').value,
     useAiGrammarFix: $('translatorAiGrammarFix').checked
@@ -6364,6 +6420,35 @@ let _translatorCache = null
 let _translatorCacheTime = 0
 const TRANSLATOR_CACHE_TTL = 5000 // refresh settings at most every 5 s
 
+// Auto-translate for OCR / speech-to-text: always auto-detects the language,
+// translates into the feature's own target, returns '' when the text is
+// already in that language (nothing to translate), and can show the result
+// on the desktop / VR HUD.
+async function autoTranslate (text, { target = 'en', overlay = false, source = '' } = {}) {
+  const t = (await api.getSetting('translator', null)) || {}
+  const provider = t.provider || 'google_free'
+  try {
+    const r = await api.translate({
+      provider,
+      endpoint: t.endpoint,
+      apiKey: t.apiKey,
+      apiType: t.apiType,
+      region: t.region,
+      source: 'auto',
+      target,
+      aiSettings: provider === 'ai' ? { baseUrl: $('aiBaseUrl').value, apiKey: $('aiKey').value, model: $('aiModel').value } : null,
+      text
+    })
+    if (!r || r.sameLanguage) return ''
+    const out = String(r.translatedText || '').trim()
+    if (!out || out === String(text).trim()) return ''
+    if (overlay) api.hudTranslation({ source, from: r.detectedSourceLang || '', to: target, original: text, text: out }).catch(() => {})
+    return out
+  } catch (err) {
+    console.warn('auto-translate:', err.message)
+    return ''
+  }
+}
 async function translateWithSettings (text) {
   const now = Date.now()
   if (!_translatorCache || (now - _translatorCacheTime) > TRANSLATOR_CACHE_TTL) {
@@ -6378,10 +6463,11 @@ async function translateWithSettings (text) {
       endpoint: t.endpoint,
       apiKey: t.apiKey,
       apiType: t.apiType,
+      region: t.region,
       source: t.sourceLang,
       target: t.targetLang,
       useAiGrammarFix: t.useAiGrammarFix,
-      aiSettings: t.useAiGrammarFix ? { baseUrl: $('aiBaseUrl').value, apiKey: $('aiKey').value, model: $('aiModel').value } : null,
+      aiSettings: (t.useAiGrammarFix || t.provider === 'ai') ? { baseUrl: $('aiBaseUrl').value, apiKey: $('aiKey').value, model: $('aiModel').value } : null,
       text
     })
     return result?.translatedText || text
@@ -6421,6 +6507,7 @@ const TTS_NUMERIC_FIELDS = new Set(['ttsSapiRate'])
 // from this spec at load time (before setupTts reads saved values), instead of
 // eight more hand-written blocks in index.html.
 const TTS_GENERATED = {
+  streamelements: { label: 'StreamElements (Brian etc., free account token)', hint: 'Without a token only already-cached phrases (like "hello") play; new text needs your JWT token: StreamElements dashboard → your account / channel settings → "Show secrets" (free account). 206 voices (Polly, Google, Azure) are listed in the Voice box.', fields: [['apiKey', 'JWT token', 'password'], ['voice', 'Voice', 'text', 'Brian', 'list']] },
   geminitts: { label: 'Google Gemini TTS (free tier key)', hint: 'Free key at aistudio.google.com/apikey. Voices: Kore, Puck, Charon, Fenrir, Aoede, Leda, Orus, Zephyr…', fields: [['apiKey', 'API key', 'password'], ['model', 'Model', 'text', 'gemini-2.5-flash-preview-tts'], ['voice', 'Voice', 'text', 'Kore']] },
   unrealspeech: { label: 'Unreal Speech (free monthly allowance)', hint: 'Free key at unrealspeech.com. Voices: Sierra, Dan, Will, Scarlett, Liv, Amy, Eric, Brian…', fields: [['apiKey', 'API key', 'password'], ['voice', 'Voice', 'text', 'Sierra']] },
   cartesia: { label: 'Cartesia Sonic (cloud)', hint: 'Voice = a voice id copied from play.cartesia.ai.', fields: [['apiKey', 'API key', 'password'], ['voice', 'Voice id', 'text', ''], ['model', 'Model', 'text', 'sonic-2']] },
@@ -6442,10 +6529,11 @@ const TTS_GENERATED = {
     if (![...engineSel.options].some(o => o.value === engine)) engineSel.appendChild(new Option(spec.label, engine))
     const rowId = `ttsGen${cap(engine)}Row`
     const fields = {}
-    const inputs = spec.fields.map(([key, label, type, placeholder]) => {
+    const inputs = spec.fields.map(([key, label, type, placeholder, list]) => {
       const id = `ttsGen${cap(engine)}${cap(key)}`
       fields[key] = id
-      return `<div><label>${esc(label)}</label><input type="${type}" id="${id}" placeholder="${esc(placeholder || '')}" /></div>`
+      const dl = list ? ` list="${id}List"` : ''
+      return `<div><label>${esc(label)}</label><input type="${type}" id="${id}"${dl} placeholder="${esc(placeholder || '')}" />${list ? `<datalist id="${id}List"></datalist>` : ''}</div>`
     }).join('')
     const row = document.createElement('div')
     row.id = rowId; row.style.marginTop = '8px'; row.style.display = 'none'
@@ -6453,6 +6541,38 @@ const TTS_GENERATED = {
     anchor.parentNode.insertBefore(row, anchor)
     TTS_ENGINE_FIELDS[engine] = { row: rowId, fields }
   }
+  // StreamElements' voice list is public: fill the Voice box with all of them.
+  api.ttsStreamElementsVoices().then(r => {
+    const dl = $('ttsGenStreamelementsVoiceList')
+    if (!dl || !r || !r.voices) return
+    dl.innerHTML = r.voices.map(v => `<option value="${esc(v.id)}">${esc(`${v.name !== v.id ? v.name + ' · ' : ''}${v.language || v.languageCode} · ${v.gender} · ${v.provider}`)}</option>`).join('')
+  }).catch(() => {})
+})()
+// Group the TTS engine list by what it costs (like the AI provider picker).
+// Plans change, so these are a guide - each provider's site has the details.
+const TTS_TIERS = [
+  ['Free — no key', ['sapi', 'googletranslate', 'tiktok']],
+  ['Free tier — free account / key', ['streamelements', 'geminitts', 'unrealspeech', 'elevenlabs', 'azure', 'google', 'ibmwatson']],
+  ['Free trial / starter credits', ['deepgram', 'polly', 'cartesia', 'fishaudio', 'lmnt', 'hume', 'speechify', 'murf', 'ttsmonster']],
+  ['Paid', ['openai', 'voiceforge', 'uberduck']],
+  ['Self-hosted — free, on your PC / server', ['openaicompat', 'coqui', 'piper', 'marytts', 'selfhosted', 'glados', 'moonbase']]
+]
+;(function groupTtsEngines () {
+  const sel = $('ttsEngine')
+  if (!sel) return
+  const current = sel.value
+  const byValue = new Map([...sel.options].map(o => [o.value, o]))
+  const used = new Set()
+  const groups = TTS_TIERS.map(([label, engines]) => {
+    const g = document.createElement('optgroup'); g.label = label
+    for (const e of engines) { const o = byValue.get(e); if (o) { g.appendChild(o); used.add(e) } }
+    return g
+  })
+  // Anything not classified yet still shows, under "Other".
+  const rest = [...byValue.entries()].filter(([v]) => !used.has(v))
+  if (rest.length) { const g = document.createElement('optgroup'); g.label = 'Other'; rest.forEach(([, o]) => g.appendChild(o)); groups.push(g) }
+  sel.replaceChildren(...groups.filter(g => g.children.length))
+  if (current) sel.value = current
 })()
 // Presets for the OpenAI-compatible TTS engine (self-hosted voice servers + cloud).
 // Model/voice are the servers' documented defaults; '' = use the server's default.
@@ -6625,12 +6745,17 @@ function updateSttRows () {
   const visible = new Set(STT_ROWS[engine] || [])
   ;['sttCloudRow', 'sttLocalRow'].forEach(id => { $(id).style.display = visible.has(id) ? '' : 'none' })
 }
+let sttTranslateCfg = null
 function ensureDesktopStt () {
   if (desktopStt) return desktopStt
   desktopStt = new DesktopSttController({
     transcribeCloud: opts => api.sttTranscribeCloud(opts),
     transcribeLocal: opts => api.sttTranscribeLocal(opts),
-    translate: translateWithSettings,
+    translate: text => {
+      const c = sttTranslateCfg || {}
+      if (c.autoTranslate === false) return translateWithSettings(text)
+      return autoTranslate(text, { target: c.target || 'en', overlay: c.toOverlay !== false, source: 'stt' })
+    },
     sendChatboxMessage,
     speakText: speakWithSettings,
     onUpdate: renderSttState
@@ -6655,8 +6780,12 @@ async function saveSttConfig () {
     sourceLang: $('sttSourceLang').value,
     clipSeconds: parseInt($('sttClipSeconds').value, 10) || 6,
     toChatbox: $('sttToChatbox').checked,
-    speakTranslation: $('sttSpeakTranslation').checked
+    speakTranslation: $('sttSpeakTranslation').checked,
+    target: $('sttTarget').value || 'en',
+    autoTranslate: $('sttAutoTranslate').checked,
+    toOverlay: $('sttToOverlay').checked
   }
+  sttTranslateCfg = cfg
   await api.saveSetting('desktopStt', cfg)
   ensureDesktopStt().configure({ ...cfg, cloudApiKey: cfg.cloudApiKey })
   return cfg
@@ -6675,11 +6804,15 @@ async function setupDesktopStt () {
   $('sttSpeakTranslation').checked = !!saved.speakTranslation
   LANGUAGES.forEach(({ code, name }) => $('sttSourceLang').appendChild(new Option(name, code)))
   $('sttSourceLang').value = saved.sourceLang || 'auto'
+  LANGUAGES.forEach(({ code, name }) => $('sttTarget').appendChild(new Option(name, code)))
+  $('sttTarget').value = saved.target || 'en'
+  $('sttAutoTranslate').checked = saved.autoTranslate !== false
+  $('sttToOverlay').checked = saved.toOverlay !== false
   updateSttRows()
   await saveSttConfig()
 
   $('sttEngine').addEventListener('change', async () => { updateSttRows(); await saveSttConfig() })
-  ;['sttCloudProvider', 'sttCloudKey', 'sttLocalModel', 'sttSourceLang', 'sttClipSeconds', 'sttToChatbox', 'sttSpeakTranslation']
+  ;['sttCloudProvider', 'sttCloudKey', 'sttLocalModel', 'sttSourceLang', 'sttClipSeconds', 'sttToChatbox', 'sttSpeakTranslation', 'sttTarget', 'sttAutoTranslate', 'sttToOverlay']
     .forEach(id => $(id).addEventListener('change', saveSttConfig))
 }
 // Medium/Large/Turbo are multi-GB first-time downloads - without this, a
@@ -6700,10 +6833,25 @@ $('sttToggle').addEventListener('click', async () => {
 
 /* ---------------- OCR screen translate ---------------- */
 let ocrTranslate = null
+let ocrTranslateCfg = null
 function ensureOcrTranslate () {
   if (ocrTranslate) return ocrTranslate
   ocrTranslate = new OcrTranslateController({
-    translate: translateWithSettings,
+    recognize: (lang, image) => api.ocrRecognize(lang, image),
+    // VRC+ gift banners read on screen -> HUD card.
+    onGift: g => { api.hudGift({ name: g.name, detail: g.detail }).catch(() => {}) },
+    getExcludeRects: (w, h) => api.ocrOwnWindowRects(w, h),
+    // Positioned labels for the on-screen translation overlay.
+    onOverlay: payload => {
+      const c = ocrTranslateCfg || {}
+      if (payload.stopped || c.screenLabels === false) { api.translateOverlayHide().catch(() => {}); return }
+      api.translateOverlayShow({ ...payload, ttlMs: (c.intervalMs || 3000) * 2 + 1000 }).catch(() => {})
+    },
+    translate: text => {
+      const c = ocrTranslateCfg || {}
+      if (c.autoTranslate === false) return translateWithSettings(text)
+      return autoTranslate(text, { target: c.target || 'en', overlay: c.toOverlay !== false, source: 'ocr' })
+    },
     sendChatboxMessage,
     onUpdate: renderOcrState
   })
@@ -6715,17 +6863,37 @@ function renderOcrState (s) {
   $('ocrToggle').textContent = s.enabled ? 'Stop reading' : 'Start reading'
 }
 async function saveOcrConfig () {
-  const cfg = { tesseractLang: $('ocrLang').value, intervalMs: parseInt($('ocrInterval').value, 10) || 3000, toChatbox: $('ocrToChatbox').checked }
+  const cfg = {
+    tesseractLang: $('ocrLang').value,
+    intervalMs: parseInt($('ocrInterval').value, 10) || 3000,
+    toChatbox: $('ocrToChatbox').checked,
+    target: $('ocrTarget').value || 'en',
+    region: $('ocrRegion').value || 'full',
+    autoTranslate: $('ocrAutoTranslate').checked,
+    toOverlay: $('ocrToOverlay').checked,
+    screenLabels: $('ocrScreenLabels').checked,
+    textStyle: $('ocrTextStyle').value || 'light'
+  }
+  if (!cfg.screenLabels) api.translateOverlayHide().catch(() => {})
+  ocrTranslateCfg = cfg
   await api.saveSetting('ocrTranslate', cfg)
   if (ocrTranslate) ocrTranslate.configure(cfg)
   return cfg
 }
 async function setupOcrTranslate () {
-  const saved = await api.getSetting('ocrTranslate', { tesseractLang: 'eng', intervalMs: 3000, toChatbox: false })
-  $('ocrLang').value = saved.tesseractLang || 'eng'
+  const saved = await api.getSetting('ocrTranslate', { tesseractLang: 'fast_latin', intervalMs: 3000, toChatbox: false, target: 'en', region: 'full', autoTranslate: true, toOverlay: true })
+  LANGUAGES.forEach(({ code, name }) => $('ocrTarget').appendChild(new Option(name, code)))
+  $('ocrLang').value = saved.tesseractLang || 'fast_latin'
   $('ocrInterval').value = saved.intervalMs || 3000
   $('ocrToChatbox').checked = !!saved.toChatbox
-  ;['ocrLang', 'ocrInterval', 'ocrToChatbox'].forEach(id => $(id).addEventListener('change', saveOcrConfig))
+  $('ocrTarget').value = saved.target || 'en'
+  $('ocrRegion').value = saved.region || 'full'
+  $('ocrAutoTranslate').checked = saved.autoTranslate !== false
+  $('ocrToOverlay').checked = saved.toOverlay !== false
+  $('ocrScreenLabels').checked = saved.screenLabels !== false
+  $('ocrTextStyle').value = saved.textStyle === 'any' ? 'any' : 'light'
+  ocrTranslateCfg = { ...saved }
+  ;['ocrLang', 'ocrInterval', 'ocrToChatbox', 'ocrTarget', 'ocrRegion', 'ocrAutoTranslate', 'ocrToOverlay', 'ocrScreenLabels', 'ocrTextStyle'].forEach(id => $(id).addEventListener('change', saveOcrConfig))
 }
 $('ocrToggle').addEventListener('click', async () => {
   const c = ensureOcrTranslate()

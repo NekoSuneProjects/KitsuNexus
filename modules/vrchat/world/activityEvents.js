@@ -1,4 +1,5 @@
 'use strict'
+const { parseGiftLogLine, describe: describeGift } = require('./giftEvents')
 const clean = value => String(value || '').replace(/[\x00-\x1f]/g, ' ').trim().slice(0, 160)
 function parsePortalEvent (line) {
   if (/\[PortalManager\] Received portal destroy event\.\s*$/.test(line)) return { name: 'Portal', detail: 'Portal removed or expired', confirmedPlacement: false }
@@ -31,6 +32,9 @@ class ActivityEvents {
       this.add('world', m[1], 'Entering world')
     } else if (/\[Behaviour\] OnLeftRoom\b/.test(line)) {
       this.add('world', 'Left world', 'Disconnected from instance'); this.players.clear(); this.avatars.clear()
+    } else if ((m = parseGiftLogLine(line))) {
+      // VRC+ gifts: VRChat only logs Hype Train notifications (not who gifted)
+      const d = describeGift(m); this.add('gift', d.name, d.detail)
     }
   }
   snapshot () { return this.events.map(event => ({ ...event })) }
