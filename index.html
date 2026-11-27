@@ -2427,8 +2427,18 @@
             <label class="switch"><input type="checkbox" id="autoTikTokFollowers"> TikTok followers</label>
             <label class="switch"><input type="checkbox" id="autoTwitch"> 🟣 Twitch followers</label>
             <label class="switch"><input type="checkbox" id="autoKick"> 🟢 Kick followers</label>
+            <label class="switch"><input type="checkbox" id="autoChatbox"> 💬 Chatbox (status rotation)</label>
+            <label class="switch"><input type="checkbox" id="autoDesktopHud"> 🖥 Desktop HUD</label>
+            <label class="switch"><input type="checkbox" id="autoAssistant"> 🎙 Voice assistant (Jarvis)</label>
+            <label class="switch"><input type="checkbox" id="autoStt"> 🎧 Desktop Speech-to-Text</label>
+            <label class="switch"><input type="checkbox" id="autoOcr"> 🔎 OCR screen translate</label>
+            <label class="switch"><input type="checkbox" id="autoConfiguredStart"> 🚀 Configured Start apps (below)</label>
           </div>
-          <div class="muted" style="font-size:.75rem; margin-top:6px">Saved tokens/IDs are reused — no need to press Connect each launch.</div>
+          <div class="grid cols-2" style="margin-top:8px">
+            <div><label>Wait before auto-starting (seconds)</label><input type="number" id="autoDelay" min="0" max="120" step="1" value="0" /></div>
+          </div>
+          <div class="muted" style="font-size:.75rem; margin-top:6px">Saved tokens/IDs are reused — no need to press Connect each launch. Weather, Auto-AFK, the OSC avatar clock and screenshot metadata remember their own on/off and start by themselves. A delay helps with "Launch on system login", so the network and VRChat are ready first.</div>
+          <div class="muted" id="autoStartOut" style="font-size:.75rem; margin-top:6px"></div>
         </div>
         <div class="card">
           <h3>🚀 Configured Start</h3>

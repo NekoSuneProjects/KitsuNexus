@@ -8,6 +8,14 @@ This project follows [Semantic Versioning](https://semver.org/).
 ## [1.0.85] - 2026-11-27
 
 ### Changed
+- **More auto-start options in Settings → 🚀 Startup, and you can see what started.**
+  - **New options:** 💬 Chatbox (status rotation), 🖥 Desktop HUD, 🎙 Voice assistant (Jarvis), 🎧 Desktop Speech-to-Text, 🔎 OCR screen translate, and 🚀 Configured Start apps (companion apps, and VRChat if ticked).
+  - **Startup delay:** an optional wait (0–120 s) before auto-starting, so with "Launch on system login" the network and VRChat are ready first.
+  - **Status line:** shows what really started and what didn't, with the reason (e.g. "Voice assistant (No cloud speech-to-text API key is set…)", "Kick (not set up)"). Features that report a failure without throwing (the assistant and Speech-to-Text stay "not listening") are checked after starting, so nothing is falsely shown as started.
+  - **Kick** no longer tries to connect with an empty channel name.
+  - Weather, Auto-AFK, the OSC avatar clock and screenshot metadata already remember their own on/off; the card now says so.
+  - The VR overlay is left out until it's tested in VR.
+  - Checked in the app: Chatbox, Desktop HUD, component stats, Speech-to-Text and OCR all started by themselves on launch.
 - **Desktop HUD and VR Overlay moved to the Overlay tab.** They used to sit in the Stats tab. Now all the overlays (KitsuNexus Desktop HUD, VR Overlay and OBS Overlay) are together under **Integrations → Overlay**. VR gear battery and the other readings stay in Stats.
 
 ### Fixed

@@ -5896,6 +5896,39 @@ $('overlayCopyUrl').addEventListener('click', async () => {
 document.querySelector('.navbtn[data-tab="overlay"]').addEventListener('click', refreshOverlayUi)
 
 /* ---------------- boot ---------------- */
+// Startup auto-start (Settings → Startup). Each item reuses the feature's own
+// start control and saved settings; failures are reported, not fatal.
+async function runAutoStart (as = {}) {
+  const wanted = Object.keys(as).filter(k => k.startsWith('auto') && k !== 'autoMinimized' && k !== 'autoDelay' && as[k])
+  if (!wanted.length) return
+  const delay = Math.max(0, Math.min(120, Number(as.autoDelay) || 0))
+  if (delay) { setText('autoStartOut', `Auto-start in ${delay}s…`); await new Promise(r => setTimeout(r, delay * 1000)) }
+  const done = []; const failed = []
+  const step = async (key, label, fn) => {
+    if (!as[key]) return
+    try { const r = await fn(); if (r === false) failed.push(`${label} (not set up)`); else done.push(label) } catch (err) { failed.push(`${label} (${err.message || err})`) }
+  }
+  const fireToggle = id => { if (!$(id).checked) { $(id).checked = true; $(id).dispatchEvent(new Event('change')) } }
+  await step('autoDiscord', 'Discord', () => { if (!$('discordAppId').value) return false; $('discordStart').click() })
+  await step('autoHeartrate', 'Heart rate', () => { if (!($('hrProvider').value === 'device' || $('pulsoidToken').value || $('hyperateDevice').value)) return false; $('hrStart').click() })
+  await step('autoStats', 'Component stats', () => fireToggle('enableStats'))
+  await step('autoNet', 'Network stats', () => fireToggle('enableNet'))
+  await step('autoWindow', 'Window activity', () => fireToggle('enableWindow'))
+  await step('autoTon', 'Terrors of Nowhere', () => fireToggle('enableTon'))
+  await step('autoTikTokFollowers', 'TikTok', () => { if (!$('tiktokUser').value.trim()) return false; api.tiktokFollowersStart($('tiktokUser').value) })
+  await step('autoTwitch', 'Twitch', () => $('twitchConnect').click())
+  await step('autoKick', 'Kick', () => { if (!$('kickSlug').value.trim()) return false; $('kickConnect').click() })
+  await step('autoChatbox', 'Chatbox', () => { if (!composerRunning) $('composerToggle').click() })
+  await step('autoDesktopHud', 'Desktop HUD', async () => { const st = await api.hudStatus(); if (!st.running) await api.hudShow(); await refreshDesktopHud() })
+  await step('autoConfiguredStart', 'Configured Start apps', () => { if (!$('startApps').value.trim() && !$('startWithVrc').checked) return false; $('startLaunch').click() })
+  // setLive() reports problems (no API key, mic denied) by staying not-live
+  // with an error, rather than throwing - check, so the status line is honest.
+  await step('autoAssistant', 'Voice assistant', async () => { const c = ensureJarvisAssistant(); if (!c.live) await c.setLive(true); if (!c.live) throw new Error(c.error || 'could not start listening') })
+  await step('autoStt', 'Speech-to-Text', async () => { const c = ensureDesktopStt(); if (!c.live) await c.setLive(true); if (!c.live) throw new Error(c.error || 'could not start listening') })
+  await step('autoOcr', 'OCR screen translate', async () => { const c = ensureOcrTranslate(); if (!c.enabled) { await c.configure(await saveOcrConfig()); const s = await c.start(); if (!s.enabled) throw new Error(s.error || 'could not start') } })
+  setText('autoStartOut', [done.length ? '✓ Auto-started: ' + done.join(', ') : '', failed.length ? '✗ Not started: ' + failed.join(', ') : ''].filter(Boolean).join('  ·  '))
+}
+
 async function init () {
   await loadAudioDevices()
 
@@ -6147,29 +6180,26 @@ async function init () {
 
   // ---- Startup / auto-start ----
   const as = await api.getSetting('autostart', {})
-  const AUTO_IDS = ['autoMinimized', 'autoDiscord', 'autoHeartrate', 'autoStats', 'autoNet', 'autoWindow', 'autoTon', 'autoTikTokFollowers', 'autoTwitch', 'autoKick']
+  const AUTO_IDS = ['autoMinimized', 'autoDiscord', 'autoHeartrate', 'autoStats', 'autoNet', 'autoWindow', 'autoTon', 'autoTikTokFollowers', 'autoTwitch', 'autoKick',
+    'autoChatbox', 'autoDesktopHud', 'autoAssistant', 'autoStt', 'autoOcr', 'autoConfiguredStart']
   AUTO_IDS.forEach(id => { $(id).checked = !!as[id] })
+  $('autoDelay').value = Math.max(0, Math.min(120, Number(as.autoDelay) || 0))
   try { $('autoLaunch').checked = await api.getLaunchOnLogin() } catch (_) {}
 
   const saveAutostart = () => {
     const out = {}
     AUTO_IDS.forEach(id => { out[id] = $(id).checked })
+    out.autoDelay = Math.max(0, Math.min(120, Number($('autoDelay').value) || 0))
     api.saveSetting('autostart', out)
   }
   AUTO_IDS.forEach(id => $(id).addEventListener('change', saveAutostart))
+  $('autoDelay').addEventListener('change', saveAutostart)
   $('autoLaunch').addEventListener('change', e => api.setLaunchOnLogin(e.target.checked))
 
   // Drive the existing controls so saved tokens/IDs are reused (no manual clicks).
-  const fireToggle = id => { if (!$(id).checked) { $(id).checked = true; $(id).dispatchEvent(new Event('change')) } }
-  if (as.autoDiscord && $('discordAppId').value) $('discordStart').click()
-  if (as.autoHeartrate && ($('hrProvider').value === 'device' || $('pulsoidToken').value || $('hyperateDevice').value)) $('hrStart').click()
-  if (as.autoStats) fireToggle('enableStats')
-  if (as.autoNet) fireToggle('enableNet')
-  if (as.autoWindow) fireToggle('enableWindow')
-  if (as.autoTon) fireToggle('enableTon')
-  if (as.autoTikTokFollowers && $('tiktokUser').value.trim()) api.tiktokFollowersStart($('tiktokUser').value)
-  if (as.autoTwitch) $('twitchConnect').click()
-  if (as.autoKick) $('kickConnect').click()
+  // Runs in the background (after the optional delay) and reports what
+  // actually started, so it's visible whether auto-start worked.
+  runAutoStart(as).catch(err => setText('autoStartOut', 'Auto-start error: ' + (err.message || err)))
 
   refreshNowPlaying()
 }
