@@ -7,6 +7,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [1.0.85] - 2026-11-27
 
+### Changed
+- **Desktop HUD and VR Overlay moved to the Overlay tab.** They used to sit in the Stats tab. Now all the overlays (KitsuNexus Desktop HUD, VR Overlay and OBS Overlay) are together under **Integrations → Overlay**. VR gear battery and the other readings stay in Stats.
+
 ### Fixed
 - **Sidebar buttons ended up in the wrong categories** (Feed and Face, Hands & Body at the bottom of "General", Terrors outside "Games").
   - **Cause:** a custom sidebar order saved before those buttons existed didn't include them, so they were sorted to the very end. The category labels stay fixed while buttons fill the slots in order, so every missing button also pushed the buttons after it into the next category.
