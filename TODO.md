@@ -193,6 +193,7 @@ category's section below.
 - [x] Hardware info: live NVIDIA stats via nvidia-smi, Windows GPU counters for AMD/Intel, CPU temp via LibreHardwareMonitor/OpenHardwareMonitor (no fake 0°C), network stats skip VPN/virtual adapters, CPU/GPU name + VRAM tokens
 - [ ] CPU temperature via LibreHardwareMonitor/OpenHardwareMonitor WMI is implemented + unit-tested but not yet checked on a PC actually running LHM (none installed on the dev PC) — confirm sensor names/values on one.
 - [ ] Flaky test: `test/updaterBootstrap.test.js` "main app waits for the helper ready signal…" failed once under full-suite load (passes alone and on re-run) — timing-sensitive, give it a longer wait or a deterministic signal.
+- [ ] Flaky test: `test/vrchatPacing.test.js` "VRChat requests are paced: max 2 in flight, starts >= 350 ms apart" failed once under full-suite load (passes alone 3/3 and on re-run) — timing-sensitive; use fake timers or a wider tolerance.
 - [x] Crash-safe sql.js DB saves (tmp + rename + .bak, corrupt files kept, never overwritten)
 - [x] Chatbox: long line no longer blanks the whole message; emoji-safe 144-char cap
 - [x] Timer leaks: Cloud Sync pairing poll, TikTok connect race, VR overlay double start, GMANS retrigger
