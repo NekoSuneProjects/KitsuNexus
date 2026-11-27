@@ -5,6 +5,85 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.85] - 2026-11-27
+
+### Fixed
+- **Sidebar buttons ended up in the wrong categories** (Feed and Face, Hands & Body at the bottom of "General", Terrors outside "Games").
+  - **Cause:** a custom sidebar order saved before those buttons existed didn't include them, so they were sorted to the very end. The category labels stay fixed while buttons fill the slots in order, so every missing button also pushed the buttons after it into the next category.
+  - **Fix:** new buttons are now placed right after their default neighbour, the repaired order is saved, and buttons that no longer exist are dropped (`modules/ui/sidebarOrder.js`).
+  - Checked with a real saved order: Feed is back in Avatars & Media, Face, Hands & Body in Tools, and Terrors in Games, with the user's own custom ordering kept.
+- **OCR Screen Translate never worked.**
+  - Tesseract crashed on start ("worker script … must be an absolute path … Received file:///…"). In Electron's renderer, tesseract.js sees `document`, treats the page as a browser and turns its worker path into a `file://` URL, but Electron's `require` loads its Node worker code, which refuses URLs.
+  - OCR now runs in the main process (`modules/integrations/osc/ocr/ocrEngine.js`) as plain Node, which also keeps heavy recognition off the UI thread.
+  - Tesseract silently failed to cache its language data, because it doesn't create the cache folder, so it re-downloaded about 29 MB on every start. The data is now kept in `userData/tesseract`.
+- **MyMemory with "Auto-detect" showed an error as the translation** ("'AUTO' IS AN INVALID SOURCE LANGUAGE"). MyMemory can't auto-detect, so the language is now detected first.
+- **New setups default to Google's free translation endpoint**, and the free services fall back to each other when one is rate-limited or down.
+
+### Removed
+- **NekoSuneVR Ollama (AI) and NekoSuneVR LibreTranslate (Translator).** Both servers have been taken down, so they're gone from the AI and Translator provider lists.
+  - **Saved settings migrate automatically on startup:**
+    - anything still on NekoSuneVR Ollama (IntelliChat, Jarvis's own provider, Jarvis's backup) moves to **Pollinations.ai**, which is free with no key;
+    - the Translator moves to **Google Translate (free)**;
+    - a LibreTranslate entry pointing at someone's own server is kept, as "LibreTranslate (self-hosted)".
+  - **Jarvis's no-configuration fallback** is now Pollinations → OVHcloud, both free and keyless.
+  - **The HUD's Quick Chat "Translate" button** was hard-wired to the NekoSuneVR LibreTranslate, so it was failing. It now uses the Translator settings, which default to Google free.
+  - Checked in the app with old-style settings seeded: everything migrated, Jarvis answered through Pollinations, and translation worked.
+- **TikTok TTS was broken: all three community proxies had died.** Checked 2026-11-27:
+  - `tiktok-tts.weilnet.workers.dev` now only redirects (307), because the service moved to `ottsy.weilbyte.dev`, which is now used first.
+  - The `printmechanical…` worker now needs a TikTok session id (500), and `gesserit.co` is gone (404). Both were dropped.
+  - A proxy's "voice unavailable" answer is now reported instead of being treated as missing audio.
+
+### Added
+- **Live on-screen translation over VRChat chatboxes (OCR → "lens" overlay).** When someone's chatbox says "Hola", a **"Hello"** label appears right above that bubble, wherever it is on screen.
+  - **How it works:** a transparent, click-through, always-on-top window draws the labels (`modules/vr/overlay/translateOverlay.*`). OCR now returns each line's and word's position, lines are grouped into chatbox bubbles (VRChat centres its lines), and each bubble is translated once.
+  - **Screen mapping:** a screen capture maps onto its display. A window capture maps onto the real window rectangle, which comes from Windows (`GetWindowRect`) via the window handle in the capture source id.
+  - **No feedback loops:**
+    - the label window is excluded from capture, so OCR never reads it;
+    - KitsuNexus' own on-top windows (HUD, widgets, the focused app window) are blanked out of each frame before OCR, so it never reads them back either. They're masked rather than hidden from capture, so OBS still sees them.
+  - **New "Text style: Light text on dark (VRChat chatbox)" mode:**
+    - keeps only bright, colourless pixels, which removes the scene, yellow nameplates and the grey player list;
+    - drops stray edge characters (a light read as "©");
+    - filters words by their own OCR confidence, and positions labels from word boxes, so junk next to the text can't shift the label.
+  - **Results on real VRChat screenshots:**
+    - "Hola" went from "i ) NI / Hola" in 15.7 s to a clean "Hola" → "Hello", labelled exactly over the bubble;
+    - the Spotify chatbox went from 10 junk lines to the 2 real lines.
+  - **New "Fast: English + Spanish" OCR mode** (the default): ~1–2 s per frame instead of ~3–10 s for all eight languages.
+- **VRC+ gift and badge detection (gifts to you, gift drops, Hype Train, badges).** Built and checked against real gifts on 2026-11-27.
+  - **Gifts to you, from the log (exact):** `Received Notification … of type: vrcplus, details: {{VRCPlusGift=True}}, message: "Salsa Shark has gifted you 1 months of VRC+!"` becomes a 🎁 HUD card "Salsa Shark gifted you · 1 month of VRC+", with the gifter's user id.
+  - **New badges, from the log:** `type: badge`, e.g. "Supporter - Supports VRChat through VRC+" or "VRC+ Subscriber (2 Years)".
+  - **Hype Train rewards, from the log:** e.g. "Claim your Frosty Ski Goggles + All Aboard Sticker from your inventory."
+  - **Gift drops to others, from the screen:** VRChat doesn't log these, so the OCR overlay reads the banner (e.g. "Salsa Shark gifted VRC+ 🎁 1"), labels it 🎁 on screen and posts one HUD card per gift. "Has gifted you" banners are labelled but not alerted twice, since the log already reported them.
+  - **Ignored:** the Hype Train HUD ("3/15 VRC+ gifts", "Less than 90 seconds left! Send a VRC+ Gift…"), VRChat's internal subscription check, the gifting promo notification, and `hypetrain/<instance>` refreshes (which happen on every world join).
+  - **Two OCR fixes found on a real gift screenshot:**
+    - Tesseract joined the Hype Train counter and the gift banner into one line because they share a row. Lines are now split at wide gaps between words.
+    - The banner's avatar icon was read as "Lo)". Short icon fragments at line edges are now trimmed.
+    - Both banners now read and label correctly (2 s).
+- **Auto-translate OCR and Desktop Speech-to-Text onto the desktop / VR overlay.** Text on screen, or speech in any language, is detected and translated into the language you pick ("Translate into", per feature). Text that's already in your language is skipped.
+  - Translations appear on the HUD as 🌐 cards like "Screen · ES → EN" or "Speech · FR → EN", and can still go to the chatbox.
+  - Checked end to end in the app: Spanish and French text drawn on screen was read by OCR, auto-detected and translated into English, English was skipped, and all of it showed on the desktop HUD. OCR reads take ~0.3–1.2 s after the first-time language download.
+  - **OCR reading modes** that read several languages at once: Auto Latin (EN/ES/FR/DE/IT/PT/NL/PL), Latin + Cyrillic (adds RU/UK) and Asian (EN/JA/ZH/KO). A single language is still available for the best accuracy.
+  - **OCR Read area:** whole screen, bottom third (subtitles), bottom half, centre or top half.
+  - **Less OCR noise:** low-confidence lines and stray characters are dropped, and near-identical re-reads aren't translated twice.
+- **Translator providers grouped by cost, with more of them:**
+  - **Free, no key:** Google Translate (free endpoint, detects the language), MyMemory and NekoSuneVR LibreTranslate.
+  - **Free tier:** DeepL (the free/Pro host is detected from the key), Microsoft Translator (Azure F0, 2M chars/month, with a region field), Google Cloud, and **AI translation**, which uses any provider from the AI tab, including the free ones.
+  - **Paid:** LibreTranslate.com.
+  - **Self-hosted:** LibreTranslate and Lingva.
+  - Every provider reports the detected language. Results are cached, and free providers fall back to each other on rate limits.
+- **Offline language detection** (`modules/ai/langDetect.js`). It recognises Japanese, Chinese, Korean, Cyrillic (Russian vs Ukrainian), Arabic, Hebrew, Thai, Hindi and Greek scripts, plus common words in Spanish, French, German, Italian, Portuguese, Dutch, Polish and English. That lets "already in your language" be decided without a network request; Google's free endpoint rate-limits after short bursts.
+- **TikTok TTS: 73 voices instead of 12,** every one checked to return audio (an unknown voice id is refused, so the check is real). The set covers:
+  - English US / UK / AU voices;
+  - characters: Ghostface, C-3PO, Stitch, Chewbacca, Deadpool, Grinch, Madame Leota, Pirate, Magician…;
+  - narrators: Story Teller, Wacky, Peaceful, Serious, Lord Cringe…;
+  - 12 singing voices;
+  - French, German, Spanish, Portuguese, Indonesian, Japanese, Korean and Italian voices.
+- **StreamElements TTS (the classic "Brian" streamer voice).** All 206 voices (Amazon Polly, Google and Azure) are loaded live from StreamElements' public voice list into the Voice box.
+  - New text now needs the JWT token from a free StreamElements account, sent as a Bearer token. Without one, StreamElements answers 401 "No API key was found".
+  - Only audio StreamElements' CDN already has cached still plays without a key. For "hello", that's 6 of 206 voices: Brian, Emma, Joanna, Hans, Jakub and Ewa, all Cloudflare cache hits about 101 days old. So without a token the app tries anonymously first and explains the token when it's refused.
+  - The Voice box shows each voice's name (e.g. "Маша (Masha)" for `ru-RU-Wavenet-A`), matching the StreamElements dashboard's list. That list has 205 voices: the same as the API's 206, minus Brian, which the dashboard no longer shows.
+  - Not yet exercised with a real token.
+- **TTS engines are grouped by cost:** Free — no key (3), Free tier — free account / key (7), Free trial / starter credits (9), Paid (3), and Self-hosted — free (7).
+
 ## [1.0.84] - 2026-11-27
 
 ### Added

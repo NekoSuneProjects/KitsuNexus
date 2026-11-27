@@ -1021,7 +1021,12 @@
             <div><label>Source language</label><select id="sttSourceLang"><option value="auto">Auto-detect</option></select></div>
             <div><label>Clip length (s)</label><input type="number" id="sttClipSeconds" min="3" max="15" value="6" /></div>
           </div>
+          <div class="grid cols-2" style="margin-top:8px">
+            <div><label>Translate into</label><select id="sttTarget"></select></div>
+            <div style="display:flex;align-items:flex-end"><label class="switch" style="margin:0"><input type="checkbox" id="sttAutoTranslate" checked> Auto-translate (skips speech already in your language)</label></div>
+          </div>
           <div class="row" style="margin-top:8px;flex-wrap:wrap;gap:14px">
+            <label class="switch" style="margin:0"><input type="checkbox" id="sttToOverlay" checked> Show on desktop / VR overlay</label>
             <label class="switch" style="margin:0"><input type="checkbox" id="sttToChatbox"> Send to chatbox</label>
             <label class="switch" style="margin:0"><input type="checkbox" id="sttSpeakTranslation"> Speak the translation</label>
           </div>
@@ -1036,6 +1041,13 @@
           <div class="grid cols-2">
             <div><label>OCR language</label>
               <select id="ocrLang">
+                <optgroup label="Auto — reads several languages">
+                <option value="fast_latin">Fast: English + Spanish (also reads most Latin-alphabet languages) - recommended</option>
+                <option value="auto_latin">Auto: Latin (English, Spanish, French, German, Italian, Portuguese, Dutch, Polish)</option>
+                <option value="auto_latin_cyrillic">Auto: Latin + Cyrillic (adds Russian, Ukrainian)</option>
+                <option value="auto_asian">Auto: Asian (English, Japanese, Chinese, Korean)</option>
+                </optgroup>
+                <optgroup label="One language (most accurate)">
                 <option value="eng">English</option>
                 <option value="jpn">Japanese</option>
                 <option value="spa">Spanish</option>
@@ -1051,12 +1063,37 @@
                 <option value="pol">Polish</option>
                 <option value="ukr">Ukrainian</option>
                 <option value="vie">Vietnamese</option>
+                </optgroup>
               </select>
             </div>
             <div><label>Scan interval (ms)</label><input type="number" id="ocrInterval" min="1000" max="15000" step="500" value="3000" /></div>
           </div>
-          <label class="switch" style="margin-top:8px"><input type="checkbox" id="ocrToChatbox"> Send to chatbox</label>
+          <div class="grid cols-2" style="margin-top:8px">
+            <div><label>Translate into</label><select id="ocrTarget"></select></div>
+            <div><label>Text style</label>
+              <select id="ocrTextStyle">
+                <option value="light">Light text on dark (VRChat chatbox) - cleaner, faster</option>
+                <option value="any">Any text (documents, websites)</option>
+              </select>
+            </div>
+            <div><label>Read area</label>
+              <select id="ocrRegion">
+                <option value="full">Whole screen / window</option>
+                <option value="bottom_third">Bottom third (subtitles)</option>
+                <option value="bottom_half">Bottom half</option>
+                <option value="center">Centre</option>
+                <option value="top_half">Top half</option>
+              </select>
+            </div>
+          </div>
+          <div class="row" style="margin-top:8px;flex-wrap:wrap;gap:14px">
+            <label class="switch" style="margin:0"><input type="checkbox" id="ocrAutoTranslate" checked> Auto-translate (detects the language; skips text already in your language)</label>
+            <label class="switch" style="margin:0"><input type="checkbox" id="ocrScreenLabels" checked> Show the translation over the text on screen</label>
+            <label class="switch" style="margin:0"><input type="checkbox" id="ocrToOverlay" checked> Show on desktop / VR overlay (HUD cards)</label>
+            <label class="switch" style="margin:0"><input type="checkbox" id="ocrToChatbox"> Send to chatbox</label>
+          </div>
           <div class="row" style="margin-top:10px"><button class="btn" id="ocrToggle">Start reading</button></div>
+          <div class="muted" style="margin-top:6px;font-size:.72rem">On-screen labels: share the <b>entire screen</b> or the <b>VRChat window</b>, and run VRChat windowed / borderless (labels can't draw over exclusive fullscreen). The labels are hidden from the capture, so they're never re-read.</div>
           <div class="muted" id="ocrStatus" style="margin-top:8px;font-size:.78rem">Stopped</div>
           <div class="muted" id="ocrLastText" style="margin-top:4px;font-size:.78rem"></div>
         </div>
@@ -2475,9 +2512,15 @@
             <label data-i18n="translator.apiKey">API key</label>
             <input type="password" id="translatorApiKey" placeholder="key" />
           </div>
+          <div id="translatorRegionRow" style="margin-top:8px">
+            <label>Azure region <span class="muted" style="font-size:.7rem">(the Translator resource's location, e.g. westeurope; blank for global)</span></label>
+            <input type="text" id="translatorRegion" placeholder="westeurope" />
+          </div>
+          <div id="translatorAiRow" class="muted" style="margin-top:8px;font-size:.75rem">Uses the AI provider set in the AI tab (IntelliChat). Free options there: OpenRouter free models, Gemini, Groq, Pollinations…</div>
+          <div class="muted" id="translatorProviderNote" style="margin-top:6px;font-size:.75rem"></div>
           <div id="translatorDeeplTypeRow" style="margin-top:8px">
             <label data-i18n="translator.deeplType">DeepL account type</label>
-            <select id="translatorDeeplType"><option value="free">Free</option><option value="pro">Pro</option></select>
+            <select id="translatorDeeplType"><option value="auto">Detect from key</option><option value="free">Free</option><option value="pro">Pro</option></select>
           </div>
           <div class="grid cols-2" style="margin-top:8px">
             <div>

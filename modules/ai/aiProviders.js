@@ -19,7 +19,6 @@ const axios = require('axios')
 
 const AI_PROVIDERS = {
   // ---- free, no key ----
-  nekosune_ollama: { label: 'NekoSuneVR Ollama (free, no key)', tier: 'free', baseUrl: 'https://ollama.nekosunevr.co.uk/v1', model: 'llama3.1', needsKey: false, locked: true },
   pollinations: { label: 'Pollinations.ai (free, no key)', tier: 'free', baseUrl: 'https://text.pollinations.ai/openai', model: 'openai-fast', needsKey: false, note: 'Anonymous use is rate-limited; a free token from auth.pollinations.ai raises the limit.', keyUrl: 'https://auth.pollinations.ai' },
   ovh: { label: 'OVHcloud AI Endpoints (free, no key, rate-limited)', tier: 'free', baseUrl: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1', model: 'Meta-Llama-3_3-70B-Instruct', needsKey: false, note: 'Works without a key at a low rate limit; a free OVHcloud key raises it.' },
 
@@ -83,6 +82,22 @@ const AI_PROVIDERS = {
   azure_openai: { label: 'Azure OpenAI / AI Foundry (v1 API)', tier: 'paid', baseUrl: 'https://YOUR_RESOURCE.openai.azure.com/openai/v1', model: '', needsKey: true, note: 'Replace YOUR_RESOURCE; model = your deployment name.' },
 
   custom: { label: 'Custom (any OpenAI-compatible URL)', tier: 'custom', baseUrl: '', model: '', needsKey: false }
+}
+
+// Providers that were removed (their servers are gone). Saved settings that
+// still use them are moved to a free working provider on startup.
+const REMOVED_PROVIDERS = {
+  nekosune_ollama: { replacement: 'pollinations', baseUrlMatch: /ollama\.nekosunevr\.co\.uk/i }
+}
+function migrateAiConfig (cfg) {
+  if (!cfg || typeof cfg !== 'object') return { cfg, changed: false }
+  for (const [key, r] of Object.entries(REMOVED_PROVIDERS)) {
+    if (cfg.provider === key || r.baseUrlMatch.test(String(cfg.baseUrl || ''))) {
+      const p = AI_PROVIDERS[r.replacement]
+      return { cfg: { ...cfg, provider: r.replacement, baseUrl: p.baseUrl, model: p.model, key: '' }, changed: true }
+    }
+  }
+  return { cfg, changed: false }
 }
 
 const TIER_LABELS = { free: 'Free — no key', 'free-key': 'Free with a free key', local: 'Runs on your PC', gateway: 'Gateways / proxies (route to many providers)', paid: 'Paid', custom: 'Other' }
@@ -181,4 +196,4 @@ async function testConnection (cfg) {
   }
 }
 
-module.exports = { AI_PROVIDERS, TIER_LABELS, headersFor, chatOnce, chatWithFallback, listModels, testConnection, explainError, isRetryable }
+module.exports = { AI_PROVIDERS, TIER_LABELS, REMOVED_PROVIDERS, migrateAiConfig, headersFor, chatOnce, chatWithFallback, listModels, testConnection, explainError, isRetryable }

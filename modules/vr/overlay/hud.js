@@ -174,7 +174,7 @@ function renderNotices () {
   }
   for (const event of [...active].reverse()) {
     const card = document.createElement('div'); card.className = 'activity-notice'; card.dataset.kind = event.kind
-    const icon = document.createElement('span'); icon.className = 'activity-icon'; icon.textContent = ({ join: '+', leave: '−', portal: '◇', avatar: '◈', world: '⌂', friend: '★' })[event.kind] || '•'; icon.setAttribute('aria-hidden', 'true')
+    const icon = document.createElement('span'); icon.className = 'activity-icon'; icon.textContent = ({ join: '+', leave: '−', portal: '◇', avatar: '◈', world: '⌂', friend: '★', translate: '🌐', gift: '🎁' })[event.kind] || '•'; icon.setAttribute('aria-hidden', 'true')
     const content = document.createElement('div')
     const name = document.createElement('div'); name.className = 'activity-name'; name.textContent = event.name
     const detail = document.createElement('div'); detail.className = 'activity-detail'; detail.textContent = event.detail || ({ join: 'Joined the instance', leave: 'Left the instance' })[event.kind] || 'Activity detected'
@@ -198,14 +198,43 @@ function receiveFriendAlert (state) {
   notices.splice(100)
   renderNotices()
 }
+// OCR / speech-to-text translations (main: hud:translation). Same once-per-id
+// rule as friend alerts, since HUD data is merged and re-sent.
+let lastTranslationId = null
+function receiveTranslation (state) {
+  const t = state && state.translation
+  if (!t || !Number.isFinite(t.id) || t.id === lastTranslationId) return
+  const stale = lastTranslationId === null && Date.now() - Number(t.at) > 30000
+  lastTranslationId = t.id
+  if (stale || document.getElementById('pauseNotices').checked) return
+  const langs = t.from ? String(t.from).toUpperCase() + ' → ' + String(t.to || '').toUpperCase() : 'Translated'
+  const src = t.source === 'ocr' ? 'Screen' : t.source === 'stt' ? 'Speech' : ''
+  notices.unshift({ id: t.id, at: Number(t.at) || Date.now(), kind: 'translate', name: (src ? src + ' · ' : '') + langs, detail: String(t.text || '').slice(0, 200) })
+  notices.splice(100)
+  renderNotices()
+}
+// VRC+ gift alerts read off the screen by OCR (main: hud:gift).
+let lastGiftId = null
+function receiveGift (state) {
+  const g = state && state.gift
+  if (!g || !Number.isFinite(g.id) || g.id === lastGiftId) return
+  const stale = lastGiftId === null && Date.now() - Number(g.at) > 30000
+  lastGiftId = g.id
+  if (stale || document.getElementById('pauseNotices').checked) return
+  notices.unshift({ id: g.id, at: Number(g.at) || Date.now(), kind: 'gift', name: String(g.name || 'VRC+ gift').slice(0, 160), detail: String(g.detail || '').slice(0, 200) })
+  notices.splice(100)
+  renderNotices()
+}
 function receiveActivity (state) {
   receiveFriendAlert(state)
+  receiveTranslation(state)
+  receiveGift(state)
   if (state && Object.prototype.hasOwnProperty.call(state, 'music')) receivedMusic = true
   if (Number.isFinite(state?.activitySequence)) lastReceivedSequence = state.activitySequence
   if (!Number.isFinite(state?.activitySequence)) return
   if (activityCursor === null) { activityCursor = state.activitySequence; return }
   const events = Array.isArray(state.activityEvents) ? state.activityEvents : []
-  const fresh = events.filter(e => Number.isFinite(e.id) && e.id > activityCursor && ['join', 'leave', 'portal', 'avatar', 'world'].includes(e.kind) && Number.isFinite(e.at))
+  const fresh = events.filter(e => Number.isFinite(e.id) && e.id > activityCursor && ['join', 'leave', 'portal', 'avatar', 'world', 'gift'].includes(e.kind) && Number.isFinite(e.at))
   activityCursor = Math.max(activityCursor, state.activitySequence)
   if (document.getElementById('pauseNotices').checked) return
   for (const event of fresh) notices.unshift({ ...event, name: String(event.name || '').slice(0, 160), detail: String(event.detail || '').slice(0, 200) })

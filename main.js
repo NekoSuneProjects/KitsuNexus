@@ -50,8 +50,8 @@ const { startKick, stopKick } = require('./modules/live/kickModule')
 const { getTikTokTtsAudio, TIKTOK_VOICES } = require('./modules/live/tiktokTts')
 const { intelliRewrite, AI_PROVIDERS } = require('./modules/ai/intelliChat')
 const aiProviders = require('./modules/ai/aiProviders')
-const { translateText, TRANSLATE_PROVIDERS } = require('./modules/ai/translateProviders')
-const { speak, listSapiVoices, TTS_PROVIDERS } = require('./modules/ai/ttsProviders')
+const { translateText, TRANSLATE_PROVIDERS, TRANSLATE_TIER_LABELS } = require('./modules/ai/translateProviders')
+const { speak, listSapiVoices, listStreamElementsVoices, TTS_PROVIDERS } = require('./modules/ai/ttsProviders')
 const { transcribeCloud, transcribeLocal, configureModelsDir, STT_CLOUD_PROVIDERS, STT_LOCAL_MODELS } = require('./modules/ai/speechToText')
 const { interpretCommand, summarizeSearchResults } = require('./modules/ai/assistantBrain')
 const { searchWeb } = require('./modules/ai/webSearch')
@@ -105,6 +105,7 @@ const crashGuard = require('./modules/vrchat/tools/crashGuard')
 const quickLaunch = require('./modules/vrchat/launcher/quickLaunch')
 const vrOverlay = require('./modules/vr/overlay/vrOverlayController')
 const hudWindow = require('./modules/vr/overlay/hudWindow')
+const translateOverlay = require('./modules/vr/overlay/translateOverlay')
 const { createFriendAlerts } = require('./modules/vrchat/friends/friendAlerts')
 const osClock = require('./modules/time/osClock')
 const clockSync = require('./modules/time/clockSync')
@@ -353,6 +354,9 @@ function createWindow () {
       const sources = await getDesktopSourcesSafe({ types: ['screen', 'window'] })
       const selected = sources.find(source => source.id === oscAppsCaptureSourceId) ||
         sources.find(source => source.id.startsWith('screen:')) || sources[0]
+      // Remember what's being captured, so on-screen translation labels can be
+      // mapped from frame pixels onto the right screen / window.
+      if (selected) translateOverlay.setCaptureSource(selected)
       callback(selected ? { video: selected, audio: request.audioRequested ? 'loopback' : undefined } : {})
     } catch (err) {
       console.warn('Display media request failed:', err.message)
@@ -419,6 +423,19 @@ app.whenReady().then(async () => {
   // per-machine install.
   configureModelsDir(app.getPath('userData'))
   setPreferredSource(settings.get('nowPlayingSource', '')) // restore the chosen media source
+  // Settings still pointing at the removed NekoSuneVR Ollama / LibreTranslate
+  // servers move to free working providers (Pollinations / Google free).
+  try {
+    const { migrateAiConfig } = aiProviders
+    const { migrateTranslatorConfig } = require('./modules/ai/translateProviders')
+    const ai = migrateAiConfig(settings.get('ai', null)); if (ai.changed) settings.set('ai', ai.cfg)
+    const asst = settings.get('assistantAi', null)
+    if (asst && typeof asst === 'object') {
+      const p = migrateAiConfig(asst.primary); const b = migrateAiConfig(asst.backup)
+      if (p.changed || b.changed) settings.set('assistantAi', { ...asst, primary: p.cfg, backup: b.cfg })
+    }
+    const tr = migrateTranslatorConfig(settings.get('translator', null)); if (tr.changed) settings.set('translator', tr.cfg)
+  } catch (err) { console.warn('settings migration:', err.message) }
   createWindow()
   // Keep every clock in step with Windows' own timezone/DST rules (Electron's
   // bundled tzdata predates the 2026 Canadian changes - see clockSync.js).
@@ -553,7 +570,7 @@ app.on('before-quit', () => {
   if (blePairingCallback) { const callback = blePairingCallback; blePairingCallback = null; callback({ confirmed: false }) }
   stopComponentStats(); stopNetworkStats(); stopPulsoid(); stopHyperate(); stopDeviceBridge(); stopWindowActivity(); stopTon()
   disconnectTikTok(); stopTwitch(); twitchInteractive.stop(false); stopKick(); stopDiscord(); stopVrBattery(); stopVrcWorld(); stopAfk()
-  stopWeather(); stopVrcStatusPoll(); stopBot(); stopOfficialBot(); stopStatusPush(); pawprints.tickCommit(); stopFriendDiff(); pipeline.stop(); autoLauncher.stop(); vrcServerStatus.stop(); stopTracking(); trackerWin.destroy(); friendFeed.flush(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); stopTonLog(); ranks.close(); screenshotMetadata.stop(); screenshotMetadata.flushCache(); localFavoritesDb.close()
+  stopWeather(); stopVrcStatusPoll(); stopBot(); stopOfficialBot(); stopStatusPush(); pawprints.tickCommit(); stopFriendDiff(); pipeline.stop(); autoLauncher.stop(); vrcServerStatus.stop(); stopTracking(); trackerWin.destroy(); friendFeed.flush(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); stopTonLog(); ranks.close(); screenshotMetadata.stop(); screenshotMetadata.flushCache(); try { require('./modules/integrations/osc/ocr/ocrEngine').shutdown() } catch (_) {} try { translateOverlay.hide() } catch (_) {} localFavoritesDb.close()
   ruskLaserdome.stop(false)
   if (unsubHotkeyHold) { unsubHotkeyHold(); unsubHotkeyHold = null }
   stopHotkeyTick()
@@ -1136,7 +1153,10 @@ ipcMain.handle('hud:action', async (event, payload = {}) => {
   }
   if (type === 'translate') {
     try {
-      const output = await translateText({ provider: 'libretranslate', endpoint: TRANSLATE_PROVIDERS.libretranslate.endpoint,
+      // Uses the Translator settings (the NekoSuneVR LibreTranslate this used to
+      // be hard-wired to was taken down); Google's free endpoint by default.
+      const t = settings.get('translator', {}) || {}
+      const output = await translateText({ provider: t.provider || 'google_free', endpoint: t.endpoint, apiKey: t.apiKey, apiType: t.apiType, region: t.region,
         source: 'auto', target: String(payload.target || 'en').slice(0, 12), text })
       return { ok: true, translatedText: String(output.translatedText || '').slice(0, 2000), message: 'Translated — review before sending' }
     } catch (err) { return { ok: false, error: err.message } }
@@ -1465,6 +1485,30 @@ ipcMain.handle('translate:run', async (e, opts = {}) => {
   return translateText({ ...opts, text })
 })
 ipcMain.handle('translate:providers', () => TRANSLATE_PROVIDERS)
+ipcMain.handle('translate:tiers', () => TRANSLATE_TIER_LABELS)
+// OCR runs here in the main process (see modules/integrations/osc/ocr/ocrEngine.js for why).
+const ocrEngine = require('./modules/integrations/osc/ocr/ocrEngine')
+ipcMain.handle('translateOverlay:show', async (e, payload) => { try { return await translateOverlay.show(payload) } catch (err) { return { ok: false, error: err.message } } })
+ipcMain.handle('translateOverlay:hide', () => { translateOverlay.hide(); return true })
+ipcMain.handle('ocr:ownWindowRects', async (e, { frameWidth, frameHeight } = {}) => { try { return await translateOverlay.ownWindowFrameRects(frameWidth, frameHeight) } catch (_) { return [] } })
+// VRC+ gifts read off the screen by OCR -> HUD card.
+let hudGiftSeq = 0
+ipcMain.handle('hud:gift', (e, g = {}) => {
+  hudWindow.broadcast({ gift: { id: Date.now() * 100 + (hudGiftSeq++ % 100), at: Date.now(), name: String(g.name || '').slice(0, 160), detail: String(g.detail || '').slice(0, 200) } })
+  return true
+})
+ipcMain.handle('ocr:recognize', async (e, { lang, image } = {}) => {
+  ocrEngine.setCacheDir(app.getPath('userData'))
+  try { return { ok: true, ...(await ocrEngine.recognize(lang, image)) } } catch (err) { return { ok: false, error: err.message } }
+})
+// OCR / speech-to-text translations shown on the desktop + VR HUD.
+let hudTranslationSeq = 0
+ipcMain.handle('hud:translation', (e, t = {}) => {
+  const text = String(t.text || '').slice(0, 400)
+  if (!text) return false
+  hudWindow.broadcast({ translation: { id: Date.now() * 100 + (hudTranslationSeq++ % 100), at: Date.now(), source: String(t.source || '').slice(0, 20), from: String(t.from || '').slice(0, 10), to: String(t.to || '').slice(0, 10), original: String(t.original || '').slice(0, 400), text } })
+  return true
+})
 
 /* ------------------------------------------------------------------ */
 /* i18n                                                                 */
@@ -1476,6 +1520,7 @@ ipcMain.handle('i18n:strings', (e, lang) => i18n.getStrings(lang))
 /* Text-to-speech (SAPI / TikTok / ElevenLabs / self-hosted)           */
 /* ------------------------------------------------------------------ */
 ipcMain.handle('tts:speak', (e, opts) => speak(opts))
+ipcMain.handle('tts:streamElementsVoices', async () => { try { return { ok: true, voices: await listStreamElementsVoices() } } catch (err) { return { ok: false, error: err.message, voices: [] } } })
 ipcMain.handle('tts:providers', () => TTS_PROVIDERS)
 ipcMain.handle('tts:sapiVoices', () => listSapiVoices())
 
@@ -1512,7 +1557,7 @@ function assistantAiConfigs (opts = {}) {
   if (own.backup && own.backup.enabled && own.backup.baseUrl) list.push(toCfg(own.backup))
   // Nothing configured at all: free no-key providers, tried in order.
   if (!list.length) {
-    for (const k of ['nekosune_ollama', 'pollinations', 'ovh']) {
+    for (const k of ['pollinations', 'ovh']) {
       const p = aiProviders.AI_PROVIDERS[k]
       if (p) list.push({ baseUrl: p.baseUrl, apiKey: '', model: p.model })
     }

@@ -178,6 +178,13 @@ window.electronAPI = {
 
   // translator
   translate: opts => ipcRenderer.invoke('translate:run', opts),
+  translateTiers: () => ipcRenderer.invoke('translate:tiers'),
+  hudTranslation: t => ipcRenderer.invoke('hud:translation', t),
+  ocrRecognize: (lang, image) => ipcRenderer.invoke('ocr:recognize', { lang, image }),
+  translateOverlayShow: payload => ipcRenderer.invoke('translateOverlay:show', payload),
+  translateOverlayHide: () => ipcRenderer.invoke('translateOverlay:hide'),
+  hudGift: g => ipcRenderer.invoke('hud:gift', g),
+  ocrOwnWindowRects: (frameWidth, frameHeight) => ipcRenderer.invoke('ocr:ownWindowRects', { frameWidth, frameHeight }),
   translateProviders: () => ipcRenderer.invoke('translate:providers'),
 
   // i18n
@@ -186,6 +193,7 @@ window.electronAPI = {
 
   // text-to-speech
   ttsSpeak: opts => ipcRenderer.invoke('tts:speak', opts),
+  ttsStreamElementsVoices: () => ipcRenderer.invoke('tts:streamElementsVoices'),
   ttsProviders: () => ipcRenderer.invoke('tts:providers'),
   ttsSapiVoices: () => ipcRenderer.invoke('tts:sapiVoices'),
 

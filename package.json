@@ -1,6 +1,6 @@
 {
   "name": "kitsunexus",
-  "version": "1.0.84",
+  "version": "1.0.85",
   "main": "main.js",
   "bin": "main.js",
   "scripts": {
