@@ -35,6 +35,7 @@ const path = require('path')
 const fs = require('fs')
 const { detectCue, CHECK_IN_MESSAGES } = require('./emotionCues')
 const { resolveTimezone } = require('./timezones')
+const clockSync = require('../../time/clockSync')
 
 // How often the instant-replay recorder rotates to a fresh, independently
 // valid segment (see startReplayBuffer below).
@@ -83,7 +84,7 @@ class JarvisAssistant {
       engine: 'cloud', cloudBaseUrl: '', cloudApiKey: '', cloudModel: '', localModel: 'tiny',
       aiBaseUrl: '', aiApiKey: '', aiModel: '',
       searchProvider: 'searxng', // 'searxng' | 'duckduckgo'
-      searxngEndpoint: 'https://searxng.nekosunevr.co.uk/',
+      searxngEndpoint: 'https://search.nekosunevr.co.uk/api/search',
       clipSeconds: 4,
       // Minimum RMS energy (0-1, normalized signal) a captured clip needs
       // before it's even sent to transcription. Below this it's treated as
@@ -433,8 +434,10 @@ class JarvisAssistant {
     const timeOpts = { hour: 'numeric', minute: '2-digit' }
     const dateOpts = { weekday: 'long', month: 'long', day: 'numeric' }
     if (tz) { timeOpts.timeZone = tz; dateOpts.timeZone = tz }
-    const time = now.toLocaleTimeString([], timeOpts)
-    const date = now.toLocaleDateString([], dateOpts)
+    // clockSync applies the 2026 tz rule changes (BC, Alberta, Manitoba...)
+    // that Electron's bundled tzdata doesn't know about yet.
+    const time = clockSync.format(now, timeOpts)
+    const date = clockSync.format(now, dateOpts)
     const suffix = tz ? ` in ${place || tz.split('/').pop().replace(/_/g, ' ')}` : ''
     return this.respond(`It's ${time} on ${date}${suffix}.`)
   }

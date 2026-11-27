@@ -123,6 +123,9 @@ window.electronAPI = {
   vrOverlayStop: () => ipcRenderer.invoke('vrOverlay:stop'),
   vrOverlayIsRunning: () => ipcRenderer.invoke('vrOverlay:isRunning'),
   appVersion: () => ipcRenderer.invoke('app:version'),
+  // Windows' own current UTC offset (see modules/time/clockSync.js)
+  timeOsClock: () => ipcRenderer.invoke('time:osClock'),
+  timeRefresh: () => ipcRenderer.invoke('time:refresh'),
   appContributors: () => ipcRenderer.invoke('app:contributors'),
   appSupporters: () => ipcRenderer.invoke('app:supporters'),
 
@@ -164,6 +167,9 @@ window.electronAPI = {
   // ai
   aiRewrite: opts => ipcRenderer.invoke('ai:rewrite', opts),
   aiProviders: () => ipcRenderer.invoke('ai:providers'),
+  aiListModels: cfg => ipcRenderer.invoke('ai:listModels', cfg),
+  aiTest: cfg => ipcRenderer.invoke('ai:test', cfg),
+  aiTiers: () => ipcRenderer.invoke('ai:tiers'),
 
   // avatar scaling hotkeys (global keyboard hook lives in main)
   avatarScalingRecordKey: () => ipcRenderer.invoke('avatarScaling:recordKey'),
@@ -347,6 +353,10 @@ window.electronAPI = {
   // photo relay
   photoRelaySet: cfg => ipcRenderer.invoke('photoRelay:set', cfg),
   screenshotMetadataSet: enabled => ipcRenderer.invoke('screenshotMetadata:set', enabled),
+  screenshotsList: opts => ipcRenderer.invoke('screenshots:list', opts),
+  screenshotsThumb: (p, mtimeMs) => ipcRenderer.invoke('screenshots:thumb', p, mtimeMs),
+  screenshotsOpen: p => ipcRenderer.invoke('screenshots:open', p),
+  screenshotsReveal: p => ipcRenderer.invoke('screenshots:reveal', p),
   launchVRChat: () => ipcRenderer.invoke('app:launchVRChat'),
   mediaPhotos: () => ipcRenderer.invoke('media:photos'),
   mediaOpen: p => ipcRenderer.invoke('media:open', p),

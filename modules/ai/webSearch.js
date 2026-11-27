@@ -1,7 +1,8 @@
 // modules/ai/webSearch.js
 // Web search for the voice assistant, two selectable providers:
-//   - searxng: a self-hosted SearXNG instance's JSON API (real web search
-//     results; SearXNG must have `formats: [json]` enabled in settings.yml).
+//   - searxng: any SearXNG-compatible JSON API (real web search results).
+//     Default is NekoSune Search (https://search.nekosunevr.co.uk/api/search);
+//     a self-hosted SearXNG works too (needs `formats: [json]` in settings.yml).
 //   - duckduckgo: DuckDuckGo's public "Instant Answer" API. This is NOT a
 //     full web search API - no API key needed, but it only returns an
 //     abstract/infobox-style answer and related topics, and returns nothing
@@ -11,11 +12,30 @@
 
 const axios = require('axios')
 
-async function searchSearxng (query, endpoint) {
-  const base = String(endpoint || '').trim().replace(/\/+$/, '')
-  if (!base) throw new Error('No SearXNG endpoint configured')
+// Default instance: NekoSune Search (degoog), SearXNG-compatible JSON at /api/search.
+const DEFAULT_SEARCH_ENDPOINT = 'https://search.nekosunevr.co.uk/api/search'
+// The previous default, so saved configs still on it get moved to the new one.
+const LEGACY_SEARCH_ENDPOINTS = ['https://searxng.nekosunevr.co.uk/', 'https://searxng.nekosunevr.co.uk']
 
-  const res = await axios.get(`${base}/search`, {
+// Accepts a bare instance URL ("https://host/" → https://host/search, the
+// SearXNG layout), a URL that already ends in /search or /api/search, or a
+// full pasted example URL (its ?format=…&q=… is dropped; we set our own).
+function searchUrl (endpoint) {
+  const raw = String(endpoint || '').trim()
+  if (!raw) return ''
+  let u
+  try { u = new URL(raw) } catch (_) { return '' }
+  u.search = ''; u.hash = ''
+  const path = u.pathname.replace(/\/+$/, '')
+  u.pathname = /\/search$/i.test(path) ? path : `${path}/search`
+  return u.toString()
+}
+
+async function searchSearxng (query, endpoint) {
+  const url = searchUrl(LEGACY_SEARCH_ENDPOINTS.includes(String(endpoint || '').trim()) ? DEFAULT_SEARCH_ENDPOINT : endpoint)
+  if (!url) throw new Error('No search endpoint configured')
+
+  const res = await axios.get(url, {
     params: { q: query, format: 'json' },
     timeout: 15000
   })
@@ -64,4 +84,4 @@ async function searchWeb (query, opts = {}) {
   return searchSearxng(q, endpoint)
 }
 
-module.exports = { searchWeb }
+module.exports = { searchWeb, searchUrl, DEFAULT_SEARCH_ENDPOINT, LEGACY_SEARCH_ENDPOINTS }

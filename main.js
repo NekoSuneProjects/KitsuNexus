@@ -49,6 +49,7 @@ const { startTwitch, stopTwitch, getTwitchState } = require('./modules/live/twit
 const { startKick, stopKick } = require('./modules/live/kickModule')
 const { getTikTokTtsAudio, TIKTOK_VOICES } = require('./modules/live/tiktokTts')
 const { intelliRewrite, AI_PROVIDERS } = require('./modules/ai/intelliChat')
+const aiProviders = require('./modules/ai/aiProviders')
 const { translateText, TRANSLATE_PROVIDERS } = require('./modules/ai/translateProviders')
 const { speak, listSapiVoices, TTS_PROVIDERS } = require('./modules/ai/ttsProviders')
 const { transcribeCloud, transcribeLocal, configureModelsDir, STT_CLOUD_PROVIDERS, STT_LOCAL_MODELS } = require('./modules/ai/speechToText')
@@ -104,6 +105,9 @@ const crashGuard = require('./modules/vrchat/tools/crashGuard')
 const quickLaunch = require('./modules/vrchat/launcher/quickLaunch')
 const vrOverlay = require('./modules/vr/overlay/vrOverlayController')
 const hudWindow = require('./modules/vr/overlay/hudWindow')
+const { createFriendAlerts } = require('./modules/vrchat/friends/friendAlerts')
+const osClock = require('./modules/time/osClock')
+const clockSync = require('./modules/time/clockSync')
 app.on('before-quit', () => { hudWindow.hideDesktop(); hudWindow.closeVrSurface() })
 const { LocalHistory } = require('./modules/vrchat/history/localHistory')
 let localHistory = null
@@ -416,6 +420,13 @@ app.whenReady().then(async () => {
   configureModelsDir(app.getPath('userData'))
   setPreferredSource(settings.get('nowPlayingSource', '')) // restore the chosen media source
   createWindow()
+  // Keep every clock in step with Windows' own timezone/DST rules (Electron's
+  // bundled tzdata predates the 2026 Canadian changes - see clockSync.js).
+  clockSync.setOverrideTimeZone(settings.get('clock.overrideTimeZone', ''))
+  osClock.start({
+    powerMonitor: require('electron').powerMonitor,
+    onUpdate: info => { for (const w of BrowserWindow.getAllWindows()) { try { if (!w.isDestroyed()) w.webContents.send('time:osClock', info) } catch (_) {} } }
+  })
   if (process.argv.includes('--desktop-hud')) {
     hudWindow.showDesktop({ ...settings.get('hudDesktopBounds', {}), ...settings.get('hudDesktopOptions', {}), clickThrough: false })
     const widgetArgument = process.argv.find(value => value.startsWith('--hud-widgets='))
@@ -542,7 +553,7 @@ app.on('before-quit', () => {
   if (blePairingCallback) { const callback = blePairingCallback; blePairingCallback = null; callback({ confirmed: false }) }
   stopComponentStats(); stopNetworkStats(); stopPulsoid(); stopHyperate(); stopDeviceBridge(); stopWindowActivity(); stopTon()
   disconnectTikTok(); stopTwitch(); twitchInteractive.stop(false); stopKick(); stopDiscord(); stopVrBattery(); stopVrcWorld(); stopAfk()
-  stopWeather(); stopVrcStatusPoll(); stopBot(); stopOfficialBot(); stopStatusPush(); pawprints.tickCommit(); stopFriendDiff(); pipeline.stop(); autoLauncher.stop(); vrcServerStatus.stop(); stopTracking(); trackerWin.destroy(); friendFeed.flush(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); stopTonLog(); ranks.close(); screenshotMetadata.stop(); localFavoritesDb.close()
+  stopWeather(); stopVrcStatusPoll(); stopBot(); stopOfficialBot(); stopStatusPush(); pawprints.tickCommit(); stopFriendDiff(); pipeline.stop(); autoLauncher.stop(); vrcServerStatus.stop(); stopTracking(); trackerWin.destroy(); friendFeed.flush(); stopGreeter(); gamelog.close(); photoRelay.stop(); stopGroupAlerts(); stopNotifPoll(); crashGuard.stop(); stopTonLog(); ranks.close(); screenshotMetadata.stop(); screenshotMetadata.flushCache(); localFavoritesDb.close()
   ruskLaserdome.stop(false)
   if (unsubHotkeyHold) { unsubHotkeyHold(); unsubHotkeyHold = null }
   stopHotkeyTick()
@@ -555,10 +566,16 @@ app.on('before-quit', () => {
 /* Generic settings + now playing (carried from OSCAudiolink)          */
 /* ------------------------------------------------------------------ */
 ipcMain.handle('getSetting', (e, key, def) => settings.get(key, def))
+ipcMain.handle('time:osClock', () => osClock.current())
+ipcMain.handle('time:refresh', async () => (await osClock.refresh()) || osClock.current())
 ipcMain.handle('saveSetting', (e, key, value) => {
   // The website owns Twitch credentials for paired installs.
   if (key === 'oauth.twitch' && cloudSync.isPaired()) return { serverManaged: true }
   settings.set(key, value)
+  if (key === 'clock.overrideTimeZone') {
+    const tz = clockSync.setOverrideTimeZone(value)
+    for (const w of BrowserWindow.getAllWindows()) { try { if (!w.isDestroyed()) w.webContents.send('time:override', tz) } catch (_) {} }
+  }
   return value
 })
 // The bridge returns display-only snapshots. Credentials and raw grants never
@@ -1480,8 +1497,33 @@ ipcMain.handle('stt:localModels', () => STT_LOCAL_MODELS)
 /* ------------------------------------------------------------------ */
 /* Voice assistant command interpretation (wake-word body -> action)   */
 /* ------------------------------------------------------------------ */
-ipcMain.handle('assistant:interpret', (e, opts) => interpretCommand(opts))
-ipcMain.handle('assistant:summarizeSearch', (e, opts) => summarizeSearchResults(opts))
+// Jarvis AI: its own provider (or the shared IntelliChat one) plus an optional
+// backup tried when the first fails (free tiers rate-limit). Read from
+// settings on every call - Jarvis used to copy the AI settings once, so
+// changing the provider later did nothing until a Jarvis setting was saved.
+function assistantAiConfigs (opts = {}) {
+  const shared = settings.get('ai', {})
+  const own = settings.get('assistantAi', {})
+  const toCfg = c => ({ baseUrl: c.baseUrl || '', apiKey: c.key || c.apiKey || '', model: c.model || '' })
+  const list = []
+  if (own.mode === 'own' && own.primary && own.primary.baseUrl) list.push(toCfg(own.primary))
+  else if (shared.baseUrl) list.push(toCfg(shared))
+  else if (opts.aiBaseUrl || opts.baseUrl) list.push({ baseUrl: opts.aiBaseUrl || opts.baseUrl, apiKey: opts.aiApiKey || opts.apiKey || '', model: opts.aiModel || opts.model || '' })
+  if (own.backup && own.backup.enabled && own.backup.baseUrl) list.push(toCfg(own.backup))
+  // Nothing configured at all: free no-key providers, tried in order.
+  if (!list.length) {
+    for (const k of ['nekosune_ollama', 'pollinations', 'ovh']) {
+      const p = aiProviders.AI_PROVIDERS[k]
+      if (p) list.push({ baseUrl: p.baseUrl, apiKey: '', model: p.model })
+    }
+  }
+  return list
+}
+ipcMain.handle('assistant:interpret', (e, opts = {}) => interpretCommand({ text: opts.text, configs: assistantAiConfigs(opts) }))
+ipcMain.handle('assistant:summarizeSearch', (e, opts = {}) => summarizeSearchResults({ ...opts, configs: assistantAiConfigs(opts) }))
+ipcMain.handle('ai:listModels', (e, cfg = {}) => aiProviders.listModels({ baseUrl: cfg.baseUrl, apiKey: cfg.key || cfg.apiKey }))
+ipcMain.handle('ai:test', (e, cfg = {}) => aiProviders.testConnection({ baseUrl: cfg.baseUrl, apiKey: cfg.key || cfg.apiKey, model: cfg.model }))
+ipcMain.handle('ai:tiers', () => aiProviders.TIER_LABELS)
 ipcMain.handle('assistant:searchWeb', (e, { query, provider, endpoint } = {}) => searchWeb(query, { provider, endpoint }))
 
 function runFfmpeg (args) {
@@ -2170,11 +2212,32 @@ function logWorldDiff (w) {
 // Friend feed + friend log (VRCX-style). One snapshot shared by the live
 // pipeline websocket and the 2-minute full-list poll, persisted in settings so
 // adds/removes/renames/trust changes made while the app was closed are caught.
+// Feed → optional alerts for chosen friends (online / joining your instance).
+const friendAlerts = createFriendAlerts({
+  getConfig: () => settings.get('friendAlerts', {}),
+  getMyLocation: () => { const w = getVrcWorld(); return (w.inWorld && w.worldId && w.instanceId) ? `${w.worldId}:${w.instanceId}` : '' },
+  notify: alert => {
+    push('friend:alert', alert)
+    if (alert.hud) hudWindow.broadcast({ friendAlert: { id: alert.id, at: alert.at, kind: alert.kind, name: alert.name, detail: alert.body } })
+    // Native Windows toast, unless the app window is already in front.
+    const focused = mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()
+    if (alert.desktop && !focused) {
+      try {
+        const { Notification } = require('electron')
+        if (Notification.isSupported()) {
+          const n = new Notification({ title: alert.title, body: alert.body, silent: false })
+          n.on('click', () => { if (mainWindow && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.focus() } })
+          n.show()
+        }
+      } catch (err) { console.warn('friend alert toast:', err.message) }
+    }
+  }
+})
 const friendFeed = createFriendFeed({
   loadSnapshot: () => settings.get('friendSnapshot', null),
   saveSnapshot: snap => settings.set('friendSnapshot', snap),
   resolveWorldName: async worldId => { const r = await vrchatApi.getWorldName(worldId); return r && r.ok ? r.name : '' },
-  onFeed: e => { gamelog.logFeed(e); push('vrchat:feed', e) },
+  onFeed: e => { gamelog.logFeed(e); push('vrchat:feed', e); try { friendAlerts.handleFeed(e) } catch (err) { console.warn('friend alerts:', err.message) } },
   onFriendLog: e => { gamelog.log(e.type, e.name, e.detail, ''); push('vrchat:friendLog', e) }
 })
 const pipeline = createPipeline({
@@ -2576,6 +2639,35 @@ ipcMain.handle('media:key', (e, action) => pressMediaKey(action).then(() => ({ o
 ipcMain.handle('photoRelay:set', (e, cfg) => { photoRelay.start(cfg || {}, s => push('photoRelay:event', s)); return true })
 
 // Screenshot metadata (VRCX-compatible world/instance/players embedded into new screenshots)
+// Screenshot gallery: list photos with the metadata embedded in them (ours,
+// VRCX's or VRChat's own XMP), thumbnails, open / show in folder. Paths from
+// the renderer are only accepted inside the VRChat photos folder.
+let screenshotCacheReady = false
+function screenshotCache () {
+  if (!screenshotCacheReady) { screenshotMetadata.setCacheFile(path.join(app.getPath('userData'), 'screenshot-meta-cache.json')); screenshotCacheReady = true }
+}
+ipcMain.handle('screenshots:list', async (e, opts = {}) => {
+  screenshotCache()
+  try {
+    return { ok: true, ...(await screenshotMetadata.listScreenshots(opts, (done, total) => push('screenshots:progress', { done, total }))) }
+  } catch (err) { return { ok: false, error: err.message } }
+})
+const thumbCache = new Map() // path|mtime -> dataURL
+ipcMain.handle('screenshots:thumb', async (e, filePath, mtimeMs) => {
+  if (!screenshotMetadata.isInPhotosDir(filePath)) return ''
+  const key = `${filePath}|${mtimeMs}`
+  if (thumbCache.has(key)) return thumbCache.get(key)
+  try {
+    const { nativeImage } = require('electron')
+    const img = await nativeImage.createThumbnailFromPath(filePath, { width: 320, height: 180 })
+    const url = img.isEmpty() ? '' : img.toDataURL()
+    if (thumbCache.size > 400) thumbCache.clear()
+    thumbCache.set(key, url)
+    return url
+  } catch (_) { return '' }
+})
+ipcMain.handle('screenshots:open', (e, filePath) => { if (screenshotMetadata.isInPhotosDir(filePath)) return shell.openPath(filePath); return 'Not a VRChat screenshot' })
+ipcMain.handle('screenshots:reveal', (e, filePath) => { if (screenshotMetadata.isInPhotosDir(filePath)) shell.showItemInFolder(filePath); return true })
 ipcMain.handle('screenshotMetadata:set', (e, enabled) => {
   settings.set('screenshotMetadata', !!enabled)
   if (enabled) screenshotMetadata.start(); else screenshotMetadata.stop()

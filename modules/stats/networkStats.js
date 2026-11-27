@@ -13,14 +13,39 @@ function mbps (bytesPerSec) {
   return Math.round((bytesPerSec * 8) / 1e6 * 10) / 10
 }
 
+// Which adapter to measure. si.networkStats() with no argument uses the
+// "default" interface, which on many gaming PCs is a VPN / virtual adapter
+// (Radmin VPN, Tailscale, ZeroTier, Hamachi, VMware, Hyper-V vEthernet...)
+// that carries no traffic, so up/down stayed at 0 Mbps forever. Measure every
+// real adapter instead and report the busiest one.
+const VIRTUAL_RE = /vpn|radmin|tailscale|zerotier|hamachi|wireguard|openvpn|\btap\b|tun\d*|vmware|virtualbox|vbox|vethernet|hyper-v|loopback|npcap|bluetooth|teredo|isatap|wan miniport|docker|wsl/i
+function isRealAdapter (i) {
+  if (!i || i.internal || i.virtual) return false
+  if (VIRTUAL_RE.test(`${i.iface || ''} ${i.ifaceName || ''}`)) return false
+  return i.operstate === 'up' || !i.operstate
+}
+let adapters = null // iface names of real adapters
+let adaptersAt = 0
+async function realAdapters () {
+  if (adapters && Date.now() - adaptersAt < 60000) return adapters
+  const list = await si.networkInterfaces().catch(() => [])
+  adapters = (Array.isArray(list) ? list : [list]).filter(isRealAdapter).map(i => i.iface)
+  adaptersAt = Date.now()
+  return adapters
+}
+// si keys its rx/tx deltas by iface; strip spaces like it does to compare.
+const norm = s => String(s || '').replace(/\s+/g, '').toLowerCase()
+
 let tickCount = 0
 let ticking = false
 async function tick (pingHost) {
   if (ticking) return
   ticking = true
   try {
-    const stats = await si.networkStats().catch(() => [])
-    const primary = stats?.[0]
+    const real = (await realAdapters()).map(norm)
+    const stats = await si.networkStats(real.length ? (await realAdapters()).join(',') : '*').catch(() => [])
+    const list = (Array.isArray(stats) ? stats : []).filter(s => s && (!real.length || real.includes(norm(s.iface))))
+    const primary = list.reduce((best, s) => (((s.rx_sec || 0) + (s.tx_sec || 0)) > ((best?.rx_sec || 0) + (best?.tx_sec || 0)) ? s : best), list[0])
     if (primary) {
       last.downMbps = mbps(primary.rx_sec)
       last.upMbps = mbps(primary.tx_sec)
@@ -61,4 +86,4 @@ function getNetworkStats () {
   return { ...last }
 }
 
-module.exports = { startNetworkStats, stopNetworkStats, getNetworkStats }
+module.exports = { startNetworkStats, stopNetworkStats, getNetworkStats, isRealAdapter }

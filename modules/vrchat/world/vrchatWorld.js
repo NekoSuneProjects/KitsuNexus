@@ -93,13 +93,33 @@ function emit () {
   if (typeof onUpdate === 'function') onUpdate({ ...getVrcWorld(), at: Date.now() })
 }
 
+// Leaving the world: a real "[Behaviour] OnLeftRoom", VRChat quitting
+// ("VRCApplication: HandleApplicationQuit" - logged with no OnLeftRoom first)
+// or VRChat no longer running (crash; see checkVrchatGone).
+function leaveWorld (at) {
+  if (!state.inWorld && !state.worldId) return false
+  event({ type: 'left', at })
+  state.inWorld = false
+  state.worldId = ''
+  state.instanceId = ''
+  state.groupId = ''
+  state.worldName = ''
+  media.reset(); media.setWorld(''); state.media = null
+  playerSet.clear(); playerMap.clear(); syncPlayers()
+  return true
+}
+
 // Parse a single log line and fold any world/user info into state.
 // Returns true if something relevant changed.
+//
+// World/player lines are matched only with VRChat's own "[Behaviour] " prefix.
+// Without it, Udon/world debug output and exception stack traces matched too,
+// e.g. "  at ÎÍÌ….OnLeftRoom () [0x00000]" blanked the current world.
 function processLine (line) {
   activity.process(line)
   // "[Behaviour] Joining wrld_xxxx-...:12345~region(use)~nonce(...)" — a Group instance's id
   // additionally carries a "~group(grp_xxxx)" tag (VRChat's own instance-type marker).
-  let m = line.match(/Joining (wrld_[^\s:]+):(\S+)/)
+  let m = line.match(/\[Behaviour\] Joining (wrld_[^\s:]+):(\S+)/)
   if (m) {
     state.worldId = m[1]
     state.instanceId = m[2]
@@ -111,8 +131,8 @@ function processLine (line) {
     return true
   }
   // RADAR: "[Behaviour] OnPlayerJoined <DisplayName> (usr_...)"
-  m = line.match(/OnPlayerJoined\s+(.+)$/)
-  if (m && !/OnPlayerJoinComplete/.test(line)) {
+  m = line.match(/\[Behaviour\] OnPlayerJoined\s+(.+)$/)
+  if (m) {
     const { displayName, id } = splitNameAndId(m[1])
     playerSet.add(displayName)
     if (id) playerMap.set(displayName, id)
@@ -121,7 +141,7 @@ function processLine (line) {
     return true
   }
   // "[Behaviour] OnPlayerLeft <DisplayName> (usr_...)"
-  m = line.match(/OnPlayerLeft\s+(.+)$/)
+  m = line.match(/\[Behaviour\] OnPlayerLeft\s+(.+)$/)
   if (m) {
     const { displayName, id } = splitNameAndId(m[1])
     event({ type: 'leave', displayName, userId: id || playerMap.get(displayName) || '', at: lineTime(line) })
@@ -131,7 +151,7 @@ function processLine (line) {
     return true
   }
   // "[Behaviour] Joining or Creating Room: <World Name>"
-  m = line.match(/Joining or Creating Room:\s*(.+?)\s*$/)
+  m = line.match(/\[Behaviour\] Joining or Creating Room:\s*(.+?)\s*$/)
   if (m) {
     state.worldName = m[1]
     state.inWorld = true
@@ -139,17 +159,10 @@ function processLine (line) {
     return true
   }
   // "[Behaviour] OnLeftRoom"
-  if (/OnLeftRoom\b/.test(line)) {
-    event({ type: 'left', at: lineTime(line) })
-    state.inWorld = false
-    state.worldId = ''
-    state.instanceId = ''
-    state.groupId = ''
-    state.worldName = ''
-    media.reset(); media.setWorld(''); state.media = null
-    playerSet.clear(); playerMap.clear(); syncPlayers()
-    return true
-  }
+  if (/\[Behaviour\] OnLeftRoom\s*$/.test(line)) return leaveWorld(lineTime(line))
+  // "VRCApplication: HandleApplicationQuit at 8748.678" - game closed while
+  // still in a world (no OnLeftRoom is logged).
+  if (/VRCApplication: HandleApplicationQuit\b/.test(line)) return leaveWorld(lineTime(line))
   // World media + video player URLs (media-link history). Covers AVPro
   // "Resolving URL", USharpVideo and SDK2 "User X added URL ..." lines too,
   // which the old single regex missed.
@@ -165,8 +178,11 @@ function processLine (line) {
     state.portalSeq++
     return true
   }
-  // "User Authenticated: DisplayName (usr_xxxx-...)"
-  m = line.match(/User Authenticated:\s*(.+?)\s*\((usr_[^)]+)\)/)
+  // Older builds: "User Authenticated: DisplayName (usr_xxxx-...)".
+  // Current builds: "[Authentication - …] Preforming post login checks for DisplayName (usr_…)"
+  // (VRChat's own spelling of "Preforming"; "Performing" accepted in case they fix it).
+  m = line.match(/User Authenticated:\s*(.+?)\s*\((usr_[^)]+)\)/) ||
+    line.match(/\[Authentication[^\]]*\] P(?:re|er)forming post login checks for\s+(.+?)\s*\((usr_[^)]+)\)/)
   if (m) {
     state.userDisplayName = m[1]
     state.userId = m[2]
@@ -205,6 +221,32 @@ function consume (chunk) {
   return changed
 }
 
+// VRChat crashed or was killed: no OnLeftRoom/HandleApplicationQuit is ever
+// logged, so the last world would stay "current" forever (Discord presence,
+// chatbox world line, Radar, instance history duration). Once the log has been
+// quiet a while and we still think we're in a world, check VRChat is actually
+// running. Log silence alone isn't enough: an idle empty world can go quiet.
+const GONE_QUIET_MS = 60000
+const GONE_CHECK_MS = 30000
+let lastGoneCheck = 0
+let goneCheckPending = false
+let isVrchatRunning = cb => {
+  if (process.platform !== 'win32') return cb(true)
+  require('child_process').execFile('tasklist', ['/FI', 'IMAGENAME eq VRChat.exe', '/NH'], { windowsHide: true, timeout: 10000 },
+    (err, out) => cb(err ? true : /VRChat\.exe/i.test(out || ''))) // on error assume running (don't drop state)
+}
+function checkVrchatGone (mtimeMs) {
+  if (!state.inWorld || goneCheckPending) return
+  const now = Date.now()
+  if (now - mtimeMs < GONE_QUIET_MS || now - lastGoneCheck < GONE_CHECK_MS) return
+  lastGoneCheck = now
+  goneCheckPending = true
+  isVrchatRunning(running => {
+    goneCheckPending = false
+    if (!running && state.inWorld && leaveWorld(Math.round(mtimeMs))) emit()
+  })
+}
+
 function poll () {
   const newest = newestLogFile()
   if (!newest) return
@@ -218,10 +260,10 @@ function poll () {
     tail = ''
   }
 
-  let size
-  try { size = fs.statSync(currentFile).size } catch (_) { return }
+  let size, mtimeMs
+  try { const st = fs.statSync(currentFile); size = st.size; mtimeMs = st.mtimeMs } catch (_) { return }
   if (size < readPos) { readPos = 0; tail = ''; primingActivity = true; activity.events = []; activity.players.clear(); activity.avatars.clear() } // log truncated/rotated
-  if (size === readPos) return // nothing new
+  if (size === readPos) { checkVrchatGone(mtimeMs); return } // nothing new
 
   let fd
   try {
@@ -256,4 +298,9 @@ function stopVrcWorld () {
 
 function getVrcWorld () { return { ...state, media: state.media ? { ...state.media } : null, activityEvents: activity.snapshot(), activitySequence: activity.sequence } }
 
-module.exports = { startVrcWorld, stopVrcWorld, getVrcWorld, setEventListener, _processLine: processLine }
+module.exports = {
+  startVrcWorld, stopVrcWorld, getVrcWorld, setEventListener,
+  _processLine: processLine,
+  _checkVrchatGone: checkVrchatGone,
+  _setIsVrchatRunning: fn => { isVrchatRunning = fn; lastGoneCheck = 0 }
+}

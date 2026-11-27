@@ -36,6 +36,49 @@ const BLE_OPTIONAL_SERVICES = getBleHeartRateOptionalServices()
 
 const api = window.electronAPI
 const $ = id => document.getElementById(id)
+const clockSync = require('./modules/time/clockSync')
+
+// Clock & timezone: keep this window's clockSync fed with Windows' real UTC
+// offset (pushed by main/osClock.js) plus the optional manual override, and
+// show what the app is using in Settings → Clock & timezone.
+;(function setupClockSync () {
+  const render = () => {
+    const el = $('clockSyncOut'); if (!el) return
+    const d = clockSync.describe()
+    const src = { override: 'manual override', windows: 'Windows clock', corrected: 'built-in 2026 rule fix', system: 'bundled timezone data' }[d.source] || d.source
+    const lines = [`Now ${d.now} · ${d.offset} · source: ${src}`, `Detected zone: ${d.systemTimeZone || 'unknown'}${d.windowsId ? ` (Windows: ${d.windowsId}, ${d.windowsOffset})` : ''}`]
+    if (d.correction) lines.push(`Applied fix: ${d.correction}`)
+    if (d.mismatch) lines.push(`Bundled tzdata ${d.tzdata || '?'} would have shown ${d.bundledOffset} - corrected.`)
+    el.textContent = lines.join('\n')
+  }
+  api.on('time:osClock', info => { clockSync.setOsClock(info); render() })
+  api.timeOsClock().then(info => { if (info) clockSync.setOsClock(info); render() }).catch(() => {})
+  api.getSetting('clock.overrideTimeZone', '').then(tz => {
+    clockSync.setOverrideTimeZone(tz)
+    if ($('clockOverrideTz')) $('clockOverrideTz').value = clockSync._state.overrideTz
+    render()
+  }).catch(() => {})
+  const list = $('clockTzList')
+  if (list && typeof Intl.supportedValuesOf === 'function') {
+    try { list.innerHTML = Intl.supportedValuesOf('timeZone').map(z => `<option value="${z}"></option>`).join('') } catch (_) {}
+  }
+  $('clockOverrideTz')?.addEventListener('change', async () => {
+    const raw = $('clockOverrideTz').value.trim()
+    const tz = clockSync.setOverrideTimeZone(raw)
+    await api.saveSetting('clock.overrideTimeZone', tz)
+    render()
+    if (raw && !tz) {
+      $('clockOverrideTz').value = ''
+      $('clockSyncOut').textContent = `"${raw}" isn't a known timezone - using automatic.\n` + $('clockSyncOut').textContent
+    }
+  })
+  $('clockSyncNow')?.addEventListener('click', async () => {
+    const info = await api.timeRefresh().catch(() => null)
+    if (info) clockSync.setOsClock(info)
+    render()
+  })
+  setInterval(render, 15000)
+})()
 
 ;(function moveTranslationCards () {
   const target = $('translationCards')
@@ -405,7 +448,7 @@ function setPill (id, on, onText, offText) {
 let logBuffer = []
 let logDirty = false
 function logLine (line) {
-  logBuffer.push(`${new Date().toLocaleTimeString()} ${line}`)
+  logBuffer.push(`${clockSync.formatTime(new Date(), { hour: 'numeric', minute: '2-digit', second: '2-digit' })} ${line}`)
   if (logBuffer.length > 200) logBuffer.splice(0, logBuffer.length - 200)
   logDirty = true
 }
@@ -985,7 +1028,7 @@ function renderChatHistory () {
     const idx = start + i
     const row = document.createElement('div')
     row.className = 'switch'; row.style.alignItems = 'center'; row.style.gap = '8px'
-    const when = new Date(entry.ts).toLocaleString()
+    const when = clockSync.formatDateTime(new Date(entry.ts))
     const text = document.createElement('span')
     text.style.flex = '1'; text.style.overflow = 'hidden'; text.style.textOverflow = 'ellipsis'; text.style.whiteSpace = 'nowrap'
     text.title = `${entry.text}\n${when}`
@@ -1353,10 +1396,24 @@ $('kickDisconnect').addEventListener('click', () => api.kickStop())
 
 /* ---------------- stats / network / hr / window / vr ---------------- */
 api.on('stats:update', s => {
-  setText('statsOut', `CPU ${s.cpuLoad}% ${s.cpuTemp ? s.cpuTemp + '°C ' : ''}| GPU ${s.gpuLoad}% ${s.gpuTemp ? s.gpuTemp + '°C ' : ''}| RAM ${s.ramUsedGb}/${s.ramTotalGb}GB (${s.ramPct}%)`)
+  const temp = t => (Number.isFinite(t) && t > 0 ? ` ${t}°C` : '')
+  const vram = Number.isFinite(s.vramUsedMb) && Number.isFinite(s.vramTotalMb) && s.vramTotalMb > 0
+    ? ` · VRAM ${(s.vramUsedMb / 1024).toFixed(1)}/${(s.vramTotalMb / 1024).toFixed(1)}GB` : ''
+  const lines = [
+    `CPU ${s.cpuLoad}%${temp(s.cpuTemp)}${s.cpuName ? ` · ${s.cpuName}` : ''}`,
+    `GPU ${s.gpuLoadKnown === false ? '—' : s.gpuLoad + '%'}${temp(s.gpuTemp)}${vram}${s.gpuName ? ` · ${s.gpuName}` : ''}`,
+    `RAM ${s.ramUsedGb}/${s.ramTotalGb}GB (${s.ramPct}%)`
+  ]
+  // Windows doesn't give normal apps the CPU temperature; say how to get it
+  // instead of showing a fake 0°C.
+  if (!(Number.isFinite(s.cpuTemp) && s.cpuTemp > 0)) lines.push('CPU temp: run LibreHardwareMonitor (or OpenHardwareMonitor) in the background to show it.')
+  setText('statsOut', lines.join('\n'))
   composer.update({
-    cpu: s.cpuLoad, cpuTemp: s.cpuTemp, gpu: s.gpuLoad, gpuTemp: s.gpuTemp,
-    ramPct: s.ramPct, ramUsed: s.ramUsedGb, ramTotal: s.ramTotalGb
+    cpu: s.cpuLoad, cpuTemp: s.cpuTemp || 0, gpu: s.gpuLoad, gpuTemp: s.gpuTemp || 0,
+    ramPct: s.ramPct, ramUsed: s.ramUsedGb, ramTotal: s.ramTotalGb,
+    cpuName: s.cpuName || '', gpuName: s.gpuName || '',
+    vramUsed: Number.isFinite(s.vramUsedMb) ? +(s.vramUsedMb / 1024).toFixed(1) : 0,
+    vramTotal: Number.isFinite(s.vramTotalMb) ? +(s.vramTotalMb / 1024).toFixed(1) : 0
   })
 })
 $('enableStats').addEventListener('change', e => {
@@ -1727,6 +1784,7 @@ async function connectGmansHeartRate (server) {
     await bleWait(150)
   }
   await triggerGmansHeartRate()
+  if (bleRetriggerTimer) clearInterval(bleRetriggerTimer) // reconnect without a clean disconnect
   bleRetriggerTimer = setInterval(() => {
     triggerGmansHeartRate().catch(err => {
       console.warn('GMANS heart-rate retrigger failed:', err.message)
@@ -2020,7 +2078,7 @@ function renderHrSessions (list) {
   const el = $('hrSessions')
   if (!list || !list.length) { el.textContent = 'No saved sessions yet.'; return }
   el.innerHTML = list.map(x => {
-    const d = new Date(x.startedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    const d = clockSync.format(new Date(x.startedAt), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     return `<div style="padding:2px 0">❤️ ${d} · ${fmtDur(x.durationSec)} · avg ${x.avg} · ${x.min}–${x.max} <span style="opacity:.55">(${x.provider})</span></div>`
   }).join('')
 }
@@ -2396,7 +2454,7 @@ async function loadTonCache () {
   const d = tonCacheData || {}
   const counts = `${(d.achievements || []).length} ach · ${(d.terrors || []).length} terrors · ${(d.items || []).length} items · ${(d.locations || []).length} maps · ${(d.rounds || []).length} rounds`
   setPill('tonCacheState', (d.achievements || []).length > 0, 'cached')
-  const when = d.fetchedAt ? new Date(d.fetchedAt).toLocaleString() : 'never'
+  const when = d.fetchedAt ? clockSync.formatDateTime(new Date(d.fetchedAt)) : 'never'
   setText('tonCacheInfo', `${counts} · updated ${when}`)
   renderTonBoard()
 }
@@ -2409,7 +2467,7 @@ async function loadTonRoundHistory () {
     const res = r.result === 'Survived' ? '✅' : (r.result === 'Died' ? '☠' : '·')
     return `<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid var(--line,#222)">
       <span>${res} ${tonEsc(r.roundType || 'Round')}${r.terror ? ' · ' + tonEsc(r.terror) : ''}</span>
-      <span class="muted">${tonEsc(r.map || '')} · ${new Date(r.ts).toLocaleDateString()}</span></div>`
+      <span class="muted">${tonEsc(r.map || '')} · ${clockSync.formatDate(new Date(r.ts))}</span></div>`
   }).join('')
 }
 
@@ -2496,13 +2554,13 @@ async function loadTonSaves () {
   tonFillDiffSelects(list)
   if (!list.length) { el.textContent = 'No saves captured yet — they appear when the game saves, or paste one above to import.'; return }
   el.innerHTML = list.map(s => `<div class="tonSaveRow" data-ts="${s.ts}" title="Tap anywhere to copy this code" style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;margin:4px 0;border:1px solid var(--line,#333);border-radius:8px;cursor:pointer">
-      <span>💾 ${new Date(s.ts).toLocaleString()} <span class="muted">· ${s.length} chars</span></span>
+      <span>💾 ${clockSync.formatDateTime(new Date(s.ts))} <span class="muted">· ${s.length} chars</span></span>
       <button class="btn tonSaveCopy" style="padding:4px 14px;font-size:.74rem;flex:none">Copy</button></div>`).join('')
 }
 // Populate the A/B decode/diff pickers. Default A = newest, B = next-newest
 // (so "Diff A → B" reads newest vs the one before it).
 function tonFillDiffSelects (list) {
-  const opts = (list || []).map(s => `<option value="${s.ts}">${new Date(s.ts).toLocaleString()} · ${s.length}c</option>`).join('')
+  const opts = (list || []).map(s => `<option value="${s.ts}">${clockSync.formatDateTime(new Date(s.ts))} · ${s.length}c</option>`).join('')
   const a = $('tonDiffA'); const b = $('tonDiffB')
   if (a) { a.innerHTML = opts; if (list && list[0]) a.value = String(list[0].ts) }
   if (b) { b.innerHTML = opts; if (list && list[1]) b.value = String(list[1].ts) }
@@ -2518,7 +2576,7 @@ if ($('tonSavesList')) $('tonSavesList').addEventListener('click', async ev => {
   if (btn) { btn.textContent = 'Copied ✓'; setTimeout(() => { btn.textContent = 'Copy' }, 1500) }
 })
 if ($('tonSavesClear')) $('tonSavesClear').addEventListener('click', async () => { await api.tonSavesClear(); loadTonSaves() })
-api.on('ton:save', s => { loadTonSaves(); setText('tonCacheInfo', `💾 Save backed up · ${new Date(s.ts).toLocaleTimeString()}`) })
+api.on('ton:save', s => { loadTonSaves(); setText('tonCacheInfo', `💾 Save backed up · ${clockSync.formatTime(new Date(s.ts), { hour: 'numeric', minute: '2-digit', second: '2-digit' })}`) })
 
 // Switch the board to the achievements view so freshly-applied unlocks are visible.
 function tonShowAchievements () {
@@ -2892,7 +2950,7 @@ $('tonOscRefresh').addEventListener('click', async () => { const sent = await ap
 $('tonOscRaw').addEventListener('click', async () => {
   const raw = await api.tonOscRaw()
   $('tonOscOut').textContent = (raw || []).slice(0, 25).map(r => {
-    const t = new Date(r.at).toLocaleTimeString()
+    const t = clockSync.formatTime(new Date(r.at), { hour: 'numeric', minute: '2-digit', second: '2-digit' })
     return `${t}  ${JSON.stringify(r.msg)}`
   }).join('\n') || 'No ToN WebSocket messages yet — connect ToNSaveManager and join a round.'
 })
@@ -2906,7 +2964,7 @@ let shazamOscLoaded = false
 
 function renderOscQrHistory (history = []) {
   $('oscQrHistory').innerHTML = history.length
-    ? history.map(item => `<div class="section-note" style="padding:4px 0;border-bottom:1px solid var(--border)"><b>${item.spotify ? 'Spotify' : 'QR'}</b> · ${new Date(item.at).toLocaleTimeString()}<br>${esc(item.data)}</div>`).join('')
+    ? history.map(item => `<div class="section-note" style="padding:4px 0;border-bottom:1px solid var(--border)"><b>${item.spotify ? 'Spotify' : 'QR'}</b> · ${clockSync.formatTime(new Date(item.at), { hour: 'numeric', minute: '2-digit', second: '2-digit' })}<br>${esc(item.data)}</div>`).join('')
     : '<div class="section-note">No QR codes detected.</div>'
 }
 
@@ -3252,6 +3310,72 @@ api.on('photoRelay:event', s => {
 })
 
 /* ---------------- tools: Screenshot Metadata (VRCX-style) ---------------- */
+// Screenshot gallery (main: screenshots:* IPC, modules/vrchat/tools/screenshotMetadata.js)
+;(function setupShotGallery () {
+  if (!$('shotGalleryGrid')) return
+  const PAGE = 48
+  let offset = 0; let query = ''; let items = []; let loading = false; let token = 0
+  const grid = $('shotGalleryGrid')
+  const thumbObserver = new IntersectionObserver(entries => {
+    for (const en of entries) {
+      if (!en.isIntersecting) continue
+      const img = en.target; thumbObserver.unobserve(img)
+      api.screenshotsThumb(img.dataset.path, Number(img.dataset.mtime)).then(url => { if (url) img.src = url }).catch(() => {})
+    }
+  }, { rootMargin: '200px' })
+  const card = (it, i) => {
+    const m = it.meta || {}; const w = (m.world && m.world.name) || (m.world && m.world.id ? 'Unknown world' : 'No world info')
+    const when = clockSync.format(new Date(m.takenAt || it.takenAt || it.mtimeMs), { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    const players = (m.players || []).length
+    return `<div class="shot" data-i="${i}" style="cursor:pointer;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:rgba(0,0,0,.2)">
+      <img data-path="${esc(it.path)}" data-mtime="${it.mtimeMs}" alt="" style="width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:#111">
+      <div style="padding:5px 7px;font-size:.74rem"><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(w)}">🌍 ${esc(w)}</div>
+      <div class="muted">${esc(when)}${players ? ` · 👥 ${players}` : ''}</div></div></div>`
+  }
+  const showDetail = it => {
+    const m = it.meta || {}; const el = $('shotGalleryDetail'); el.style.display = ''
+    const world = m.world || {}
+    el.innerHTML = `<div style="font-weight:600">${esc(world.name || 'Unknown world')}</div>
+      <div>${esc(clockSync.formatDateTime(new Date(m.takenAt || it.takenAt || it.mtimeMs)))}${m.author && m.author.displayName ? ` · by ${esc(m.author.displayName)}` : ''}${m.source ? ` · metadata: ${esc(m.source)}` : ''}</div>
+      ${(m.players || []).length ? `<div style="margin-top:4px">👥 ${m.players.map(p => esc(p.displayName)).join(', ')}</div>` : '<div style="margin-top:4px">No player list stored in this photo.</div>'}
+      <div class="row" style="margin-top:6px">
+        <button class="btn ghost" data-act="open">Open</button>
+        <button class="btn ghost" data-act="reveal">Show in folder</button>
+        ${world.id ? '<button class="btn ghost" data-act="world">World page</button>' : ''}
+      </div>`
+    el.querySelectorAll('button[data-act]').forEach(b => b.addEventListener('click', () => {
+      if (b.dataset.act === 'open') api.screenshotsOpen(it.path)
+      else if (b.dataset.act === 'reveal') api.screenshotsReveal(it.path)
+      else if (b.dataset.act === 'world') api.openExternal(`https://vrchat.com/home/world/${encodeURIComponent(world.id)}`)
+    }))
+  }
+  async function load (reset) {
+    if (loading && !reset) return // "Load more" waits; a new search supersedes (token drops stale results)
+    loading = true
+    const my = ++token
+    if (reset) { offset = 0; items = []; grid.innerHTML = ''; $('shotGalleryDetail').style.display = 'none' }
+    query = $('shotGallerySearch').value.trim()
+    setText('shotGalleryCount', query && reset ? 'searching…' : 'loading…')
+    const r = await api.screenshotsList({ offset, limit: PAGE, query }).catch(err => ({ ok: false, error: err.message }))
+    if (my !== token) return
+    loading = false
+    if (!r.ok) { setText('shotGalleryCount', 'Error: ' + (r.error || '')); return }
+    const start = items.length
+    items = items.concat(r.items)
+    grid.insertAdjacentHTML('beforeend', r.items.map((it, k) => card(it, start + k)).join(''))
+    grid.querySelectorAll('img[data-path]:not([src])').forEach(img => thumbObserver.observe(img))
+    offset += r.items.length
+    setText('shotGalleryCount', `${r.total} photo${r.total === 1 ? '' : 's'}${query ? ` matching "${query}"` : ''}`)
+    $('shotGalleryMore').style.display = offset < r.total ? '' : 'none'
+    if (!r.total) grid.innerHTML = `<div class="muted">${query ? 'No photos match.' : 'No VRChat screenshots found in ' + esc(r.dir || 'the photos folder') + '.'}</div>`
+  }
+  grid.addEventListener('click', e => { const c = e.target.closest('.shot'); if (c) showDetail(items[Number(c.dataset.i)]) })
+  $('shotGalleryLoad').addEventListener('click', () => load(true))
+  $('shotGallerySearch').addEventListener('keydown', e => { if (e.key === 'Enter') load(true) })
+  $('shotGalleryMore').addEventListener('click', () => load(false))
+  api.on('screenshots:progress', p => { if (loading && query) setText('shotGalleryCount', `searching… ${p.done}/${p.total} (first search reads each photo once)`) })
+})()
+
 if ($('screenshotMetaEnable')) {
   $('screenshotMetaEnable').addEventListener('change', async e => {
     const enabled = e.target.checked
@@ -3284,7 +3408,7 @@ api.on('afk:update', s => {
   if (s.afk) {
     const since = s.since || Date.now()
     const mins = Math.max(0, Math.round((Date.now() - since) / 60000))
-    const time = new Date(since).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    const time = clockSync.formatTime(new Date(since), { hour: '2-digit', minute: '2-digit' })
     const msg = c.message.replace(/\{mins\}/g, mins).replace(/\{time\}/g, time)
     setText('afkOut', `AFK — ${msg}`)
     if (c.toChatbox && c.enabled) { sendChatboxMessage(msg, false); logLine(`OUT chatbox: ${msg}`) }
@@ -3859,7 +3983,7 @@ async function loadEvents () {
   all.sort((a, b) => new Date(a.startsAt || 0) - new Date(b.startsAt || 0))
   el.innerHTML = all.length
     ? all.map(e => {
-      const when = e.startsAt ? new Date(e.startsAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'TBA'
+      const when = e.startsAt ? clockSync.format(new Date(e.startsAt), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'TBA'
       return `<div style="padding:3px 0">🔭 <b>${String(e.title || 'Event').replace(/</g, '&lt;')}</b> — ${when}</div>`
     }).join('')
     : 'No upcoming events for the selected groups.'
@@ -4021,7 +4145,7 @@ const HIST_ICON = { join: '➡️', leave: '⬅️', friend_add: '➕', friend_r
 function renderHeatmap (rows) {
   const el = $('histHeatmap'); if (!el) return
   const grid = Array.from({ length: 7 }, () => Array(24).fill(0))
-  for (const r of rows) { const d = new Date(r.ts); grid[d.getDay()][d.getHours()]++ }
+  for (const r of rows) { const p = clockSync.wallParts(new Date(r.ts)); grid[p.dow][p.hour]++ }
   const max = Math.max(1, ...grid.flat())
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   let html = '<div class="um-sec">Activity heatmap</div><div style="display:grid;grid-template-columns:28px repeat(24,1fr);gap:2px;font-size:.58rem">'
@@ -4036,7 +4160,7 @@ async function loadHistory () {
   const rows = await api.historyList({ type: $('histType').value || undefined, limit: 300 })
   if (!rows || !rows.length) { el.textContent = 'No history yet — it fills as you use VRChat with the app open.'; return }
   el.innerHTML = rows.map(r => {
-    const when = new Date(r.ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    const when = clockSync.format(new Date(r.ts), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     // Person-type rows: make the name clickable to open that user's profile.
     const isPerson = HIST_PERSON_TYPES.has(r.type) && r.name
     const nameHtml = isPerson
@@ -4090,12 +4214,16 @@ $('histClear').addEventListener('click', async () => { await api.historyClear();
 $('histImport').addEventListener('click', async () => {
   $('histList').textContent = 'Importing from VRCX…'
   const r = await api.historyImportVrcx()
-  if (r.ok) { setText('histList', `✅ Imported ${r.imported} VRCX events.`); loadHistory() } else setText('histList', 'Import failed: ' + (r.error || ''))
+  if (r.ok) {
+    const extra = [r.duplicates ? `${r.duplicates} already imported` : '', r.droppedByCap ? `${r.droppedByCap} older ones over the ${r.cap}-event history limit` : ''].filter(Boolean).join(', ')
+    setText('histList', `✅ Imported ${r.imported} VRCX events${extra ? ` (skipped ${extra})` : ''}.`)
+    setTimeout(loadHistory, 2500)
+  } else setText('histList', 'Import failed: ' + (r.error || ''))
 })
 document.querySelector('[data-tab="history"]').addEventListener('click', loadHistory)
 
 /* ---------------- Instances, timeline chart, players met ---------------- */
-const fmtWhen = ts => new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+const fmtWhen = ts => clockSync.format(new Date(ts), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 const fmtSpan = ms => fmtDuration(Math.max(0, Math.round(ms / 1000)))
 async function loadInstances () {
   const el = $('instList'); el.textContent = 'Loading…'
@@ -4153,7 +4281,7 @@ const FEED_ICON = { gps: '🌐', online: '🟢', offline: '⚫', status: '💬',
 const FEED_STATUS_DOT = { 'join me': '🔵', active: '🟢', 'ask me': '🟠', busy: '🔴' }
 const PIPELINE_LABEL = { connected: '🟢 live', connecting: '🟡 connecting…', reconnecting: '🟡 reconnecting…', 'no-auth': '⚪ log into VRChat for the live feed', 'auth-failed': '🔴 VRChat login expired — log in again', stopped: '⚪ off', error: '🔴 error' }
 function feedRowHtml (r) {
-  const when = new Date(r.ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const when = clockSync.format(new Date(r.ts), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   let what = ''
   if (r.type === 'gps') what = r.world ? `→ ${esc(r.world)}` : 'changed world'
   else if (r.type === 'online') what = 'came online'
@@ -4177,6 +4305,35 @@ $('feedList').addEventListener('click', e => { const u = e.target.closest('.hist
 document.querySelector('[data-tab="feed"]').addEventListener('click', loadFeed)
 api.on('vrchat:pipeline', ({ status }) => setText('feedPipeline', 'live feed: ' + (PIPELINE_LABEL[status] || status)))
 // Prepend live rows while the Feed tab is open (if they match the filter).
+// Friend alerts (main: modules/vrchat/friends/friendAlerts.js)
+;(function setupFriendAlerts () {
+  const read = () => ({
+    enabled: $('friendAlertsEnable').checked,
+    friends: $('friendAlertsList').value.split(/[\n,]/).map(s => s.trim()).filter(Boolean),
+    online: $('friendAlertsOnline').checked,
+    joinInstance: $('friendAlertsJoin').checked,
+    desktop: $('friendAlertsDesktop').checked,
+    hud: $('friendAlertsHud').checked
+  })
+  const pill = c => setPill('friendAlertsState', c.enabled && c.friends.length > 0, c.friends.length ? `${c.friends.length} watched` : 'on')
+  api.getSetting('friendAlerts', {}).then(c => {
+    $('friendAlertsEnable').checked = !!c.enabled
+    $('friendAlertsList').value = (Array.isArray(c.friends) ? c.friends : []).join('\n')
+    $('friendAlertsOnline').checked = c.online !== false
+    $('friendAlertsJoin').checked = c.joinInstance !== false
+    $('friendAlertsDesktop').checked = c.desktop !== false
+    $('friendAlertsHud').checked = c.hud !== false
+    pill(read())
+  }).catch(() => {})
+  const save = async () => { const c = read(); await api.saveSetting('friendAlerts', c); pill(c) }
+  ;['friendAlertsEnable', 'friendAlertsList', 'friendAlertsOnline', 'friendAlertsJoin', 'friendAlertsDesktop', 'friendAlertsHud']
+    .forEach(id => $(id).addEventListener('change', save))
+  api.on('friend:alert', a => {
+    toast(`<b>${a.kind === 'join' ? '🚪' : '🟢'} ${esc(a.title)}</b><br>${esc(a.body)}`)
+    setText('friendAlertsOut', `Last alert: ${a.title} · ${clockSync.formatTime(new Date(a.at), { hour: '2-digit', minute: '2-digit' })}`)
+  })
+})()
+
 api.on('vrchat:feed', e => {
   if (!$('feed').classList.contains('active')) return
   const t = $('feedType').value; const q = $('feedSearch').value.trim().toLowerCase()
@@ -4277,7 +4434,7 @@ async function openWorldModal (id) {
   $('dmBody').innerHTML = (w.description ? `<div class="um-bio">${esc(w.description)}</div>` : '') + dmInfo([
     ['Players', w.occupants || 0], ['Capacity', w.capacity || '?'], ['Visits', w.visits || 0],
     ['Favorites', w.favorites || 0], ['Status', w.releaseStatus || ''],
-    ['Updated', w.updated_at ? new Date(w.updated_at).toLocaleDateString() : '']
+    ['Updated', w.updated_at ? clockSync.formatDate(new Date(w.updated_at)) : '']
   ]) +
     `<div class="um-sec">Create instance</div>
      <div class="row" style="flex-wrap:wrap;gap:8px">
@@ -4334,7 +4491,7 @@ async function openGroupModal (id) {
   $('grpMakeInst').addEventListener('click', () => makeGroupInstance(g))
   $('dmBody').innerHTML = (g.description ? `<div class="um-bio">${esc(g.description)}</div>` : '') + dmInfo([
     ['Members', g.memberCount || 0], ['Code', g.shortCode ? '@' + g.shortCode : ''],
-    ['Privacy', g.privacy || ''], ['Created', g.createdAt ? new Date(g.createdAt).toLocaleDateString() : '']
+    ['Privacy', g.privacy || ''], ['Created', g.createdAt ? clockSync.formatDate(new Date(g.createdAt)) : '']
   ]) +
     (g.myMember ? `<div class="um-sec">Your membership</div><div class="muted" style="font-size:.8rem">${(g.myMember.roleIds || []).length} role(s) · ${(g.myMember.permissions || []).length} permission(s)</div>` : '') +
     '<div class="um-sec">Members</div><div id="grpMembers" class="muted">Loading…</div>' +
@@ -4423,7 +4580,7 @@ async function loadGroupExtras (gid) {
 }
 
 /* ---------------- rail clock + launch ---------------- */
-function tickRailClock () { if ($('railClock')) $('railClock').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
+function tickRailClock () { if ($('railClock')) $('railClock').textContent = clockSync.formatTime(new Date(), { hour: '2-digit', minute: '2-digit' }) }
 tickRailClock(); setInterval(tickRailClock, 15000)
 $('launchVrc').addEventListener('click', () => api.launchVRChat())
 
@@ -4471,7 +4628,7 @@ async function markAllNotifsRead (rerender) {
 function markNotifsReadOnView () { if (notifCache.some(n => !n.read)) markAllNotifsRead(false) }
 
 function notifItemHtml (n) {
-  const when = new Date(n.ts || Date.now()).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const when = clockSync.format(new Date(n.ts || Date.now()), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   let title
   if (n.type === 'friendRequest') title = `Friend request from <b>${esc(n.sender)}</b>`
   else if (n.type === 'invite') title = `<b>${esc(n.sender)}</b> invited you${n.world ? ` to <b>${esc(n.world)}</b>` : ''}`
@@ -4735,7 +4892,7 @@ async function renderMTab (tab) {
     const badges = (u.badges || []).filter(b => b.badgeImageUrl).map(b => `<img class="badge-img" src="${imgAttr(b.badgeImageUrl)}" title="${esc(b.badgeName)}${b.badgeDescription ? ' — ' + esc(b.badgeDescription) : ''}" referrerpolicy="no-referrer" loading="lazy" decoding="async" />`).join('')
     const rows = [['Platform', u.last_platform === 'standalonewindows' ? 'PC' : (u.last_platform || '—')]]
     if (u.date_joined) rows.push(['Joined', u.date_joined])
-    if (u.last_login) { try { rows.push(['Last login', new Date(u.last_login).toLocaleDateString()]) } catch (_) {} }
+    if (u.last_login) { try { rows.push(['Last login', clockSync.formatDate(new Date(u.last_login))]) } catch (_) {} }
     rows.push(['Age verified', u.ageVerified ? 'Yes' : 'No'])
     rows.push(['Avatar cloning', u.allowAvatarCopying ? 'On' : 'Off'])
     const trustLadder = (() => {
@@ -4781,7 +4938,7 @@ async function renderMTab (tab) {
       api.historyList({ limit: 3000 }).then(rows => {
         const meets = (rows || []).filter(h => h.type === 'join' && h.name === u.displayName)
         if (meets.length && $('umTabBody')) {
-          const last = new Date(meets[0].ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+          const last = clockSync.format(new Date(meets[0].ts), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
           const note = document.createElement('div'); note.className = 'muted'; note.style.cssText = 'font-size:.78rem;margin-top:6px'
           note.textContent = `🐾 Seen together ${meets.length}× · last ${last}`
           $('umTabBody').appendChild(note)
@@ -4847,7 +5004,7 @@ async function openAvatarModal (id) {
   $('dmBody').innerHTML = (a.description ? `<div class="um-bio">${esc(a.description)}</div>` : '') + dmInfo([
     ['Platforms', (a.platforms || []).map(p => p === 'standalonewindows' ? 'PC' : p === 'android' ? 'Quest' : p).join(', ') || '—'],
     ['Performance', (a.performance || []).join(', ') || '—'],
-    ['Status', a.releaseStatus || ''], ['Updated', a.updated ? new Date(a.updated).toLocaleDateString() : '']
+    ['Status', a.releaseStatus || ''], ['Updated', a.updated ? clockSync.formatDate(new Date(a.updated)) : '']
   ])
 }
 async function renderMutSub (sub) {
@@ -5589,9 +5746,9 @@ async function refreshCloudSyncUi () {
     $('cloudSyncConnected').style.display = ''
     setText('cloudSyncServerLabel', '🔗 ' + s.baseUrl)
     $('cloudSyncEnabled').checked = !!s.enabled
-    setText('cloudSyncStatusOut', s.lastSyncAt ? `Last synced ${new Date(s.lastSyncAt).toLocaleString()}` : 'Not synced yet.')
+    setText('cloudSyncStatusOut', s.lastSyncAt ? `Last synced ${clockSync.formatDateTime(new Date(s.lastSyncAt))}` : 'Not synced yet.')
     $('cloudSyncHistoryEnabled').checked = !!s.historyEnabled
-    setText('cloudSyncHistoryOut', s.historyLastSyncAt ? `Last synced ${new Date(s.historyLastSyncAt).toLocaleString()}` : 'Not synced yet.')
+    setText('cloudSyncHistoryOut', s.historyLastSyncAt ? `Last synced ${clockSync.formatDateTime(new Date(s.historyLastSyncAt))}` : 'Not synced yet.')
   } else {
     $('cloudSyncDisconnected').style.display = ''
     $('cloudSyncConnected').style.display = 'none'
@@ -5608,17 +5765,33 @@ $('cloudSyncConnect').addEventListener('click', async () => {
   $('cloudSyncPairing').style.display = ''
   setText('cloudSyncCode', r.code)
   setText('cloudSyncPairOut', `Waiting for you to enter this on ${url}/pair…`)
-  cloudSyncPollTimer = setInterval(async () => {
-    const p = await api.cloudSyncPollPairing()
-    if (!p.ok) { setText('cloudSyncPairOut', 'Error: ' + p.error); clearInterval(cloudSyncPollTimer); return }
-    if (p.expired) { setText('cloudSyncPairOut', 'Code expired — click Connect… to try again.'); clearInterval(cloudSyncPollTimer); return }
-    if (p.paired) {
-      clearInterval(cloudSyncPollTimer)
-      await refreshCloudSyncUi()
-      await refreshTwitchCloudUi()
-      updateBoosterStatus('force')
-    }
+  // Clicking Connect again (it's re-enabled while waiting) used to start a
+  // second loop and orphan the first. Each loop cleared the *shared* variable,
+  // not itself, so the old one polled every 3 s for the rest of the session.
+  // Stop any previous loop, have each loop stop only itself, and skip a tick
+  // while the previous poll is still in flight.
+  if (cloudSyncPollTimer) clearInterval(cloudSyncPollTimer)
+  let polling = false
+  const timer = setInterval(async () => {
+    if (polling) return
+    polling = true
+    const stop = () => { clearInterval(timer); if (cloudSyncPollTimer === timer) cloudSyncPollTimer = null }
+    try {
+      const p = await api.cloudSyncPollPairing()
+      if (cloudSyncPollTimer !== timer) { stop(); return } // superseded by a newer Connect
+      if (!p.ok) { setText('cloudSyncPairOut', 'Error: ' + p.error); stop(); return }
+      if (p.expired) { setText('cloudSyncPairOut', 'Code expired — click Connect… to try again.'); stop(); return }
+      if (p.paired) {
+        stop()
+        await refreshCloudSyncUi()
+        await refreshTwitchCloudUi()
+        updateBoosterStatus('force')
+      }
+    } catch (err) {
+      setText('cloudSyncPairOut', 'Error: ' + (err && err.message ? err.message : err)); stop()
+    } finally { polling = false }
   }, 3000)
+  cloudSyncPollTimer = timer
 })
 $('cloudSyncEnabled').addEventListener('change', async e => { await api.cloudSyncSetEnabled(e.target.checked) })
 $('cloudSyncNowBtn').addEventListener('click', async () => {
@@ -5998,41 +6171,129 @@ async function init () {
   refreshNowPlaying()
 }
 
-// ---- AI provider picker ----
-async function setupAiProviders () {
-  const providers = await api.aiProviders()
-  const sel = $('aiProvider')
-  sel.innerHTML = ''
-  Object.entries(providers).forEach(([key, p]) => {
-    const o = document.createElement('option'); o.value = key; o.text = p.label; sel.appendChild(o)
-  })
-  const saved = await api.getSetting('ai', { provider: 'openai', baseUrl: providers.openai.baseUrl, model: providers.openai.model, key: '' })
-  sel.value = saved.provider || 'openai'
-  $('aiBaseUrl').value = saved.baseUrl || providers[sel.value]?.baseUrl || ''
-  $('aiModel').value = saved.model || providers[sel.value]?.model || ''
-  $('aiKey').value = saved.key || ''
-
-  function applyAiProviderLock () {
-    const p = providers[sel.value]
-    const locked = !!p?.locked
-    $('aiBaseUrl').disabled = locked
-    $('aiModel').disabled = locked
+// ---- AI provider pickers (IntelliChat + Jarvis own/backup) ----
+// One reusable picker: providers grouped by cost tier, "get a free key" link,
+// models loaded from the provider (OpenRouter's free models flagged), and a
+// connection test. Element ids are `${prefix}Provider`, `${prefix}BaseUrl`,
+// `${prefix}Model`, `${prefix}Key` - the IntelliChat picker keeps the old
+// aiProvider/aiBaseUrl/aiModel/aiKey ids other features read.
+let aiProviderCatalog = null
+let aiTierLabels = null
+async function aiCatalog () {
+  if (!aiProviderCatalog) {
+    aiProviderCatalog = await api.aiProviders()
+    aiTierLabels = await api.aiTiers().catch(() => ({}))
   }
-  applyAiProviderLock()
-
-  sel.addEventListener('change', async () => {
-    const p = providers[sel.value]
-    if (p && sel.value !== 'custom') { $('aiBaseUrl').value = p.baseUrl; $('aiModel').value = p.model }
-    applyAiProviderLock()
-    await saveAi()
+  return aiProviderCatalog
+}
+async function mountAiPicker (container, prefix, onChange) {
+  const providers = await aiCatalog()
+  const box = typeof container === 'string' ? $(container) : container
+  const order = ['free', 'free-key', 'local', 'gateway', 'paid', 'custom']
+  const groups = order.map(tier => {
+    const items = Object.entries(providers).filter(([, p]) => (p.tier || 'custom') === tier)
+    if (!items.length) return ''
+    return `<optgroup label="${esc(aiTierLabels[tier] || tier)}">${items.map(([k, p]) => `<option value="${esc(k)}">${esc(p.label)}</option>`).join('')}</optgroup>`
+  }).join('')
+  box.innerHTML = `
+    <label>Provider</label>
+    <select id="${prefix}Provider">${groups}</select>
+    <div class="muted" id="${prefix}Note" style="font-size:.75rem;margin-top:4px"></div>
+    <label style="margin-top:8px">Base URL (OpenAI-compatible)</label>
+    <input type="text" id="${prefix}BaseUrl" placeholder="https://…/v1" />
+    <div class="grid cols-2" style="margin-top:8px">
+      <div><label>Model</label><input type="text" id="${prefix}Model" list="${prefix}ModelList" placeholder="model id" /><datalist id="${prefix}ModelList"></datalist></div>
+      <div><label>API key</label><input type="password" id="${prefix}Key" placeholder="key (blank if not needed)" /></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn ghost" id="${prefix}LoadModels">Load models</button>
+      <label class="switch" style="margin:0"><input type="checkbox" id="${prefix}FreeOnly"> Free models only</label>
+      <button class="btn ghost" id="${prefix}Test">Test</button>
+    </div>
+    <div class="muted" id="${prefix}Out" style="font-size:.75rem;margin-top:4px"></div>`
+  const el = id => $(prefix + id)
+  let models = []
+  const renderNote = () => {
+    const p = providers[el('Provider').value] || {}
+    const parts = []
+    if (p.note) parts.push(esc(p.note))
+    if (p.keyUrl) parts.push(`<a href="#" data-keyurl="${esc(p.keyUrl)}">Get a ${p.tier === 'paid' ? '' : 'free '}key ↗</a>`)
+    if (p.tier === 'local' || p.tier === 'gateway') parts.push('Runs on your PC / server: start it first.')
+    if (!p.needsKey && p.tier !== 'custom') parts.push('No key needed.')
+    el('Note').innerHTML = parts.join(' · ')
+    el('Note').querySelectorAll('a[data-keyurl]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); api.openExternal(a.dataset.keyurl) }))
+    el('BaseUrl').disabled = !!p.locked
+    el('Model').disabled = !!p.locked
+  }
+  const renderModels = () => {
+    const list = el('FreeOnly').checked ? models.filter(m => m.free) : models
+    el('ModelList').innerHTML = list.slice(0, 500).map(m => `<option value="${esc(m.id)}">${m.free ? '★ free' : ''}${m.name ? ' ' + esc(m.name) : ''}</option>`).join('')
+  }
+  const get = () => ({ provider: el('Provider').value, baseUrl: el('BaseUrl').value.trim(), model: el('Model').value.trim(), key: el('Key').value.trim() })
+  const changed = () => { if (onChange) onChange(get()) }
+  el('Provider').addEventListener('change', () => {
+    const p = providers[el('Provider').value]
+    if (p && el('Provider').value !== 'custom') { el('BaseUrl').value = p.baseUrl; el('Model').value = p.model }
+    models = []; renderModels(); renderNote(); setText(prefix + 'Out', ''); changed()
   })
-  ;['aiBaseUrl', 'aiModel', 'aiKey'].forEach(id => $(id).addEventListener('change', saveAi))
+  ;['BaseUrl', 'Model', 'Key'].forEach(id => el(id).addEventListener('change', changed))
+  el('FreeOnly').addEventListener('change', renderModels)
+  el('LoadModels').addEventListener('click', async () => {
+    setText(prefix + 'Out', 'Loading models…')
+    const r = await api.aiListModels(get()).catch(err => ({ ok: false, error: err.message }))
+    if (!r.ok) { setText(prefix + 'Out', 'Could not load models: ' + r.error); return }
+    models = r.models
+    const free = models.filter(m => m.free).length
+    renderModels()
+    setText(prefix + 'Out', `${models.length} models${free ? ` (${free} free ★)` : ''} - pick one in the Model box.`)
+  })
+  el('Test').addEventListener('click', async () => {
+    setText(prefix + 'Out', 'Testing…')
+    const r = await api.aiTest(get()).catch(err => ({ ok: false, error: err.message }))
+    setText(prefix + 'Out', r.ok ? `✅ Works (${r.ms} ms): "${r.reply}"` : `❌ ${r.error}`)
+  })
+  return {
+    get,
+    set (cfg = {}) {
+      const key = cfg.provider && providers[cfg.provider] ? cfg.provider : 'nekosune_ollama'
+      el('Provider').value = key
+      el('BaseUrl').value = cfg.baseUrl || providers[key].baseUrl || ''
+      el('Model').value = cfg.model || providers[key].model || ''
+      el('Key').value = cfg.key || ''
+      renderNote()
+    }
+  }
+}
+
+async function setupAiProviders () {
+  const main = await mountAiPicker('aiPickerMain', 'ai', cfg => api.saveSetting('ai', cfg))
+  const providers = await aiCatalog()
+  main.set(await api.getSetting('ai', { provider: 'openai', baseUrl: providers.openai.baseUrl, model: providers.openai.model, key: '' }))
+  await setupAssistantAi()
 }
 async function saveAi () {
-  await api.saveSetting('ai', {
-    provider: $('aiProvider').value, baseUrl: $('aiBaseUrl').value,
-    model: $('aiModel').value, key: $('aiKey').value
-  })
+  await api.saveSetting('ai', { provider: $('aiProvider').value, baseUrl: $('aiBaseUrl').value, model: $('aiModel').value, key: $('aiKey').value })
+}
+
+// Jarvis: same AI as IntelliChat, or its own; plus an optional backup that
+// main tries when the first fails (assistantAiConfigs in main.js).
+async function setupAssistantAi () {
+  const saved = await api.getSetting('assistantAi', {})
+  const state = { mode: saved.mode === 'own' ? 'own' : 'shared', primary: saved.primary || {}, backup: saved.backup || {} }
+  const save = () => api.saveSetting('assistantAi', state)
+  const own = await mountAiPicker('aiPickerAssistant', 'asstAi', cfg => { state.primary = cfg; save() })
+  const backup = await mountAiPicker('aiPickerBackup', 'asstAiBk', cfg => { state.backup = { ...cfg, enabled: $('assistantAiBackupEnable').checked }; save() })
+  own.set(state.primary.provider ? state.primary : { provider: 'groq' })
+  backup.set(state.backup.provider ? state.backup : { provider: 'nekosune_ollama' })
+  $('assistantAiMode').value = state.mode
+  $('assistantAiBackupEnable').checked = !!state.backup.enabled
+  const show = () => {
+    $('aiPickerAssistant').style.display = state.mode === 'own' ? '' : 'none'
+    $('aiPickerBackup').style.display = $('assistantAiBackupEnable').checked ? '' : 'none'
+  }
+  show()
+  $('assistantAiMode').addEventListener('change', () => { state.mode = $('assistantAiMode').value; if (state.mode === 'own') state.primary = own.get(); show(); save() })
+  $('assistantAiBackupEnable').addEventListener('change', () => { state.backup = { ...backup.get(), enabled: $('assistantAiBackupEnable').checked }; show(); save() })
 }
 
 const TRANSLATOR_ROWS = {
@@ -6150,10 +6411,75 @@ const TTS_ENGINE_FIELDS = {
   ttsmonster: { row: 'ttsMonsterRow', fields: { apiKey: 'ttsMonsterKey', voiceId: 'ttsMonsterVoice' } },
   glados: { row: 'ttsGladosRow', fields: { endpoint: 'ttsGladosEndpoint' } },
   moonbase: { row: 'ttsMoonbaseRow', fields: { endpoint: 'ttsMoonbaseEndpoint', voice: 'ttsMoonbaseVoice' } },
-  selfhosted: { row: 'ttsSelfHostedRow', fields: { endpoint: 'ttsSelfHostedEndpoint' } }
+  selfhosted: { row: 'ttsSelfHostedRow', fields: { endpoint: 'ttsSelfHostedEndpoint' } },
+  googletranslate: { row: 'ttsGoogleTranslateRow', fields: { languageCode: 'ttsGtLang' } },
+  openaicompat: { row: 'ttsOpenaiCompatRow', fields: { baseUrl: 'ttsOcBaseUrl', apiKey: 'ttsOcKey', model: 'ttsOcModel', voice: 'ttsOcVoice', format: 'ttsOcFormat' } }
 }
-const TTS_ALL_FIELD_IDS = [...new Set(Object.values(TTS_ENGINE_FIELDS).flatMap(e => Object.values(e.fields)))]
 const TTS_NUMERIC_FIELDS = new Set(['ttsSapiRate'])
+
+// More TTS engines (main: ttsProviders.js). Their settings rows are generated
+// from this spec at load time (before setupTts reads saved values), instead of
+// eight more hand-written blocks in index.html.
+const TTS_GENERATED = {
+  geminitts: { label: 'Google Gemini TTS (free tier key)', hint: 'Free key at aistudio.google.com/apikey. Voices: Kore, Puck, Charon, Fenrir, Aoede, Leda, Orus, Zephyr…', fields: [['apiKey', 'API key', 'password'], ['model', 'Model', 'text', 'gemini-2.5-flash-preview-tts'], ['voice', 'Voice', 'text', 'Kore']] },
+  unrealspeech: { label: 'Unreal Speech (free monthly allowance)', hint: 'Free key at unrealspeech.com. Voices: Sierra, Dan, Will, Scarlett, Liv, Amy, Eric, Brian…', fields: [['apiKey', 'API key', 'password'], ['voice', 'Voice', 'text', 'Sierra']] },
+  cartesia: { label: 'Cartesia Sonic (cloud)', hint: 'Voice = a voice id copied from play.cartesia.ai.', fields: [['apiKey', 'API key', 'password'], ['voice', 'Voice id', 'text', ''], ['model', 'Model', 'text', 'sonic-2']] },
+  fishaudio: { label: 'Fish Audio (cloud)', hint: 'Voice = a model/reference id from fish.audio (blank = default voice).', fields: [['apiKey', 'API key', 'password'], ['voice', 'Voice (reference id)', 'text', ''], ['model', 'Model (optional)', 'text', '']] },
+  lmnt: { label: 'LMNT (cloud)', hint: 'Voices: leah, lily, ava, daniel, morgan…', fields: [['apiKey', 'API key', 'password'], ['voice', 'Voice', 'text', 'leah']] },
+  speechify: { label: 'Speechify (cloud)', hint: 'Voices: george, henry, carly, kristy, oliver…', fields: [['apiKey', 'API key', 'password'], ['voice', 'Voice id', 'text', 'george']] },
+  hume: { label: 'Hume Octave (cloud)', hint: 'Voice = a name from Hume\'s voice library (blank = Octave picks one).', fields: [['apiKey', 'API key', 'password'], ['voice', 'Voice name', 'text', '']] },
+  murf: { label: 'Murf AI (cloud)', hint: 'Voice ids look like en-US-natalie, en-UK-hazel…', fields: [['apiKey', 'API key', 'password'], ['voice', 'Voice id', 'text', 'en-US-natalie']] },
+  coqui: { label: 'Coqui TTS server (self-hosted, XTTS / VITS)', hint: 'Run "tts-server --model_name …" (default port 5002). Speaker / language only for multi-speaker or multilingual models.', fields: [['endpoint', 'Server URL', 'text', 'http://localhost:5002'], ['voice', 'Speaker id (optional)', 'text', ''], ['language', 'Language id (optional)', 'text', '']] },
+  piper: { label: 'Piper HTTP server (self-hosted)', hint: 'Run "python -m piper.http_server -m en_GB-alan-medium" (default port 5000). Fast, light, fully offline.', fields: [['endpoint', 'Server URL', 'text', 'http://localhost:5000'], ['voice', 'Voice (optional)', 'text', '']] },
+  marytts: { label: 'MaryTTS (self-hosted)', hint: 'Default port 59125. Locale like en_US / en_GB / de.', fields: [['endpoint', 'Server URL', 'text', 'http://localhost:59125'], ['voice', 'Voice (optional)', 'text', 'cmu-slt-hsmm'], ['language', 'Locale', 'text', 'en_US']] }
+}
+;(function injectGeneratedTtsRows () {
+  const engineSel = $('ttsEngine')
+  const anchor = $('ttsSelfHostedRow')
+  if (!engineSel || !anchor) return
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1)
+  for (const [engine, spec] of Object.entries(TTS_GENERATED)) {
+    if (![...engineSel.options].some(o => o.value === engine)) engineSel.appendChild(new Option(spec.label, engine))
+    const rowId = `ttsGen${cap(engine)}Row`
+    const fields = {}
+    const inputs = spec.fields.map(([key, label, type, placeholder]) => {
+      const id = `ttsGen${cap(engine)}${cap(key)}`
+      fields[key] = id
+      return `<div><label>${esc(label)}</label><input type="${type}" id="${id}" placeholder="${esc(placeholder || '')}" /></div>`
+    }).join('')
+    const row = document.createElement('div')
+    row.id = rowId; row.style.marginTop = '8px'; row.style.display = 'none'
+    row.innerHTML = `<div class="grid cols-2">${inputs}</div><div class="muted" style="font-size:.72rem;margin-top:4px">${esc(spec.hint)}</div>`
+    anchor.parentNode.insertBefore(row, anchor)
+    TTS_ENGINE_FIELDS[engine] = { row: rowId, fields }
+  }
+})()
+// Presets for the OpenAI-compatible TTS engine (self-hosted voice servers + cloud).
+// Model/voice are the servers' documented defaults; '' = use the server's default.
+const TTS_OC_PRESETS = {
+  kokoro: { baseUrl: 'http://localhost:8880/v1', model: 'kokoro', voice: 'af_bella', key: '' },
+  orpheus: { baseUrl: 'http://localhost:5005/v1', model: 'orpheus', voice: 'tara', key: '' },
+  chatterbox: { baseUrl: 'http://localhost:4123/v1', model: 'chatterbox', voice: '', key: '' },
+  alltalk: { baseUrl: 'http://localhost:7851/v1', model: 'tts-1', voice: 'alloy', key: '' },
+  speaches: { baseUrl: 'http://localhost:8000/v1', model: 'speaches-ai/Kokoro-82M-v1.0-ONNX', voice: 'af_heart', key: '' },
+  openedai: { baseUrl: 'http://localhost:8000/v1', model: 'tts-1', voice: 'alloy', key: '' },
+  localai: { baseUrl: 'http://localhost:8080/v1', model: '', voice: '', key: '' },
+  groq: { baseUrl: 'https://api.groq.com/openai/v1', model: '', voice: '', key: null },
+  openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini-tts', voice: 'alloy', key: null }
+}
+if ($('ttsOcPreset')) {
+  $('ttsOcPreset').addEventListener('change', () => {
+    const p = TTS_OC_PRESETS[$('ttsOcPreset').value]
+    if (!p) return
+    $('ttsOcBaseUrl').value = p.baseUrl
+    $('ttsOcModel').value = p.model
+    $('ttsOcVoice').value = p.voice
+    if (p.key === '') $('ttsOcKey').value = '' // local servers need no key; cloud keeps what you typed
+    ;['ttsOcBaseUrl', 'ttsOcModel', 'ttsOcVoice', 'ttsOcKey'].forEach(id => $(id).dispatchEvent(new Event('change')))
+  })
+}
+// Field ids of every engine, including the generated rows above.
+const TTS_ALL_FIELD_IDS = [...new Set(Object.values(TTS_ENGINE_FIELDS).flatMap(e => Object.values(e.fields)))]
 
 function updateTtsRows () {
   const engine = $('ttsEngine').value
@@ -6182,6 +6508,12 @@ async function setupTts () {
 
   await refreshTtsOutputDevices()
   if (saved.outputDeviceId) $('ttsOutputDevice').value = saved.outputDeviceId
+  $('ttsMonitor').checked = !!saved.monitor
+  $('ttsMonitor').addEventListener('change', saveTts)
+  updateTtsRouteHint()
+  $('ttsOutputDevice').addEventListener('change', updateTtsRouteHint)
+  $('ttsEngine').addEventListener('change', updateTtsRouteHint)
+  $('ttsRouteToMic').addEventListener('click', routeTtsToVrchatMic)
 
   $('ttsEngine').addEventListener('change', async () => { updateTtsRows(); await saveTts() })
   ;[...TTS_ALL_FIELD_IDS, 'ttsOutputDevice'].forEach(id => $(id).addEventListener('change', saveTts))
@@ -6199,7 +6531,49 @@ async function refreshTtsOutputDevices () {
 async function saveTts () {
   const values = {}
   TTS_ALL_FIELD_IDS.forEach(id => { values[id] = $(id).value })
-  await api.saveSetting('tts', { engine: $('ttsEngine').value, outputDeviceId: $('ttsOutputDevice').value, values })
+  await api.saveSetting('tts', { engine: $('ttsEngine').value, outputDeviceId: $('ttsOutputDevice').value, monitor: $('ttsMonitor').checked, values })
+}
+
+// ---- TTS → VRChat mic ----
+// Windows can't turn one app's audio output into another app's microphone
+// without a virtual audio device (a driver the user installs themselves, e.g.
+// VB-CABLE or VoiceMeeter). Once one exists, TTS can be played into its
+// playback side, and VRChat uses its recording side as the mic.
+// label of the playback ("input") side -> what to pick in VRChat as the mic.
+const VIRTUAL_CABLES = [
+  { re: /CABLE(-[A-D])? Input/i, mic: label => label.replace(/Input/i, 'Output') },
+  { re: /VoiceMeeter (AUX |VAIO3 )?Input/i, mic: label => label.replace(/Input/i, 'Output') },
+  { re: /Hi-Fi Cable Input/i, mic: () => 'Hi-Fi Cable Output' },
+  // Virtual Audio Cable (VAC): playback and recording sides share the line's name.
+  { re: /\(Virtual Audio Cable\)/i, mic: label => label },
+  { re: /Virtual (Audio )?Cable|VB-Audio|Line \d+ \(Virtual/i, mic: () => 'the matching virtual cable output/recording device' }
+]
+const cableFor = label => VIRTUAL_CABLES.find(c => c.re.test(String(label || '')))
+function updateTtsRouteHint () {
+  const sel = $('ttsOutputDevice'); if (!sel) return
+  const label = sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : ''
+  const cable = cableFor(label)
+  const lines = []
+  if (cable) {
+    const mic = cable.mic(/\(Virtual Audio Cable\)/i.test(label) ? label : label.replace(/\s*\(.*\)\s*$/, ''))
+    lines.push(`✅ TTS goes into "${label}". In VRChat, set Microphone to "${mic}".`)
+    if (!$('ttsMonitor').checked) lines.push('You will not hear it yourself unless "Also play on my speakers" is on.')
+  }
+  if ($('ttsEngine').value === 'sapi' && sel.value) lines.push('⚠️ Windows built-in (SAPI) plays through Windows directly and ignores this device - pick another engine to route it.')
+  setText('ttsRouteOut', lines.join('\n'))
+}
+async function routeTtsToVrchatMic () {
+  await refreshTtsOutputDevices()
+  const sel = $('ttsOutputDevice')
+  const opt = [...sel.options].find(o => o.value && cableFor(o.textContent))
+  if (!opt) {
+    setText('ttsRouteOut', 'No virtual audio cable found. Install one (for example VB-CABLE, free, from vb-audio.com), restart KitsuNexus, then click this again.\nKitsuNexus never installs drivers for you.')
+    return
+  }
+  sel.value = opt.value
+  if (!$('ttsMonitor').checked) $('ttsMonitor').checked = true
+  await saveTts()
+  updateTtsRouteHint()
 }
 // Speak text using the saved TTS settings. Returns quietly on failure (the
 // callers - Live Typing, the assistant, etc. - shouldn't crash if TTS isn't
@@ -6219,10 +6593,19 @@ async function speakWithSettings (text) {
     if (result?.playedLocally) return // SAPI already played through the OS directly
     if (!result?.audio) return
     const audioEl = $('ttsEngineAudio')
-    if (t.outputDeviceId && typeof audioEl.setSinkId === 'function') {
-      try { await audioEl.setSinkId(t.outputDeviceId) } catch (_) {}
+    if (typeof audioEl.setSinkId === 'function') {
+      // '' = system default (also resets a device chosen earlier this session).
+      try { await audioEl.setSinkId(t.outputDeviceId || '') } catch (_) {}
     }
-    audioEl.src = `data:${result.mime || 'audio/mpeg'};base64,${result.audio}`
+    const src = `data:${result.mime || 'audio/mpeg'};base64,${result.audio}`
+    audioEl.src = src
+    // Monitor copy on the default device, so you can hear TTS that's being
+    // sent into a virtual cable (VRChat mic).
+    if (t.monitor && t.outputDeviceId) {
+      const mon = new Audio(src)
+      mon.volume = 0.8
+      mon.play().catch(() => {})
+    }
     await audioEl.play().catch(() => {})
   } catch (_) {}
 }
@@ -6408,7 +6791,7 @@ async function saveAssistantConfig () {
     replayMinutes: parseInt($('assistantReplayMinutes').value, 10) || 5,
     sosWebhook: $('assistantSosWebhook').value.trim(),
     searchProvider: $('assistantSearchProvider').value,
-    searxngEndpoint: $('assistantSearxngEndpoint').value.trim() || 'https://searxng.nekosunevr.co.uk/',
+    searxngEndpoint: $('assistantSearxngEndpoint').value.trim() || 'https://search.nekosunevr.co.uk/api/search',
     engine: sttCfg.engine || 'cloud',
     cloudBaseUrl: sttCfg.cloudBaseUrl || '',
     cloudApiKey: sttCfg.cloudApiKey || '',
@@ -6429,7 +6812,7 @@ async function setupAssistant () {
   const saved = await api.getSetting('assistant', {
     wakeWord: 'nova', micDeviceId: '', clipSeconds: 4, trustedFriends: [],
     enableReplayBuffer: false, replayMinutes: 5, sosWebhook: '',
-    searchProvider: 'searxng', searxngEndpoint: 'https://searxng.nekosunevr.co.uk/'
+    searchProvider: 'searxng', searxngEndpoint: 'https://search.nekosunevr.co.uk/api/search'
   })
   $('assistantWakeWord').value = saved.wakeWord || 'nova'
   $('assistantClipSeconds').value = saved.clipSeconds || 4
@@ -6439,7 +6822,10 @@ async function setupAssistant () {
   $('assistantReplayMinutes').value = String(saved.replayMinutes || 5)
   $('assistantSosWebhook').value = saved.sosWebhook || ''
   $('assistantSearchProvider').value = saved.searchProvider || 'searxng'
-  $('assistantSearxngEndpoint').value = saved.searxngEndpoint || 'https://searxng.nekosunevr.co.uk/'
+  // Configs saved with the old default instance move to NekoSune Search.
+  const oldSearchDefaults = ['https://searxng.nekosunevr.co.uk/', 'https://searxng.nekosunevr.co.uk']
+  const savedSearch = String(saved.searxngEndpoint || '').trim()
+  $('assistantSearxngEndpoint').value = (!savedSearch || oldSearchDefaults.includes(savedSearch)) ? 'https://search.nekosunevr.co.uk/api/search' : savedSearch
   updateAssistantSearchRows()
   await refreshAssistantMicDevices()
   if (saved.micDeviceId) $('assistantMicDevice').value = saved.micDeviceId
@@ -6511,7 +6897,7 @@ function renderHomeNews (nr) {
       : '') +
       nr.news.map(n => {
         const dateStr = n.date
-          ? new Date(n.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+          ? clockSync.format(new Date(n.date), { year: 'numeric', month: 'short', day: 'numeric' })
           : ''
         return `<div class="news-item" data-url="${esc(n.link)}">
           <div style="min-width:0">

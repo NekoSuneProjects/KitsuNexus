@@ -120,9 +120,18 @@ function sendBeat (value) {
   sendBufferToTargets(buffer, 'OSC Beat')
 }
 
+// Cap at VRChat's 144 chars without leaving half an emoji (a lone UTF-16
+// surrogate, shown as "�"). Callers that already cut with .slice(0, 144)
+// can leave one too, so any lone surrogate is dropped as well.
+function chatboxText (message) {
+  let s = String(message || '')
+  if (s.length > 144) { s = s.slice(0, 144) }
+  return s.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
+}
+
 function sendChatboxMessage (message, notify = false) {
   // send=true bypasses the VRChat keyboard; notify=false avoids the chat SFX.
-  const buffer = createChatboxMessage(String(message || '').slice(0, 144), true, notify)
+  const buffer = createChatboxMessage(chatboxText(message), true, notify)
   sendBufferToTargets(buffer, 'OSC Chatbox')
 }
 
@@ -326,6 +335,7 @@ function encodeOscString (value) {
 }
 
 module.exports = {
+  chatboxText,
   setOscPort,
   setExtraOscTargets,
   setOscReceiverPort,

@@ -40,17 +40,24 @@ async function captureAndPush () {
   }
 }
 
+// `running` is only set after the awaits below, so a second start() (double
+// click / auto-start + click) used to get past the check and create a second
+// overlay + capture loop. `starting` closes that gap.
+let starting = false
 async function start ({ intervalMs = 500 } = {}) {
-  if (running) return
+  if (running || starting) return
   if (!overlay.isAvailable()) throw new Error('SteamVR does not appear to be installed.')
 
+  starting = true
   hud.getVrSurface()
   try {
     await overlay.start({ overlayKey: 'KitsuNexus.hud', overlayName: 'KitsuNexus HUD' })
   } catch (err) {
+    starting = false
     hud.closeVrSurface()
     throw err
   }
+  starting = false
   framePath = path.join(os.tmpdir(), `KitsuNexus-vr-frame-${process.pid}.png`)
   running = true
   onStatus({ running: true })

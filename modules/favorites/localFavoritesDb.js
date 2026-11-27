@@ -7,6 +7,7 @@
 // app.getPath('userData') — callers pass an explicit path so it can be relocated.
 
 const fs = require('fs')
+const { openDb, saveDb } = require('../diagnostics/dbFile')
 const os = require('os')
 const path = require('path')
 const crypto = require('crypto')
@@ -30,7 +31,7 @@ async function init (targetPath) {
   dbPath = targetPath || defaultPath()
   try { fs.mkdirSync(path.dirname(dbPath), { recursive: true }) } catch (_) {}
   try {
-    db = new SQL.Database(fs.existsSync(dbPath) ? fs.readFileSync(dbPath) : undefined)
+    db = openDb(SQL, dbPath).db // safe load: falls back to .bak, never overwrites a damaged file
   } catch (_) { db = new SQL.Database() }
   db.run(`CREATE TABLE IF NOT EXISTS local_favorites (
     id TEXT PRIMARY KEY,
@@ -58,13 +59,13 @@ function persist () {
   if (!db || !dbPath) return
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
-    try { fs.writeFileSync(dbPath, Buffer.from(db.export())) } catch (e) { console.warn('local favorites save failed:', e.message) }
+    try { saveDb(db, dbPath) } catch (e) { console.warn('local favorites save failed:', e.message) }
   }, 8000)
 }
 
 function flush () {
   clearTimeout(saveTimer)
-  try { if (db && dbPath) fs.writeFileSync(dbPath, Buffer.from(db.export())) } catch (e) { console.warn('local favorites flush failed:', e.message) }
+  try { if (db && dbPath) saveDb(db, dbPath) } catch (e) { console.warn('local favorites flush failed:', e.message) }
 }
 
 function findByTarget (type, vrchatId) {

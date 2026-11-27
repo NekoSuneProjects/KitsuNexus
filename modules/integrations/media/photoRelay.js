@@ -85,7 +85,14 @@ async function send (file) {
     // Embed world/instance/players into the file FIRST (if that toggle is on),
     // then read the file back so we both upload and link the same content -
     // avoids racing the file against screenshotMetadata's own watcher.
-    const metadata = screenshotMetadata.isEnabled() ? await screenshotMetadata.embedForFile(file) : null
+    // embedForFile skips files that already carry metadata (e.g. VRCX's) and
+    // throws INCOMPLETE while VRChat is still writing; fall back to reading
+    // whatever metadata the file has so the upload still gets world/players.
+    let metadata = null
+    if (screenshotMetadata.isEnabled()) {
+      metadata = await screenshotMetadata.embedForFile(file).catch(() => null)
+      if (!metadata) { try { const m = screenshotMetadata.readMetadata(file); if (m.source) metadata = m } catch (_) {} }
+    }
 
     const fileName = path.basename(file)
     const buf = fs.readFileSync(file)

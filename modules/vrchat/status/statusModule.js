@@ -11,8 +11,11 @@ const DEFAULT_PRESETS = [
   '{hr} bpm | {cpu}% CPU'
 ]
 
+const clockSync = require('../../time/clockSync')
+
+// Uses clockSync so {time} matches Windows even with outdated bundled tzdata.
 function formatClock (date = new Date()) {
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return clockSync.formatTime(date, { hour: '2-digit', minute: '2-digit' })
 }
 
 // Replace {tokens} in a template using a values map.

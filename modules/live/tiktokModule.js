@@ -107,6 +107,9 @@ function stopTikTokFollowers () {
 let conn = null
 let onUpdate = null
 let roomInfoTimer = null
+// Bumped on every connect/disconnect so a slow connect() that resolves after a
+// newer connect (or a disconnect) doesn't start an orphaned room-info poll.
+let connectGeneration = 0
 let username = ''
 
 const state = {
@@ -183,6 +186,7 @@ async function connectTikTok (user, listener, signApiKey = '') {
   if (!username) { state.error = 'Enter a TikTok username'; emit(); return }
 
   disconnectTikTok()
+  const generation = ++connectGeneration
 
   // Apply the optional Euler Stream sign key globally (improves reliability).
   if (signApiKey && SignConfig) SignConfig.apiKey = String(signApiKey).trim()
@@ -202,14 +206,17 @@ async function connectTikTok (user, listener, signApiKey = '') {
 
   try {
     const connectState = await conn.connect()
+    if (generation !== connectGeneration) return // superseded
     state.connected = true
     state.followers = readFollowerCount(connectState?.roomInfo)
     state.viewers = connectState?.roomInfo?.user_count ?? state.viewers
     emit()
 
     await pollRoomInfo()
+    if (generation !== connectGeneration) return
     roomInfoTimer = setInterval(pollRoomInfo, 30000)
   } catch (err) {
+    if (generation !== connectGeneration) return
     state.connected = false
     const msg = err?.exception?.message || err?.message || String(err)
     state.error = /sign/i.test(msg)
@@ -220,6 +227,7 @@ async function connectTikTok (user, listener, signApiKey = '') {
 }
 
 function disconnectTikTok () {
+  connectGeneration++
   if (roomInfoTimer) { clearInterval(roomInfoTimer); roomInfoTimer = null }
   if (conn) {
     try { conn.disconnect() } catch (_) { /* ignore */ }
