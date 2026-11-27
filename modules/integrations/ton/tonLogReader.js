@@ -135,7 +135,11 @@ function processLine (raw) {
   if (/^Verified Round End/.test(line)) { finalizeRound(); return true }
 
   // Authenticated display name (to attribute "X landed a stun!" to us).
-  m = line.match(/User Authenticated:\s*(.+?)\s*\(usr_[^)]+\)/)
+  // Older VRChat: "User Authenticated: Name (usr_…)". Current builds log
+  // "[Authentication - …] Preforming post login checks for Name (usr_…)" instead;
+  // without it displayName stayed empty and EVERY player's stun counted as ours.
+  m = line.match(/User Authenticated:\s*(.+?)\s*\(usr_[^)]+\)/) ||
+    line.match(/\[Authentication[^\]]*\] P(?:re|er)forming post login checks for\s+(.+?)\s*\(usr_[^)]+\)/)
   if (m) { displayName = m[1].trim(); return false }
 
   // Stuns landed by us.

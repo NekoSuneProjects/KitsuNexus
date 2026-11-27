@@ -4,6 +4,7 @@
 // and custom alerts. The DB lives next to the app's user data. Runs in MAIN.
 
 const fs = require('fs')
+const { openDb, saveDb } = require('../diagnostics/dbFile')
 const os = require('os')
 const path = require('path')
 
@@ -20,7 +21,7 @@ async function init (userDataDir) {
   SQL = await initSqlJs({ locateFile: f => path.join(wasmDir, f) })
   dbPath = path.join(userDataDir || os.tmpdir(), 'KitsuNexus-history.sqlite')
   try {
-    db = new SQL.Database(fs.existsSync(dbPath) ? fs.readFileSync(dbPath) : undefined)
+    db = openDb(SQL, dbPath).db // safe load: falls back to .bak, never overwrites a damaged file
   } catch (_) { db = new SQL.Database() }
   db.run(`CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,7 +39,7 @@ async function init (userDataDir) {
   // instance, per modules/vrchat/world/vrchatWorld.js).
   try { db.run('ALTER TABLE events ADD COLUMN group_id TEXT') } catch (_) { /* column already exists */ }
   // Cap the events table so db.export() stays fast (keep most recent 8000).
-  try { db.run('DELETE FROM events WHERE id NOT IN (SELECT id FROM events ORDER BY ts DESC LIMIT 8000)') } catch (_) {}
+  trimEvents()
   db.run(`CREATE TABLE IF NOT EXISTS notifications (
     id TEXT PRIMARY KEY, ts INTEGER, type TEXT, sender TEXT, message TEXT, world TEXT, link TEXT, read INTEGER DEFAULT 0
   )`)
@@ -130,7 +131,7 @@ function persist () {
   clearTimeout(saveTimer)
   // Debounced + coalesced — db.export() serialises the whole DB, so write rarely.
   saveTimer = setTimeout(() => {
-    try { fs.writeFileSync(dbPath, Buffer.from(db.export())) } catch (e) { console.warn('history save failed:', e.message) }
+    try { saveDb(db, dbPath) } catch (e) { console.warn('history save failed:', e.message) }
   }, 8000)
 }
 
@@ -307,30 +308,106 @@ function clearType (type) {
   persist()
 }
 
-// Import history from an existing VRCX SQLite DB (best-effort — VRCX schema varies).
+// History keeps the newest EVENTS_CAP events (db.export() serialises the whole DB).
+const EVENTS_CAP = 8000
+function trimEvents () {
+  try { db.run(`DELETE FROM events WHERE id NOT IN (SELECT id FROM events ORDER BY ts DESC LIMIT ${EVENTS_CAP})`) } catch (_) {}
+}
+
+// VRCX friend-log types → our history types (others, e.g. FriendRequest, are skipped).
+const VRCX_FRIEND_TYPES = { Friend: 'friend_add', Unfriend: 'friend_remove', DisplayName: 'name_change', TrustLevel: 'trust_change' }
+
+// Import history from an existing VRCX SQLite DB, matched against VRCX's current schema
+// (src/services/database/index.js): gamelog_location, gamelog_join_leave and the per-user
+// `usr<id>_friend_log_history` tables. The old version:
+//  - reported success with 0 events for any non-database file (sql.js opens any bytes
+//    lazily and every per-table error was swallowed);
+//  - read a `gamelog_friend` table VRCX doesn't have, so friend history never imported;
+//  - added duplicates on every re-import;
+//  - was trimmed to the newest 8000 events only at the next app start, so most of a big
+//    import silently vanished. Now the cap is applied here and `imported` is what was kept.
 async function importVrcx (filePath) {
   if (!SQL || !db) return { ok: false, error: 'History not initialised' }
   let bytes
   try { bytes = fs.readFileSync(filePath) } catch (_) { return { ok: false, error: 'VRCX database not found at ' + filePath } }
   let src
   try { src = new SQL.Database(bytes) } catch (e) { return { ok: false, error: 'Could not open VRCX DB: ' + e.message } }
-  const toTs = v => { const n = typeof v === 'number' ? v : Date.parse(v); return Number.isFinite(n) ? n : Date.now() }
-  let imported = 0
-  const tryTable = (sql, mapfn) => {
-    try {
-      const st = src.prepare(sql)
-      while (st.step()) { const ev = mapfn(st.getAsObject()); if (ev) { db.run('INSERT INTO events (ts,type,name,detail,world) VALUES (?,?,?,?,?)', [ev.ts, ev.type, ev.name || '', ev.detail || '', ev.world || '']); imported++ } }
-      st.free()
-    } catch (_) { /* table not present in this VRCX version */ }
+  const close = () => { try { src.close() } catch (_) {} }
+  let tables
+  try { tables = new Set((src.exec("SELECT name FROM sqlite_master WHERE type='table'")[0]?.values || []).map(r => r[0])) } catch (_) { close(); return { ok: false, error: 'Not a VRCX database' } }
+  const friendTables = [...tables].filter(t => /_friend_log_history$/.test(t))
+  if (!tables.has('gamelog_location') && !tables.has('gamelog_join_leave') && !friendTables.length) { close(); return { ok: false, error: 'No VRCX history tables in this file (is it VRCX.sqlite3?)' } }
+
+  const toTs = v => { const n = typeof v === 'number' ? v : Date.parse(v); return Number.isFinite(n) ? n : 0 }
+  const all = sql => { try { const st = src.prepare(sql); const out = []; while (st.step()) out.push(st.getAsObject()); st.free(); return out } catch (_) { return [] } }
+  const q = name => `"${String(name).replace(/"/g, '""')}"`
+  // Only the newest EVENTS_CAP rows of each table can survive the cap anyway.
+  const recent = (table, cols) => all(`SELECT ${cols} FROM ${q(table)} ORDER BY created_at DESC LIMIT ${EVENTS_CAP}`)
+
+  const rows = []
+  const worldByLocation = new Map()
+  if (tables.has('gamelog_location')) {
+    for (const r of recent('gamelog_location', 'created_at, location, world_id, world_name')) {
+      if (r.location && r.world_name) worldByLocation.set(r.location, r.world_name)
+      rows.push({ ts: toTs(r.created_at), type: 'world', name: r.world_name, world: r.world_name, worldId: r.world_id || String(r.location || '').split(':')[0] })
+    }
   }
-  tryTable('SELECT created_at,type,display_name,location FROM gamelog_join_leave', r => ({ ts: toTs(r.created_at), type: /left/i.test(r.type || '') ? 'leave' : 'join', name: r.display_name, detail: '(VRCX import)', world: r.location }))
-  tryTable('SELECT created_at,world_name,location FROM gamelog_location', r => ({ ts: toTs(r.created_at), type: 'world', name: r.world_name, detail: '(VRCX import)', world: r.location }))
-  tryTable('SELECT created_at,type,display_name FROM gamelog_friend', r => ({ ts: toTs(r.created_at), type: /unfriend|remove|delete/i.test(r.type || '') ? 'friend_remove' : 'friend_add', name: r.display_name, detail: '(VRCX import)' }))
-  try { src.close() } catch (_) {}
+  if (tables.has('gamelog_join_leave')) {
+    for (const r of recent('gamelog_join_leave', 'created_at, type, display_name, location')) {
+      const type = r.type === 'OnPlayerLeft' ? 'leave' : r.type === 'OnPlayerJoined' ? 'join' : ''
+      if (type) rows.push({ ts: toTs(r.created_at), type, name: r.display_name, world: worldByLocation.get(r.location) || '' })
+    }
+  }
+  for (const t of friendTables) {
+    for (const r of recent(t, 'created_at, type, display_name, previous_display_name, trust_level, previous_trust_level')) {
+      const type = VRCX_FRIEND_TYPES[r.type]
+      if (!type) continue
+      const detail = type === 'name_change' ? `${r.previous_display_name || '?'} → ${r.display_name || '?'}`
+        : type === 'trust_change' ? `${r.previous_trust_level || '?'} → ${r.trust_level || '?'}` : ''
+      rows.push({ ts: toTs(r.created_at), type, name: r.display_name, detail })
+    }
+  }
+  close()
+
+  // Same event already in history: VRCX's own copy (re-import) or the one KitsuNexus
+  // logged live from the same VRChat log, whose timestamp differs by a moment.
+  const exists = db.prepare('SELECT 1 FROM events WHERE type = ? AND name = ? AND ts BETWEEN ? AND ? LIMIT 1')
+  // Once history is full, rows older than the oldest kept event would be trimmed
+  // straight away; don't insert them at all.
+  const count = db.exec('SELECT count(*), min(ts) FROM events')[0].values[0]
+  const floor = count[0] >= EVENTS_CAP ? Number(count[1]) || 0 : 0
+  let added = 0; let skipped = 0; let tooOld = 0
+  const ids = []
+  try {
+    db.run('BEGIN')
+    for (const ev of rows) {
+      if (!ev.ts || !ev.name) { skipped++; continue }
+      if (ev.ts < floor) { tooOld++; continue }
+      exists.bind([ev.type, ev.name, ev.ts - 5000, ev.ts + 5000]); const dup = exists.step(); exists.reset()
+      if (dup) { skipped++; continue }
+      db.run('INSERT INTO events (ts,type,name,detail,world,world_id) VALUES (?,?,?,?,?,?)',
+        [ev.ts, ev.type, ev.name, ev.detail ? `${ev.detail} (VRCX import)` : '(VRCX import)', ev.world || '', ev.worldId || ''])
+      ids.push(db.exec('SELECT last_insert_rowid()')[0].values[0][0])
+      added++
+    }
+    db.run('COMMIT')
+  } catch (err) {
+    try { db.run('ROLLBACK') } catch (_) {}
+    exists.free()
+    return { ok: false, error: 'Import failed: ' + err.message }
+  }
+  exists.free()
+  trimEvents()
+  // Count what's still there after the cap (older imported rows can't fit).
+  let kept = 0
+  for (let i = 0; i < ids.length; i += 500) {
+    const chunk = ids.slice(i, i + 500)
+    kept += db.exec(`SELECT count(*) FROM events WHERE id IN (${chunk.join(',')})`)[0].values[0][0]
+  }
   persist()
-  return { ok: true, imported }
+  return { ok: true, imported: kept, duplicates: skipped, droppedByCap: added - kept + tooOld, cap: EVENTS_CAP }
 }
 
-function close () { try { if (db) { fs.writeFileSync(dbPath, Buffer.from(db.export())) } } catch (_) {} }
+function close () { try { if (db) { saveDb(db, dbPath) } } catch (_) {} }
 
 module.exports = { init, log, list, logFeed, listFeed, clearFeed, instanceEvent, listInstances, instanceTimeline, playersMet, listWorldVisitsSince, mergeWorldVisit, countGroupInstanceVisits, clear, clearType, close, importVrcx, upsertNotif, listNotifs, unreadNotifCount, markAllNotifsRead, removeNotif, reconcileNotifs, clearNotifs }

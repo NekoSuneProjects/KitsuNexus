@@ -140,13 +140,13 @@ category's section below.
 - [x] **World media in Rich Presence** — Popcorn Palace, VR Dancing, LS Media, ProTV `nowplaying` (PyPyDance etc.) and YouTube titles, poster as the big icon + elapsed/remaining bar (`worldMedia.js` → `vrchatWorld.js` → `discord.js`). No UI toggle yet (`showWorldMedia` config defaults on) — add a switch to the Discord card.
 - [x] **Rich Presence party size / instance type / VR-Desktop label + hide world in private instances** (`worldPresenceContext` in `main.js`, `vrMode.js`). No UI toggles yet for `showPartySize`, `showPlatform`, `hidePrivateInstances` — add to the Discord card.
 - [x] **Live Friend Feed** (pipeline websocket → 📡 Feed tab) + Friend Log trust rank changes + persisted friend snapshot (`pipeline.js`, `friendFeed.js`).
-- [ ] Feed: optional desktop/VR notifications for chosen friends coming online or joining your world.
+- [x] Feed: optional desktop/VR notifications for chosen friends coming online or joining your world. (Feed tab → Friend alerts: Windows toast + in-app toast + desktop/VR HUD, by name or usr_ id, per-friend 1-minute cooldown — `modules/vrchat/friends/friendAlerts.js`)
 - [x] **Instance history + player timeline chart + Players Met + last seen in profile** (`instances` / `instance_players` tables in `gamelog.js`, events from `vrchatWorld.js`).
 - [ ] **Linux: app startup aborts at the tray icon.** `createTray()` loads `assets/icon.ico`, which Electron can't load on Linux, so `new Tray()` throws and the rest of the `whenReady` startup (world tracker, Discord, history, etc.) never runs. Needs a PNG tray icon on non-Windows (or a try/catch). Found while testing under Linux; not fixed here.
 - [x] **Start apps with VRChat** (auto-launch, VR/Desktop/always, close on exit) — `autoLaunch.js`, card in Quick Launch. Needs a real-Windows check of spawn/close.
 - [x] **VRChat server status banner + outage/recovery alerts** (`serverStatus.js`). No UI toggle yet for `vrcServerStatusAlerts`; couldn't test the live status.vrchat.com fetch from the dev sandbox.
 - [x] **Import VRCX local favourites** (avatars / worlds / friends → Local Favorites, `importVrcx` in `localFavoritesDb.js`).
-- [ ] History "Import VRCX" (`gamelog.importVrcx`) reports success with 0 events for a file that isn't a database — sql.js opens any bytes lazily and the per-table errors are swallowed. Validate the file first like `localFavoritesDb.importVrcx` now does. Also its VRCX table names look outdated (`gamelog_join_leave` etc.) — check against current VRCX.
+- [x] History "Import VRCX" (`gamelog.importVrcx`): validates the file first, uses VRCX's current schema (`gamelog_location`, `gamelog_join_leave`, per-user `usr…_friend_log_history` — `gamelog_friend` never existed), dedupes re-imports and events KitsuNexus already logged live (±5 s), and applies the 8000-event cap immediately so the reported count is what's kept.
 - [x] **Face & Hand Tracking over OSC** (built-in VRCFT-compatible face + webcam hands, one camera) — `modules/vrchat/tracking/`, 🙂 Face & Hands tab. Tested with a real face image + Google's face model under Linux; **needs a real-webcam check on Windows, and the hand model was never run** (couldn't download it in the dev sandbox; hand maths is unit-tested only).
 - [x] **Body tracking** (VRChat OSC trackers for VR + `BT/…` desktop body parameters, same camera) — `bodyTracking.js`. **Pose and hand models never ran for real** (Google's model storage is blocked in the dev sandbox and the legacy networks from PyPI are rejected by the web runtime); maths, OSC wire format and UI are tested. Needs a Windows test: stand in view, check trackers in VR (Calibrate FBT) and BT params on desktop.
 - [~] Body tracking: avatar animator for the `BT/…` desktop parameters — `unity/KitsuNexusTracking/` Editor tool + Live Preview. Passes the Unity end-to-end test (`unity/tests/KNTest.cs`, 101/101 on a procedural humanoid). Still needs an in-VRChat check on a real avatar, mainly: that VRChat applies the Action first-layer mask so fingers/head show through, and how lean/crouch look while walking.
@@ -170,6 +170,25 @@ category's section below.
 - [x] Heart rate (Pulsoid + HypeRate) + session analytics
 - [x] Param Lab (OSC), SpotiOSC
 - [x] Auto-launch / start-minimized / per-feature auto-start
+- [x] Jarvis/IntelliChat: 27 AI providers grouped by cost (12 free / free-key), Load models (free ★ + filter), Test, Jarvis own provider + backup fallback; TTS: Google Translate voice (free) + OpenAI-compatible TTS (Groq, Kokoro, LocalAI…)
+- [x] More AI + TTS: 55 AI providers (free no-key Pollinations/OVH verified live, 21 free-key, 15 self-hosted, 7 gateways incl. OmniRoute + LiteLLM, 9 paid); 28 TTS engines (Gemini TTS, Unreal Speech, Cartesia, Fish Audio, LMNT, Speechify, Hume, Murf, Coqui, Piper, MaryTTS, OpenAI-compatible presets for Kokoro/Orpheus/Chatterbox/AllTalk/Speaches/openedai-speech/LocalAI)
+- [ ] New cloud TTS engines (Gemini TTS, Unreal Speech, Cartesia, Fish Audio, LMNT, Speechify, Hume, Murf) follow each vendor's documented REST API and are unit-tested for clear no-key errors, but none was exercised with a real key — confirm each with a key before relying on it. Same for the self-hosted TTS presets' default ports/voices (Orpheus 5005, Chatterbox 4123, AllTalk 7851).
+- [ ] Not added (checked live): StreamElements TTS (now 401, needs auth), Pollinations TTS (402, now paid), LLM7 keyless (now needs a free key — added as free-key instead).
+- [ ] **NekoSuneVR Ollama (`ollama.nekosunevr.co.uk`) isn't reachable** (DNS resolves to 84.46.248.182, but connections fail) — it's the "free, no key" default and the Jarvis fallback when nothing is configured. Check the server, or change the fallback.
+- [ ] Default model ids for the free-key providers (Gemini, Groq, Cerebras, Mistral, GitHub, HF, NVIDIA, SambaNova, Cohere) couldn't be checked without keys; OpenRouter's was outdated and is now `openrouter/free`. Users can always pick via "Load models", but confirm the defaults with real keys.
+- [ ] Microsoft Edge neural TTS (free, high quality) not added: its endpoint only accepts clients that identify as the Edge browser. Revisit only if Microsoft offers a sanctioned free endpoint.
+- [x] Hardware info: live NVIDIA stats via nvidia-smi, Windows GPU counters for AMD/Intel, CPU temp via LibreHardwareMonitor/OpenHardwareMonitor (no fake 0°C), network stats skip VPN/virtual adapters, CPU/GPU name + VRAM tokens
+- [ ] CPU temperature via LibreHardwareMonitor/OpenHardwareMonitor WMI is implemented + unit-tested but not yet checked on a PC actually running LHM (none installed on the dev PC) — confirm sensor names/values on one.
+- [ ] Flaky test: `test/updaterBootstrap.test.js` "main app waits for the helper ready signal…" failed once under full-suite load (passes alone and on re-run) — timing-sensitive, give it a longer wait or a deterministic signal.
+- [x] Crash-safe sql.js DB saves (tmp + rename + .bak, corrupt files kept, never overwritten)
+- [x] Chatbox: long line no longer blanks the whole message; emoji-safe 144-char cap
+- [x] Timer leaks: Cloud Sync pairing poll, TikTok connect race, VR overlay double start, GMANS retrigger
+- [ ] Dead UI code: renderer.js still wires the removed ToN save decode/diff/unlock panel (`tonDecodeBtn`, `tonDiffA/B`, `tonDecodeUnlockBtn`, `tonApplyUnlockBtn`…). It's guarded so nothing crashes, but either restore the panel in index.html or delete the code.
+- [ ] `vrOverlayController.stop()` called while `start()` is still awaiting SteamVR: start then finishes and sets `running = true` anyway (rare; needs a cancel flag).
+- [x] World/instance detection: leave on VRChat quit/crash, `[Behaviour]`-anchored log matching, current local-user log line (also fixes ToN stun attribution)
+- [ ] ToN stun stats recorded before this fix may be inflated by other players' stuns (old data isn't corrected; consider a "reset stun stats" note/button)
+- [x] Clock follows Windows' timezone/DST (2026 Canadian permanent-time changes fixed; Settings → Clock & timezone with manual override)
+- [x] Past-timestamp displays (history lists, ToN saves, notifications, cloud-sync "last synced", logs, HUD history) now use `clockSync` (2026 tz rule fixes).
 
 ### UI
 - [x] Green UI, icon rail, notifications flyout, auto seasonal themes, hidden scrollbars
@@ -262,8 +281,8 @@ the Speech section below; this section is the AI brain + assistant behaviour.
   this assistant is for.
 - [x] **Weather + web search actions.** Added `get_weather` (reuses the app's existing Weather
   feature) and `search_web` actions. Web search is a user-selectable provider:
-  **SearXNG** (`modules/ai/webSearch.js`, JSON API against a self-hosted instance, e.g.
-  `https://searxng.nekosunevr.co.uk/`) or **DuckDuckGo's Instant Answer API** (no setup, no key,
+  **SearXNG-compatible JSON API** (`modules/ai/webSearch.js`, default NekoSune Search
+  `https://search.nekosunevr.co.uk/api/search`, or any self-hosted SearXNG) or **DuckDuckGo's Instant Answer API** (no setup, no key,
   but explicitly limited — it only returns an abstract/infobox-style answer and often nothing at
   all for ordinary queries; offered as a no-setup fallback, not a like-for-like replacement).
   Results are summarized into a short spoken answer by the same AI provider used for command
@@ -423,7 +442,7 @@ all feed into.
   and became fully redundant once the unified card covered the same feature).
 - [x] **TTS output-device picker** — routes `<audio>`-based engines to any enumerated output
   device via `setSinkId`. Doesn't apply to SAPI/local engines that play through the OS directly.
-- [ ] **Routing TTS into VRChat's mic input** — not solvable in pure software. Windows has no
+- [~] **Routing TTS into VRChat's mic input** — installing the driver can't be done by the app (by design), but the rest is: TTS card → "🎙️ Route to VRChat mic" finds an installed virtual cable (VB-CABLE, VoiceMeeter, Hi-Fi Cable, Virtual Audio Cable), selects it, says which mic to pick in VRChat, and "Also play on my speakers" lets you hear it. Originally: not solvable in pure software. Windows has no
   way to expose one app's audio *output* as another app's *microphone input* without some kind
   of virtual audio device (VB-Cable, Voicemeeter, etc.), which requires installing a driver —
   there's no way around that one step. If the user installs one themselves, the output-device
@@ -489,7 +508,7 @@ all feed into.
 
 ## 📸 Media
 
-- [ ] **Screenshot metadata** — embed world/instance/players into the PNG (VRChat picture metadata), and read it back in a gallery
+- [x] **Screenshot metadata** — embed world/instance/players into the PNG (VRChat picture metadata), and read it back in a gallery (Tools → Screenshot Gallery: reads KitsuNexus/VRCX Description + VRChat's own XMP + file name, search by world/player, thumbnails, persistent cache)
 - [x] **Media Library** — VRChat screenshot gallery (open on click); date/world + folders/metadata filters todo
 - [ ] **Avatar/world image upload** management (without Unity) — advanced, optional
 

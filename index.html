@@ -559,7 +559,7 @@
             <div class="muted" style="font-size:.78rem; line-height:1.7; margin-top:6px">
               <b>Time:</b> {time} {date}<br>
               <b>Music:</b> {song} {artist} {title} {songsource} {songtime} {songprogress} {songduration} {songbar} <i>(song -> "Not playing" when idle)</i><br>
-              <b>System:</b> {cpu} {cputemp} {gpu} {gputemp} {ram} {ramused} {ramtotal}<br>
+              <b>System:</b> {cpu} {cputemp} {cpuname} {gpu} {gputemp} {gpuname} {vram} {vramtotal} {ram} {ramused} {ramtotal}<br>
               <b>Network:</b> {down} {up} {ping}<br>
               <b>Heart rate:</b> {hr} {hravg} {hrmax} {hrmin}<br>
               <b>TikTok:</b> {tiktok}=followers · {tiktoklive}=viewers · {tiktoklikes} · {tiktokvideos} · {tiktoknew}=new follows<br>
@@ -756,15 +756,20 @@
 
         <div class="card">
           <h3>🤖 IntelliChat (AI provider)</h3>
-          <label>Provider</label>
-          <select id="aiProvider"></select>
-          <label style="margin-top:8px">Base URL (OpenAI-compatible /chat/completions)</label>
-          <input type="text" id="aiBaseUrl" placeholder="https://api.openai.com/v1" />
-          <div class="grid cols-2" style="margin-top:8px">
-            <div><label>Model</label><input type="text" id="aiModel" placeholder="gpt-4o-mini" /></div>
-            <div><label>API key (blank for local Ollama)</label><input type="password" id="aiKey" placeholder="key" /></div>
-          </div>
-          <div class="muted" style="font-size:.75rem; margin-top:6px">Works with OpenAI, Ollama, LiteLLM, xAI (Grok), Google Gemini, Groq, OpenRouter, Anthropic, or any compatible gateway. Used by the Chatbox ✨ IntelliChat button, the Voice Assistant below, and the Translator's AI grammar fix.</div>
+          <div id="aiPickerMain"></div>
+          <div class="muted" style="font-size:.75rem; margin-top:6px">27 providers: free ones (no key), free tiers that only need a free account key (OpenRouter free models, Gemini, Groq, Cerebras, Mistral, GitHub Models…), apps on your own PC (Ollama, LM Studio, Jan, KoboldCpp…) and paid ones. Used by the Chatbox ✨ IntelliChat button, the Voice Assistant (unless it has its own below) and the Translator's AI grammar fix.</div>
+        </div>
+
+        <div class="card">
+          <h3>🧠 Jarvis / Voice Assistant AI</h3>
+          <label>AI for the voice assistant</label>
+          <select id="assistantAiMode">
+            <option value="shared">Same as IntelliChat (above)</option>
+            <option value="own">Its own provider</option>
+          </select>
+          <div id="aiPickerAssistant" style="margin-top:8px"></div>
+          <label class="switch" style="margin-top:12px"><input type="checkbox" id="assistantAiBackupEnable"> Backup provider (used when the first one fails or a free quota runs out)</label>
+          <div id="aiPickerBackup" style="margin-top:8px"></div>
         </div>
 
         <div class="card">
@@ -786,11 +791,11 @@
           </div>
           <label style="margin-top:8px">Web search <span class="muted" style="font-size:.7rem">(used for "what's the news"-style questions and anything needing current info)</span></label>
           <select id="assistantSearchProvider">
-            <option value="searxng">SearXNG (self-hosted, real web results)</option>
+            <option value="searxng">NekoSune Search / SearXNG (real web results)</option>
             <option value="duckduckgo">DuckDuckGo (no setup, limited — instant-answer only, often returns nothing)</option>
           </select>
           <div id="assistantSearxngRow" style="margin-top:8px">
-            <input type="text" id="assistantSearxngEndpoint" placeholder="https://searxng.nekosunevr.co.uk/" />
+            <input type="text" id="assistantSearxngEndpoint" placeholder="https://search.nekosunevr.co.uk/api/search" />
           </div>
           <label style="margin-top:8px">Trusted friends (for SOS) <span class="muted" style="font-size:.7rem">comma-separated display names, must be on your friends list</span></label>
           <input type="text" id="assistantTrustedFriends" placeholder="name1, name2" />
@@ -823,14 +828,16 @@
           <label>Engine</label>
           <select id="ttsEngine">
             <option value="sapi">Windows built-in (SAPI)</option>
+            <option value="googletranslate">Google Translate voice (free, no key)</option>
+            <option value="openaicompat">OpenAI-compatible TTS (Groq free tier, Kokoro, LocalAI…)</option>
             <option value="tiktok">TikTok TTS</option>
-            <option value="elevenlabs">ElevenLabs (cloud)</option>
+            <option value="elevenlabs">ElevenLabs (cloud, free tier)</option>
             <option value="openai">OpenAI TTS (cloud)</option>
             <option value="google">Google Cloud TTS (cloud)</option>
             <option value="azure">Azure Cognitive Speech (cloud)</option>
             <option value="polly">Amazon Polly (cloud)</option>
             <option value="ibmwatson">IBM Watson TTS (cloud)</option>
-            <option value="deepgram">Deepgram Aura (cloud)</option>
+            <option value="deepgram">Deepgram Aura (cloud, free credit)</option>
             <option value="voiceforge">VoiceForge (cloud)</option>
             <option value="uberduck">UberDuck (cloud)</option>
             <option value="ttsmonster">TTS Monster (cloud)</option>
@@ -918,11 +925,62 @@
               <div><label>Voice</label><input type="text" id="ttsMoonbaseVoice" placeholder="Betty" /></div>
             </div>
           </div>
+          <div id="ttsGoogleTranslateRow" style="margin-top:8px">
+            <label>Language / accent</label>
+            <select id="ttsGtLang">
+              <option value="en">English (US)</option><option value="en-GB">English (UK)</option><option value="en-AU">English (Australia)</option><option value="en-IN">English (India)</option>
+              <option value="fr">French</option><option value="fr-CA">French (Canada)</option><option value="de">German</option><option value="es">Spanish</option><option value="it">Italian</option>
+              <option value="pt">Portuguese</option><option value="nl">Dutch</option><option value="pl">Polish</option><option value="sv">Swedish</option><option value="ru">Russian</option>
+              <option value="uk">Ukrainian</option><option value="ja">Japanese</option><option value="ko">Korean</option><option value="zh-CN">Chinese (Mandarin)</option><option value="hi">Hindi</option><option value="ar">Arabic</option><option value="tr">Turkish</option>
+            </select>
+            <div class="muted" style="font-size:.72rem;margin-top:4px">Free and needs no account. One fixed voice per language.</div>
+          </div>
+          <div id="ttsOpenaiCompatRow" style="margin-top:8px">
+            <label>Preset <span class="muted" style="font-size:.7rem">(fills the fields below)</span></label>
+            <select id="ttsOcPreset">
+              <option value="">— pick a server —</option>
+              <optgroup label="Self-hosted (free, on your PC / server)">
+                <option value="kokoro">Kokoro-FastAPI</option>
+                <option value="orpheus">Orpheus-FastAPI</option>
+                <option value="chatterbox">Chatterbox TTS API</option>
+                <option value="alltalk">AllTalk TTS</option>
+                <option value="speaches">Speaches</option>
+                <option value="openedai">openedai-speech</option>
+                <option value="localai">LocalAI</option>
+              </optgroup>
+              <optgroup label="Cloud">
+                <option value="groq">Groq (free tier key)</option>
+                <option value="openai">OpenAI</option>
+              </optgroup>
+            </select>
+            <label style="margin-top:8px">Base URL</label><input type="text" id="ttsOcBaseUrl" placeholder="http://localhost:8880/v1" list="ttsOcBaseList" />
+            <datalist id="ttsOcBaseList">
+              <option value="https://api.groq.com/openai/v1">Groq (free tier, needs a free key)</option>
+              <option value="http://localhost:8880/v1">Kokoro-FastAPI (local, free)</option>
+              <option value="http://localhost:8000/v1">Speaches / openedai-speech (local)</option>
+              <option value="http://localhost:8080/v1">LocalAI (local)</option>
+              <option value="https://api.openai.com/v1">OpenAI</option>
+            </datalist>
+            <div class="grid cols-2" style="margin-top:8px">
+              <div><label>Model</label><input type="text" id="ttsOcModel" placeholder="kokoro" /></div>
+              <div><label>Voice</label><input type="text" id="ttsOcVoice" placeholder="af_bella" /></div>
+            </div>
+            <div class="grid cols-2" style="margin-top:8px">
+              <div><label>API key (blank for local)</label><input type="password" id="ttsOcKey" placeholder="key" /></div>
+              <div><label>Format</label><select id="ttsOcFormat"><option value="mp3">mp3</option><option value="wav">wav</option><option value="opus">opus</option></select></div>
+            </div>
+            <div class="muted" style="font-size:.72rem;margin-top:4px">Any server with an OpenAI-style <code>/audio/speech</code> endpoint. Kokoro (free, local, very natural): run Kokoro-FastAPI, then model <code>kokoro</code>, voice e.g. <code>af_bella</code> / <code>bm_george</code>. Groq: use the model and voice names from Groq's text-to-speech docs.</div>
+          </div>
           <div id="ttsSelfHostedRow" style="margin-top:8px">
             <label>Endpoint URL</label><input type="text" id="ttsSelfHostedEndpoint" placeholder="http://localhost:5000/api/tts" />
           </div>
-          <label style="margin-top:8px">Output device <span class="muted" style="font-size:.7rem">(install a virtual audio cable yourself to route this into VRChat's mic input)</span></label>
+          <label style="margin-top:8px">Output device <span class="muted" style="font-size:.7rem">(pick a virtual audio cable to send TTS into VRChat's mic)</span></label>
           <select id="ttsOutputDevice"><option value="">System default</option></select>
+          <div class="row" style="margin-top:6px">
+            <button class="btn ghost" id="ttsRouteToMic">🎙️ Route to VRChat mic</button>
+            <label class="switch" style="margin:0"><input type="checkbox" id="ttsMonitor"> Also play on my speakers</label>
+          </div>
+          <div class="muted" id="ttsRouteOut" style="font-size:.75rem;margin-top:4px;white-space:pre-line"></div>
           <div class="row" style="margin-top:8px">
             <input type="text" id="ttsEngineTestText" placeholder="Type something to speak..." style="flex:1" />
             <button class="btn" id="ttsEngineTestSpeak">Speak</button>
@@ -1011,7 +1069,7 @@
           <div class="card">
             <h3>🖥 Component stats <span class="pill" id="statsState">off</span></h3>
             <label class="switch"><input type="checkbox" id="enableStats"> Enable polling</label>
-            <div id="statsOut" class="muted" style="margin-top:10px">—</div>
+            <div id="statsOut" class="muted" style="margin-top:10px;white-space:pre-line">—</div>
           </div>
           <div class="card">
             <h3>🌐 Network <span class="pill" id="netState">off</span></h3>
@@ -2004,6 +2062,20 @@
           </div>
           <div id="feedList" class="muted" style="margin-top:10px;max-height:560px;overflow:auto;font-size:.82rem">Loading…</div>
         </div>
+        <div class="card">
+          <h3>🔔 Friend alerts <span class="pill off" id="friendAlertsState">off</span></h3>
+          <p class="muted" style="font-size:.8rem;margin-top:0">Get a notification when chosen friends come online or start joining the instance you're in. Uses the live Friend Feed, so you need to be logged in to VRChat here.</p>
+          <label class="switch"><input type="checkbox" id="friendAlertsEnable"> Enable friend alerts</label>
+          <label style="margin-top:8px">Friends to watch <span class="muted" style="font-size:.72rem">(display names or usr_ ids, one per line or comma-separated)</span></label>
+          <textarea id="friendAlertsList" rows="3" placeholder="FumikoEcho&#10;usr_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></textarea>
+          <div class="grid cols-2" style="margin-top:8px">
+            <label class="switch"><input type="checkbox" id="friendAlertsOnline" checked> Coming online</label>
+            <label class="switch"><input type="checkbox" id="friendAlertsJoin" checked> Joining your instance</label>
+            <label class="switch"><input type="checkbox" id="friendAlertsDesktop" checked> Windows notification</label>
+            <label class="switch"><input type="checkbox" id="friendAlertsHud" checked> Desktop / VR HUD</label>
+          </div>
+          <div class="muted" id="friendAlertsOut" style="font-size:.75rem;margin-top:8px">No alerts yet.</div>
+        </div>
       </section>
 
       <!-- GROUPS -->
@@ -2140,6 +2212,17 @@
           <label class="switch" style="margin-top:8px"><input type="checkbox" id="screenshotMetaEnable"> Add metadata to new screenshots</label>
           <div class="muted" id="screenshotMetaOut" style="margin-top:6px;font-size:.78rem"></div>
         </div>
+        <div class="card" id="shotGalleryCard">
+          <h3>🖼️ Screenshot Gallery <span class="muted" style="font-size:.72rem" id="shotGalleryCount"></span></h3>
+          <div class="muted" style="font-size:.78rem">Your VRChat photos with the world and players stored inside them (KitsuNexus or VRCX metadata, or VRChat's own world tag). Search by world or player name.</div>
+          <div class="row" style="margin-top:8px">
+            <input id="shotGallerySearch" placeholder="Search world / player…" style="max-width:260px">
+            <button class="btn" id="shotGalleryLoad">Load</button>
+          </div>
+          <div id="shotGalleryGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin-top:10px"></div>
+          <div class="row" style="margin-top:8px"><button class="btn ghost" id="shotGalleryMore" style="display:none">Load more</button></div>
+          <div id="shotGalleryDetail" class="muted" style="margin-top:10px;font-size:.8rem;display:none"></div>
+        </div>
 
         <div class="card">
           <h3>🔊 Soundpad <span class="pill off" id="soundpadState">—</span></h3>
@@ -2209,6 +2292,15 @@
             <option value="light">Light</option>
           </select>
           <div class="muted" style="font-size:.75rem;margin-top:6px">"Auto" defaults to Black &amp; Green. Halloween runs October 1–31; Christmas/Pride/Easter follow their seasonal dates. Event themes override even custom picks and your chosen colours return automatically when the event ends.</div>
+        </div>
+        <div class="card" id="clockSyncPanel">
+          <h3>🕒 Clock &amp; timezone</h3>
+          <div class="muted" style="font-size:.75rem">All KitsuNexus clocks (OSC avatar clock, chatbox {time}, HUD, Jarvis) follow your Windows clock automatically, including the 2026 changes where BC, Alberta, the NWT and Manitoba stopped changing their clocks. Only set an override if the time still looks wrong.</div>
+          <label style="margin-top:10px">Timezone override <span class="muted" style="font-size:.72rem">(leave empty for automatic, e.g. America/Vancouver)</span></label>
+          <input type="text" id="clockOverrideTz" list="clockTzList" placeholder="Automatic (match Windows)" />
+          <datalist id="clockTzList"></datalist>
+          <div class="row" style="margin-top:10px"><button class="btn ghost" id="clockSyncNow">Re-sync with Windows</button></div>
+          <div class="muted" id="clockSyncOut" style="font-size:.75rem;margin-top:8px;white-space:pre-line">Checking clock…</div>
         </div>
         <div class="card" id="boosterPanel">
           <h3>Community Booster <span id="boosterBadge" class="booster-badge" hidden>Supporter</span></h3>

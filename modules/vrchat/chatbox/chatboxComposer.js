@@ -18,8 +18,44 @@
 // "less in rotation, more own-lines" is the default - exactly like the screenshot.
 
 const { resolveTokens, formatClock } = require('../status/statusModule')
+const clockSync = require('../../time/clockSync')
 
 const MAX_CHATBOX = 144
+
+// Shorten text to at most `max` UTF-16 units without splitting an emoji /
+// surrogate pair (a plain .slice() can leave half an emoji, shown as "�").
+function clip (text, max, ellipsis = '…') {
+  const s = String(text || '')
+  if (s.length <= max) return s
+  let out = ''
+  for (const ch of s) {
+    if (out.length + ch.length + ellipsis.length > max) break
+    out += ch
+  }
+  return out.trimEnd() + ellipsis
+}
+
+// Fit a multi-line block into VRChat's 144-char cap. Short lines are kept
+// whole; only the longest lines are shortened ("…"), each to a fair share of
+// what's left. Before, the block stopped at the first line that didn't fit, so
+// a first line over 144 chars (e.g. a long song title + progress bar) made the
+// message empty: nothing was sent, and every line after it was hidden too.
+const MIN_LINE = 12 // below this a line isn't worth showing
+function fitLines (lines, max = MAX_CHATBOX) {
+  let keep = lines.filter(Boolean)
+  // Too many lines for even a short version of each: drop from the bottom.
+  while (keep.length > 1 && keep.length * MIN_LINE + (keep.length - 1) > max) keep = keep.slice(0, -1)
+  if (keep.join('\n').length <= max) return keep.join('\n')
+  let budget = max - (keep.length - 1)
+  const caps = new Array(keep.length)
+  const order = keep.map((l, i) => i).sort((a, b) => keep[a].length - keep[b].length)
+  order.forEach((idx, k) => {
+    const share = Math.floor(budget / (order.length - k))
+    caps[idx] = Math.min(keep[idx].length, share)
+    budget -= caps[idx]
+  })
+  return keep.map((l, i) => clip(l, caps[i])).join('\n')
+}
 
 // How long a manually-sent message stays pinned in the chatbox before the
 // automated rotation takes over again (1 minute 30 seconds).
@@ -74,6 +110,7 @@ class ChatboxComposer {
     this.data = {
       song: '', artist: '', title: '', songSource: '', songTime: '', songProgress: '', songDuration: '', songBar: '', world: '',
       cpu: 0, cpuTemp: 0, gpu: 0, gpuTemp: 0, ramPct: 0, ramUsed: 0, ramTotal: 0,
+      cpuName: '', gpuName: '', vramUsed: 0, vramTotal: 0,
       down: 0, up: 0, ping: 0,
       hr: 0, hrOnline: false, hrAvg: 0, hrMax: 0, hrMin: 0,
       window: '', windowApp: '',
@@ -126,13 +163,15 @@ class ChatboxComposer {
     const n = v => (Number.isFinite(v) ? v.toLocaleString() : v)
     return {
       // time
-      time: formatClock(), date: new Date().toLocaleDateString(),
+      time: formatClock(), date: clockSync.formatDate(new Date()),
       // media
       song: d.song, artist: d.artist, title: d.title,
       songsource: d.songSource, songtime: d.songTime, songprogress: d.songProgress,
       songduration: d.songDuration, songbar: d.songBar,
       // system
-      cpu: d.cpu, cputemp: d.cpuTemp, gpu: d.gpu, gputemp: d.gpuTemp,
+      // temps / VRAM are '' when unknown, so the token drops out instead of showing "0"
+      cpu: d.cpu, cputemp: d.cpuTemp || '', gpu: d.gpu, gputemp: d.gpuTemp || '',
+      cpuname: d.cpuName, gpuname: d.gpuName, vram: d.vramUsed || '', vramtotal: d.vramTotal || '',
       ram: d.ramPct, ramused: d.ramUsed, ramtotal: d.ramTotal,
       // network
       down: d.down, up: d.up, ping: d.ping,
@@ -177,7 +216,7 @@ class ChatboxComposer {
         return `🎵 ${d.song}${extra ? ' ' + extra : ''}`
       }
       case 'world': return d.world ? `🌍 ${d.world}` : ''
-      case 'stats': return `🖥 CPU ${d.cpu}%${d.cpuTemp ? ' ' + d.cpuTemp + '°C' : ''} | GPU ${d.gpu}% | RAM ${d.ramPct}%`
+      case 'stats': return `🖥 CPU ${d.cpu}%${d.cpuTemp ? ' ' + d.cpuTemp + '°C' : ''} | GPU ${d.gpu}%${d.gpuTemp ? ' ' + d.gpuTemp + '°C' : ''} | RAM ${d.ramPct}%`
       case 'network': return `🌐 ↓${d.down} ↑${d.up} Mbps${d.ping ? ' | ' + d.ping + 'ms' : ''}`
       case 'heartRate': {
         if (!d.hrOnline || !d.hr) return ''
@@ -257,14 +296,7 @@ class ChatboxComposer {
     lines = lines.concat(fixed)
     if (rotationLine && this.rotationPosition === 'bottom') lines.push(rotationLine)
 
-    // Respect the 144-char VRChat cap across the whole multi-line block.
-    let out = ''
-    for (const line of lines) {
-      const candidate = out ? out + '\n' + line : line
-      if (candidate.length > MAX_CHATBOX) break
-      out = candidate
-    }
-    return out
+    return fitLines(lines, MAX_CHATBOX)
   }
 
   tick () {
@@ -309,7 +341,7 @@ class ChatboxComposer {
   // Manual message (typed by the user): pin it for holdMs, sent immediately with
   // notify, then the chatbox returns to automated status.
   sendNow (text) {
-    const t = String(text).slice(0, MAX_CHATBOX)
+    const t = clip(String(text), MAX_CHATBOX, '')
     if (!t) return
     this.holdText = t
     this.holdUntil = Date.now() + this.holdMs
@@ -328,4 +360,4 @@ class ChatboxComposer {
   }
 }
 
-module.exports = { ChatboxComposer, MAX_CHATBOX, LINE_ORDER, HOLD_MS }
+module.exports = { ChatboxComposer, MAX_CHATBOX, LINE_ORDER, HOLD_MS, fitLines, clip }

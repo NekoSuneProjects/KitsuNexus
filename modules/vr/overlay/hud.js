@@ -16,7 +16,8 @@ if (widgetMode) {
 }
 document.getElementById('mode').textContent = mode === 'vr' ? 'SteamVR' : 'Desktop'
 function showTime () {
-  document.getElementById('clock').textContent = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(new Date())
+  const hud = window.kitsunexusHud
+  document.getElementById('clock').textContent = hud && hud.formatTime ? hud.formatTime(Date.now()) : new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(new Date())
 }
 showTime()
 setInterval(showTime, 15000)
@@ -173,17 +174,32 @@ function renderNotices () {
   }
   for (const event of [...active].reverse()) {
     const card = document.createElement('div'); card.className = 'activity-notice'; card.dataset.kind = event.kind
-    const icon = document.createElement('span'); icon.className = 'activity-icon'; icon.textContent = ({ join: '+', leave: '−', portal: '◇', avatar: '◈', world: '⌂' })[event.kind] || '•'; icon.setAttribute('aria-hidden', 'true')
+    const icon = document.createElement('span'); icon.className = 'activity-icon'; icon.textContent = ({ join: '+', leave: '−', portal: '◇', avatar: '◈', world: '⌂', friend: '★' })[event.kind] || '•'; icon.setAttribute('aria-hidden', 'true')
     const content = document.createElement('div')
     const name = document.createElement('div'); name.className = 'activity-name'; name.textContent = event.name
     const detail = document.createElement('div'); detail.className = 'activity-detail'; detail.textContent = event.detail || ({ join: 'Joined the instance', leave: 'Left the instance' })[event.kind] || 'Activity detected'
     content.append(name, detail)
-    const time = document.createElement('time'); time.dateTime = new Date(event.at).toISOString(); time.textContent = new Date(event.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    const time = document.createElement('time'); time.dateTime = new Date(event.at).toISOString(); time.textContent = window.kitsunexusHud && window.kitsunexusHud.formatTime ? window.kitsunexusHud.formatTime(event.at) : new Date(event.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     card.append(icon, content, time); alerts.append(card)
   }
 }
 setInterval(renderNotices, 1000)
+// Friend alerts (main/friendAlerts.js): chosen friends coming online or joining
+// your instance. HUD data is merged, so the last alert is re-sent with every
+// update - show each id once.
+let lastFriendAlertId = null
+function receiveFriendAlert (state) {
+  const a = state && state.friendAlert
+  if (!a || !Number.isFinite(a.id) || a.id === lastFriendAlertId) return
+  const first = lastFriendAlertId === null && Date.now() - Number(a.at) > 30000 // stale one from before this window opened
+  lastFriendAlertId = a.id
+  if (first || document.getElementById('pauseNotices').checked) return
+  notices.unshift({ id: a.id, at: Number(a.at) || Date.now(), kind: 'friend', name: String(a.name || '').slice(0, 160), detail: String(a.detail || '').slice(0, 200) })
+  notices.splice(100)
+  renderNotices()
+}
 function receiveActivity (state) {
+  receiveFriendAlert(state)
   if (state && Object.prototype.hasOwnProperty.call(state, 'music')) receivedMusic = true
   if (Number.isFinite(state?.activitySequence)) lastReceivedSequence = state.activitySequence
   if (!Number.isFinite(state?.activitySequence)) return
@@ -413,7 +429,7 @@ if (!widgetMode) {
   const search = document.getElementById('historySearch')
   function renderHistory () {
     const query = search.value.trim().toLowerCase()
-    historyView.textContent = historyEvents.filter(e => [e.kind, e.name, e.worldId, e.instanceId, e.playerId, e.note].join(' ').toLowerCase().includes(query)).map(e => new Date(e.at).toLocaleString() + ' / ' + e.kind + ' / ' + (e.name || e.worldId || '')).join('\n') || 'No matching saved history'
+    historyView.textContent = historyEvents.filter(e => [e.kind, e.name, e.worldId, e.instanceId, e.playerId, e.note].join(' ').toLowerCase().includes(query)).map(e => (window.kitsunexusHud && window.kitsunexusHud.formatDateTime ? window.kitsunexusHud.formatDateTime(e.at) : new Date(e.at).toLocaleString()) + ' / ' + e.kind + ' / ' + (e.name || e.worldId || '')).join('\n') || 'No matching saved history'
   }
   search.addEventListener('input', renderHistory)
   async function historyRequest (request) {

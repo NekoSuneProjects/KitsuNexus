@@ -5,6 +5,7 @@
 // docs/community-ranks-spec.md §7.
 
 const fs = require('fs')
+const { openDb, saveDb } = require('../diagnostics/dbFile')
 const os = require('os')
 const path = require('path')
 
@@ -23,7 +24,7 @@ async function init (userDataDir) {
   SQL = await initSqlJs({ locateFile: f => path.join(wasmDir, f) })
   dbPath = path.join(userDataDir || os.tmpdir(), 'KitsuNexus-ranks.sqlite')
   try {
-    db = new SQL.Database(fs.existsSync(dbPath) ? fs.readFileSync(dbPath) : undefined)
+    db = openDb(SQL, dbPath).db // safe load: falls back to .bak, never overwrites a damaged file
   } catch (_) { db = new SQL.Database() }
   createSchema()
   return true
@@ -161,7 +162,7 @@ function persist () {
   clearTimeout(saveTimer)
   // db.export() serialises the whole DB — debounce so we write rarely (like gamelog).
   saveTimer = setTimeout(() => {
-    try { fs.writeFileSync(dbPath, Buffer.from(db.export())) } catch (e) { console.warn('[ranks] save failed:', e.message) }
+    try { saveDb(db, dbPath) } catch (e) { console.warn('[ranks] save failed:', e.message) }
   }, 6000)
 }
 
@@ -370,7 +371,7 @@ function leaderboard (limit = 50) {
     ORDER BY s.final_score DESC, u.created_at ASC LIMIT ` + (limit | 0))
 }
 
-function close () { try { if (db && dbPath) fs.writeFileSync(dbPath, Buffer.from(db.export())) } catch (_) {} }
+function close () { try { if (db && dbPath) saveDb(db, dbPath) } catch (_) {} }
 function isReady () { return !!db }
 
 module.exports = {

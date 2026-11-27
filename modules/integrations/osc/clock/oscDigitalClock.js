@@ -3,6 +3,8 @@
 // Compatibility sender for Bekosantux/OSCClockSenderAPP avatar parameters.
 // The original app encodes each calendar unit as ceil(value / 127, 5 decimals).
 
+const { wallParts } = require('../../../time/clockSync')
+
 const CLOCK_ROOT = '/avatar/parameters/OSCClock/'
 
 function encodeClockFloat (value) {
@@ -11,12 +13,16 @@ function encodeClockFloat (value) {
 }
 
 function clockValues (date = new Date()) {
+  // Wall-clock fields come from clockSync, not date.getHours(), so the avatar
+  // clock follows Windows / the 2026 tz rule fixes instead of Electron's
+  // bundled (outdated) tzdata.
+  const p = wallParts(date)
   const raw = {
-    MonthF: date.getMonth() + 1,
-    DayF: date.getDate(),
-    HourF: date.getHours(),
-    MinuteF: date.getMinutes(),
-    DOWF: date.getDay()
+    MonthF: p.month,
+    DayF: p.day,
+    HourF: p.hour,
+    MinuteF: p.minute,
+    DOWF: p.dow
   }
   return {
     raw,

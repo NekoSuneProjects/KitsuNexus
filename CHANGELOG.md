@@ -5,6 +5,113 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [1.0.84] - 2026-11-27
+
+### Added
+- **Even more AI options: 55 providers, including gateways / proxies and more self-hosted servers.**
+  - **Free, no key:** Pollinations.ai and OVHcloud AI Endpoints. Both were checked live without a key. When nothing is configured, Jarvis now falls back through NekoSuneVR Ollama → Pollinations → OVH.
+  - **Free with a free key (21):** adds LLM7.io, Z.ai GLM Flash, Zhipu BigModel, SiliconFlow, Chutes, Scaleway, Alibaba Qwen/DashScope, Nebius, Hyperbolic and Novita.
+  - **New "Gateways / proxies" group:** OmniRoute (`localhost:20128/v1`; routes to many free providers with auto-fallback), LiteLLM proxy, Portkey AI Gateway, One API / New API, Open WebUI's API, AnythingLLM and Cloudflare AI Gateway.
+  - **Self-hosted, on your PC (15):** adds text-generation-webui, TabbyAPI, SGLang, Aphrodite, GPT4All, llamafile, Xinference and Hugging Face TGI.
+  - **Paid:** adds Moonshot (Kimi) and Azure OpenAI.
+  - Any `YOUR_…` placeholder left in a base URL now gives a clear "replace this" error.
+- **Many more TTS engines (28 in total):**
+  - **Free tier:** Google Gemini TTS (free key; its raw audio is wrapped as WAV) and Unreal Speech (free monthly allowance).
+  - **Paid:** Cartesia Sonic, Fish Audio, LMNT, Speechify, Hume Octave and Murf AI.
+  - **Self-hosted:** Coqui TTS server (XTTS / VITS), Piper HTTP server and MaryTTS.
+  - **OpenAI-compatible engine presets:** Kokoro-FastAPI, Orpheus-FastAPI, Chatterbox TTS API, AllTalk, Speaches, openedai-speech, LocalAI, Groq and OpenAI, one click each.
+  - The new cloud engines' settings rows are generated from one spec instead of hand-written markup.
+- **Many more AI providers, with free ones marked, for IntelliChat and Jarvis (AI tab).** There are 27 providers in all (new catalog: `modules/ai/aiProviders.js`), grouped by cost:
+  - **Free, no key:** NekoSuneVR Ollama.
+  - **Free with a free account key:** OpenRouter (default model `openrouter/free`, OpenRouter's router that picks a working free model; 13 free models listed live), Google Gemini, Groq, Cerebras, Mistral, GitHub Models, Hugging Face, NVIDIA NIM, SambaNova, Cloudflare Workers AI and Cohere.
+  - **On your own PC:** Ollama, LM Studio, Jan, KoboldCpp, llama.cpp, LocalAI, vLLM and LiteLLM.
+  - **Paid:** OpenAI, Anthropic, xAI, DeepSeek, Together, Fireworks and Perplexity.
+  - **Each picker adds:**
+    - a "Get a free key ↗" link;
+    - **Load models**, listing what the key can use, free models first and marked ★, with a **Free models only** filter;
+    - **Test**, which shows a plain reason when it fails ("API key rejected", "rate limited / free quota used up", "nothing is running at that address"…).
+- **Jarvis can use its own AI provider and a backup provider.** "Same as IntelliChat" or its own provider. An optional backup is tried automatically when the first fails, which helps when a free tier hits its rate limit.
+- **More TTS engines (used by Jarvis and every TTS feature):**
+  - **Google Translate voice:** free, no key, 21 languages and accents; longer text is split and joined.
+  - **OpenAI-compatible TTS:** any `/audio/speech` server, including Groq's free tier, Kokoro-FastAPI (free, local, natural voices), LocalAI, Speaches and openedai-speech.
+  - ElevenLabs and Deepgram are now labelled with their free tier and credit.
+  - Not added: StreamElements (its speech API now needs authentication), and Microsoft Edge's free voices (only usable by impersonating the Edge browser).
+- **Screenshot Gallery (Tools → Screenshot Gallery).** Browse your VRChat photos with the world, players, author and time stored inside them, newest first, and search by world or player name.
+  - **Click a photo** for its full player list, with Open, Show in folder and World page buttons.
+  - **Three metadata sources are read:** the KitsuNexus/VRCX `Description` JSON (players + full instance), VRChat's own XMP (`vrc:WorldID` / `WorldDisplayName` / `AuthorID`), and the file name (all three layouts VRChat has used).
+  - **Fast and non-blocking:** reading never freezes the app. It reads the header chunks and the file's tail instead of every image-data chunk, sorts by file-name time instead of a `stat` per file, and keeps a persistent cache (`screenshot-meta-cache.json`).
+  - **Measured on a 1,647-photo library:**
+    - first page: ~0.1 s;
+    - first full search: ~1.3 s with a warm disk;
+    - after a restart: ~0.2 s from the cache.
+  - **Thumbnails** come from Windows' thumbnail API and load only as photos scroll into view. Open and thumbnail requests are refused for any path outside the VRChat photos folder.
+- **Friend alerts (Feed tab).** Get a notification when chosen friends come online or start joining the instance you're in.
+  - **Where alerts show:** a Windows toast (when the app isn't focused), an in-app toast, and a ★ card on the desktop/VR HUD.
+  - **Matching:** friends are matched by display name or `usr_` id, so renamed friends still match.
+  - **Repeats:** each friend alerts at most once a minute per kind.
+- **"Route to VRChat mic" for TTS.** Windows can't feed one app's audio into another app's microphone without a virtual audio driver, and KitsuNexus still never installs one. If one is installed, the TTS card now does the rest:
+  - **Detects** VB-CABLE, VoiceMeeter, Hi-Fi Cable and Virtual Audio Cable devices, selects the cable, and names the exact device to pick as the microphone in VRChat.
+  - **"Also play on my speakers"** plays a monitor copy so you can still hear your TTS.
+  - **Warns** when the Windows SAPI engine is chosen, since it plays through Windows directly and can't be routed.
+
+### Changed
+- **Assistant web search now defaults to NekoSune Search (`https://search.nekosunevr.co.uk/api/search`).** It replaces the old `searxng.nekosunevr.co.uk` instance, which now only redirects, and returns SearXNG-compatible JSON.
+  - Configs still on the old default move over automatically, both in Settings and at search time.
+  - The endpoint field now accepts any of these forms:
+    - a bare SearXNG instance URL (`/search` is added, as before)
+    - a URL already ending in `/search` or `/api/search`
+    - a full pasted example URL with `?format=json&q=…` (the query is dropped)
+  - The dropdown label is now "NekoSune Search / SearXNG".
+
+### Fixed
+- **Changing the AI provider didn't reach Jarvis.** The assistant copied the AI settings only when its own settings were saved, so a provider change kept using the old one until a Jarvis setting changed. The AI config is now read on every request. With nothing configured at all, it falls back to the free NekoSuneVR Ollama.
+- **Hardware info (CPU / GPU / network) fixed.**
+  - **GPU load looked frozen.** All GPU data came from `si.graphics()` (WMI + PowerShell), which was so slow it only ran every 6th tick, about every 30 s at the default 5 s interval. NVIDIA GPUs are now read with `nvidia-smi` on every tick (~0.3 s, exact load, temperature and VRAM; the busiest GPU is used on multi-GPU PCs). Other GPUs (AMD / Intel) use Windows' own GPU-engine counters, the same numbers Task Manager shows, read in the background. Slow WMI probes never delay a tick now.
+  - **CPU temperature was always 0.** Windows doesn't give normal apps the CPU temperature, so it now comes from the board when available, or from LibreHardwareMonitor / OpenHardwareMonitor when running (picked up within 5 minutes of starting one). Otherwise it's shown as unknown, with a hint, instead of "0°C". The `{cputemp}` / `{gputemp}` chatbox tokens are blank when unknown instead of "0".
+  - **Network up/down was stuck at 0 Mbps on PCs with a VPN or virtual adapter.** The "default" interface was used, and on many gaming PCs that's Radmin VPN, Tailscale, ZeroTier, Hamachi, VMware or Hyper-V vEthernet, which carries no traffic. All real adapters are now measured, the busiest one is reported, and VPN / virtual adapters are skipped.
+  - The stats readout now shows CPU and GPU names, GPU temperature and VRAM. New chatbox tokens `{cpuname}`, `{gpuname}`, `{vram}`, `{vramtotal}`, and the stats line also shows GPU temperature.
+  - CPU load (checked against Windows' `% Processor Time` over the same windows) was already accurate.
+- **Screenshot metadata never worked for current VRChat, and rewrote photos in a loop where it did.**
+  - **Month folders were never matched.** VRChat saves into month folders, so the folder watcher reported `2026-11\VRChat_….png`, and the `^VRChat_` check never matched it.
+  - **Endless rewrites:** for files it did catch, writing the metadata fired the watcher again. The photo was rewritten every ~2.5 s for as long as the app ran (reproduced: 6 rewrites in 16 s), each time with whoever was in the instance *now*.
+  - **VRCX's metadata was overwritten:** any existing `Description` was replaced, so with VRCX running the two apps overwrote each other.
+  - **Fixed:** each new screenshot is now processed once, and a file that already has metadata is left alone. Writes go to a temp file that's then swapped in. A file VRChat is still writing is retried. Photo Relay falls back to the file's existing metadata.
+- **History "Import VRCX" rewritten against VRCX's current schema.**
+  - It used to report success with 0 events for a file that wasn't a database. Now it checks the file first.
+  - It read a `gamelog_friend` table VRCX doesn't have, so friend history never imported. It now reads the per-user `usr…_friend_log_history` tables: friend added/removed, name changes ("Old → New") and trust changes.
+  - Join/leave rows get their world name from `gamelog_location`.
+  - Re-imports, and events KitsuNexus already logged live (within ±5 s), are skipped instead of duplicated.
+  - The 8,000-event history cap is applied straight away. A big import used to look successful and then mostly vanish on the next start. The result now says how many were kept, already present, or over the limit.
+  - Checked on a real 134 MB VRCX database: 4,712 imported, 2,117 already logged live, and a re-import adds 0.
+- **Past times (history lists, ToN saves, notifications, Cloud Sync "last synced", logs, HUD history) now use the corrected clock.** They were still formatted with the bundled 2025 tz rules, so anything after 2026-11-01 showed an hour off for BC, Alberta, NWT and Manitoba. 23 renderer displays now go through `clockSync`, which also caches its formatters for long lists.
+- **A crash or power cut while saving could wipe all instance history, players met, local favorites or ranks.** The sql.js databases were written with `fs.writeFileSync` straight over the live file, every few seconds while in an instance. A half-written file then failed to open, the app silently started an empty database, and the next save overwrote the damaged file for good. The new `modules/diagnostics/dbFile.js` changes both halves:
+  - **Saving:** writes `<file>.tmp`, then swaps it in and keeps the previous good copy as `.bak`.
+  - **Loading:** checks the file really opens. If it doesn't, the app falls back to `.bak`; if that fails too, the damaged file is renamed `.corrupt-<time>` and kept, never overwritten.
+  - Checked against a copy of a real 2.3 MB history DB: it loads the same and saves in ~30 ms.
+- **The chatbox went completely blank when one line was longer than 144 characters.** The multi-line composer stopped at the first line that didn't fit. A long song title plus progress bar in the first (Now Playing) line therefore produced an empty message: nothing was sent, and the stats, heart-rate and clock lines vanished too. Lines are now fitted to the cap. Short lines stay whole and only the longest are shortened with "…", so every line stays visible.
+- **Half emojis ("�") at the end of chatbox messages.** Chatbox text was cut with a plain `.slice(0, 144)` in several places (manual messages, QR, Shazam, OCR/STT translation, IntelliChat), which can split an emoji in half. The central OSC chatbox send now caps safely and drops any lone half emoji.
+- **Cloud Sync pairing kept polling forever after a second "Connect…" click.** The button is re-enabled while waiting for the code. A second click started a new 3-second poll loop and orphaned the first, because each loop cleared the shared timer variable instead of itself, so the old loop ran for the rest of the session. A new Connect now stops the old loop, each loop stops only itself, and overlapping polls are skipped.
+- **Duplicate loops from quick repeated starts.**
+  - **TikTok:** a second connect while the first `connect()` was still pending let the first one start an orphaned 30-second room-info poll. It now has a generation guard.
+  - **SteamVR overlay:** a double click or auto-start plus click could create two overlays and two capture loops, because `running` was only set after the awaits. It now has a `starting` guard.
+  - **GMANS heart-rate:** the retrigger timer is now cleared before it's restarted.
+- **Still shown "in" the last world after closing or crashing VRChat.** VRChat logs `VRCApplication: HandleApplicationQuit` when it closes and never writes an `OnLeftRoom`, and a crash logs nothing at all. So the last world, instance and players stayed current in:
+  - Discord presence, the chatbox world line and Radar;
+  - the app on startup, whenever the newest log was from a session that had already ended;
+  - instance history, where the visit stayed open until the next session's first join (overnight "visits").
+
+  The quit line now counts as leaving the world. If VRChat.exe isn't running, the log has been quiet for over a minute and the app still thinks you're in a world, the visit ends at the log's last write time. That process check runs at most every 30 seconds.
+- **World/instance could be blanked mid-session by exception stack traces.** `OnLeftRoom`, `OnPlayerJoined/Left`, `Joining wrld_` and `Joining or Creating Room` were matched anywhere in a log line. VRChat's Udon exception traces contain lines like `at ÎÍÌ….OnLeftRoom () [0x00000]`, and any world's debug output could match too. These patterns now need VRChat's own `[Behaviour] ` prefix.
+- **Own VRChat user never detected (empty profile link), and ToN counted everyone's stuns as yours.** Current VRChat builds no longer log `User Authenticated: Name (usr_…)`. They log `[Authentication - …] Preforming post login checks for Name (usr_…)` instead.
+  - `vrchatWorld.js` now reads both formats.
+  - So does `tonLogReader.js`. It had an empty display name, so every player's "X landed a stun!" counted toward your stun stats.
+- **Clocks were an hour off after the 2026-11-01 clock change in Canada (BC, Alberta, NWT, Manitoba).** Electron 42 and Node bundle their own timezone database (IANA tzdata 2025c) inside ICU. It predates the 2026 laws that put British Columbia on permanent UTC−7, Alberta and the NWT on UTC−6, and Manitoba plus northwestern Ontario on UTC−5, and that cancelled Cuba's 2026 fall-back. So on 2026-11-01 the app "fell back" an hour that the real clocks didn't. Windows gets these updates through Windows Update, but Chromium uses its own copy.
+  - Added `modules/time/clockSync.js`, which every clock now reads from: the OSC avatar clock (`OSCClock/*`, `VRCOSC/Clock/*`, `DateTime*`), chatbox `{time}`/`{date}` and the clock line, the rail clock, the HUD clock and alert times, AFK "since {time}", Jarvis "what time is it (in …)", and the history heatmap.
+  - Local time now follows the UTC offset Windows itself reports, so it matches the taskbar clock. The main process (`modules/time/osClock.js`) asks Windows every 5 minutes and again after sleep/resume and unlock, then pushes the answer to every window.
+  - Named zones (e.g. "time in Vancouver") get the IANA 2026b–2026f rule changes applied on top of the bundled data. The fix switches itself off once Electron ships tzdata that already includes them.
+  - Settings now has a **Clock & timezone** card. It shows the time and offset in use and where they come from, has a "Re-sync with Windows" button, and takes an optional manual timezone override.
+  - Jarvis now also recognises BC, Saskatchewan, Yukon, the NWT, New Brunswick, PEI and Cuba by name.
+
 ## [1.0.83] - 2026-11-26
 
 ### Added

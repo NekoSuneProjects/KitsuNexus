@@ -72,6 +72,24 @@ const ALIASES = {
   'nova scotia': 'America/Halifax',
   newfoundland: 'America/St_Johns',
   'st johns': 'America/St_Johns',
+  bc: 'America/Vancouver',
+  victoria: 'America/Vancouver',
+  saskatchewan: 'America/Regina',
+  regina: 'America/Regina',
+  saskatoon: 'America/Regina',
+  yukon: 'America/Whitehorse',
+  whitehorse: 'America/Whitehorse',
+  yellowknife: 'America/Edmonton',
+  'northwest territories': 'America/Edmonton',
+  nwt: 'America/Edmonton',
+  inuvik: 'America/Inuvik',
+  'new brunswick': 'America/Moncton',
+  'prince edward island': 'America/Halifax',
+  pei: 'America/Halifax',
+
+  // --- Caribbean ---
+  cuba: 'America/Havana',
+  havana: 'America/Havana',
 
   // --- EU / Europe ---
   eu: 'Europe/Paris',

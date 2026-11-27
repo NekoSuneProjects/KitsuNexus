@@ -21,20 +21,33 @@ const { getTikTokTtsAudio } = require('../live/tiktokTts')
 
 const TTS_PROVIDERS = {
   sapi: { label: 'Windows built-in (SAPI)' },
+  googletranslate: { label: 'Google Translate voice (free, no key)' },
   tiktok: { label: 'TikTok TTS' },
-  elevenlabs: { label: 'ElevenLabs (cloud)', needsKey: true },
+  openaicompat: { label: 'OpenAI-compatible TTS (Groq free tier, Kokoro, LocalAI…)', needsEndpoint: true },
+  geminitts: { label: 'Google Gemini TTS (free tier key)', needsKey: true },
+  unrealspeech: { label: 'Unreal Speech (free monthly allowance)', needsKey: true },
+  elevenlabs: { label: 'ElevenLabs (cloud, free tier)', needsKey: true },
+  cartesia: { label: 'Cartesia Sonic (cloud)', needsKey: true },
+  fishaudio: { label: 'Fish Audio (cloud)', needsKey: true },
+  lmnt: { label: 'LMNT (cloud)', needsKey: true },
+  speechify: { label: 'Speechify (cloud)', needsKey: true },
+  hume: { label: 'Hume Octave (cloud)', needsKey: true },
+  murf: { label: 'Murf AI (cloud)', needsKey: true },
   openai: { label: 'OpenAI TTS (cloud)', needsKey: true },
   google: { label: 'Google Cloud TTS (cloud)', needsKey: true },
   azure: { label: 'Azure Cognitive Speech (cloud)', needsKey: true },
   polly: { label: 'Amazon Polly (cloud)', needsKey: true },
   ibmwatson: { label: 'IBM Watson TTS (cloud)', needsKey: true },
-  deepgram: { label: 'Deepgram Aura (cloud)', needsKey: true },
+  deepgram: { label: 'Deepgram Aura (cloud, free credit)', needsKey: true },
   voiceforge: { label: 'VoiceForge (cloud)', needsKey: true },
   uberduck: { label: 'UberDuck (cloud)', needsKey: true },
   ttsmonster: { label: 'TTS Monster (cloud)', needsKey: true },
   glados: { label: 'GLaDOS TTS (self-hosted)', needsEndpoint: true },
   moonbase: { label: 'Moonbase Voices (local app)', needsEndpoint: true },
-  selfhosted: { label: 'Self-hosted (Piper / XTTS / other)', needsEndpoint: true }
+  selfhosted: { label: 'Self-hosted (Piper / XTTS / other)', needsEndpoint: true },
+  coqui: { label: 'Coqui TTS server (self-hosted, XTTS / VITS)', needsEndpoint: true },
+  piper: { label: 'Piper HTTP server (self-hosted)', needsEndpoint: true },
+  marytts: { label: 'MaryTTS (self-hosted)', needsEndpoint: true }
 }
 
 function speakSapi ({ text, voice, rate, volume }) {
@@ -320,6 +333,205 @@ async function speakSelfHosted ({ text, endpoint }) {
   return { audio: buf.toString('base64'), mime }
 }
 
+// Google Translate's public speech endpoint: free, no key, ~200 characters per
+// request, so longer text is split at word boundaries and the MP3 pieces are
+// joined (MP3 frames concatenate cleanly). Unofficial but long-standing and
+// widely used; good enough as a zero-setup fallback voice.
+function splitForTts (text, max = 190) {
+  const parts = []
+  let rest = String(text || '').replace(/\s+/g, ' ').trim()
+  while (rest.length > max) {
+    let cut = Math.max(rest.lastIndexOf('. ', max), rest.lastIndexOf(', ', max), rest.lastIndexOf(' ', max))
+    if (cut < max * 0.4) cut = max
+    parts.push(rest.slice(0, cut + 1).trim())
+    rest = rest.slice(cut + 1).trim()
+  }
+  if (rest) parts.push(rest)
+  return parts
+}
+
+async function speakGoogleTranslate ({ text, languageCode }) {
+  const tl = String(languageCode || 'en').trim() || 'en'
+  const pieces = []
+  for (const part of splitForTts(text).slice(0, 10)) {
+    const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(tl)}&q=${encodeURIComponent(part)}`
+    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } })
+    if (!res.ok) throw new Error(`Google Translate voice request failed: ${res.status}`)
+    pieces.push(Buffer.from(await res.arrayBuffer()))
+  }
+  if (!pieces.length) throw new Error('Nothing to speak')
+  return { audio: Buffer.concat(pieces).toString('base64'), mime: 'audio/mpeg' }
+}
+
+// Any OpenAI-compatible /audio/speech endpoint: Groq (free tier), OpenAI-format
+// servers like Kokoro-FastAPI, LocalAI, Speaches, openedai-speech, AllTalk...
+async function speakOpenAiCompatible ({ text, baseUrl, apiKey, model, voice, format }) {
+  const base = String(baseUrl || '').trim().replace(/\/+$/, '')
+  if (!base) throw new Error('Base URL is required (for example http://localhost:8880/v1 for Kokoro)')
+  const headers = { 'Content-Type': 'application/json' }
+  if (String(apiKey || '').trim()) headers.Authorization = `Bearer ${String(apiKey).trim()}`
+  const fmt = String(format || 'mp3').trim() || 'mp3'
+  const body = { input: text, response_format: fmt }
+  if (String(model || '').trim()) body.model = String(model).trim()
+  if (String(voice || '').trim()) body.voice = String(voice).trim()
+  const res = await fetch(`${base}/audio/speech`, { method: 'POST', headers, body: JSON.stringify(body) })
+  if (!res.ok) throw new Error(`TTS request failed: ${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`.trim())
+  const buf = Buffer.from(await res.arrayBuffer())
+  const mime = res.headers.get('content-type') || ({ mp3: 'audio/mpeg', wav: 'audio/wav', opus: 'audio/ogg', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac' }[fmt] || 'audio/mpeg')
+  return { audio: buf.toString('base64'), mime }
+}
+
+// ---- More cloud voices ------------------------------------------------------
+// Each returns { audio: base64, mime }. Request shapes follow each vendor's
+// public REST docs; all need the user's own key.
+
+async function checkedFetch (label, url, init) {
+  const res = await fetch(url, init)
+  if (!res.ok) throw new Error(`${label} request failed: ${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`.trim())
+  return res
+}
+const asAudio = async (res, fallbackMime = 'audio/mpeg') => ({ audio: Buffer.from(await res.arrayBuffer()).toString('base64'), mime: (res.headers.get('content-type') || '').startsWith('audio/') ? res.headers.get('content-type') : fallbackMime })
+
+// Wrap raw 16-bit little-endian mono PCM in a WAV header (Gemini returns PCM).
+function pcmToWav (pcm, sampleRate = 24000, channels = 1, bits = 16) {
+  const header = Buffer.alloc(44)
+  const byteRate = sampleRate * channels * bits / 8
+  header.write('RIFF', 0); header.writeUInt32LE(36 + pcm.length, 4); header.write('WAVE', 8)
+  header.write('fmt ', 12); header.writeUInt32LE(16, 16); header.writeUInt16LE(1, 20); header.writeUInt16LE(channels, 22)
+  header.writeUInt32LE(sampleRate, 24); header.writeUInt32LE(byteRate, 28); header.writeUInt16LE(channels * bits / 8, 32); header.writeUInt16LE(bits, 34)
+  header.write('data', 36); header.writeUInt32LE(pcm.length, 40)
+  return Buffer.concat([header, pcm])
+}
+
+// Google Gemini TTS: free tier with a free AI Studio key.
+async function speakGeminiTts ({ text, apiKey, model, voice }) {
+  if (!apiKey) throw new Error('Gemini API key is required (free at aistudio.google.com/apikey)')
+  const m = String(model || 'gemini-2.5-flash-preview-tts').trim()
+  const res = await checkedFetch('Gemini TTS', `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text }] }],
+      generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice || 'Kore' } } } }
+    })
+  })
+  const j = await res.json()
+  const part = (j.candidates?.[0]?.content?.parts || []).find(p => p.inlineData && p.inlineData.data)
+  if (!part) throw new Error('Gemini TTS returned no audio')
+  const rate = Number((String(part.inlineData.mimeType || '').match(/rate=(\d+)/) || [])[1]) || 24000
+  return { audio: pcmToWav(Buffer.from(part.inlineData.data, 'base64'), rate).toString('base64'), mime: 'audio/wav' }
+}
+
+// Unreal Speech: free monthly allowance.
+async function speakUnrealSpeech ({ text, apiKey, voice }) {
+  if (!apiKey) throw new Error('Unreal Speech API key is required')
+  const res = await checkedFetch('Unreal Speech', 'https://api.v8.unrealspeech.com/stream', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ Text: String(text).slice(0, 1000), VoiceId: voice || 'Sierra', Bitrate: '192k', Speed: '0', Pitch: '1', Codec: 'libmp3lame' })
+  })
+  return asAudio(res)
+}
+
+async function speakCartesia ({ text, apiKey, voice, model }) {
+  if (!apiKey) throw new Error('Cartesia API key is required')
+  if (!voice) throw new Error('Cartesia voice id is required (copy one from play.cartesia.ai)')
+  const res = await checkedFetch('Cartesia', 'https://api.cartesia.ai/tts/bytes', {
+    method: 'POST',
+    headers: { 'X-API-Key': apiKey, 'Cartesia-Version': '2024-06-10', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_id: model || 'sonic-2', transcript: text, voice: { mode: 'id', id: voice }, output_format: { container: 'mp3', sample_rate: 44100, bit_rate: 128000 } })
+  })
+  return asAudio(res)
+}
+
+async function speakFishAudio ({ text, apiKey, voice, model }) {
+  if (!apiKey) throw new Error('Fish Audio API key is required')
+  const headers = { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
+  if (model) headers.model = model
+  const body = { text, format: 'mp3' }
+  if (voice) body.reference_id = voice
+  const res = await checkedFetch('Fish Audio', 'https://api.fish.audio/v1/tts', { method: 'POST', headers, body: JSON.stringify(body) })
+  return asAudio(res)
+}
+
+async function speakLmnt ({ text, apiKey, voice }) {
+  if (!apiKey) throw new Error('LMNT API key is required')
+  const res = await checkedFetch('LMNT', 'https://api.lmnt.com/v1/ai/speech/bytes', {
+    method: 'POST',
+    headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ voice: voice || 'leah', text, format: 'mp3' })
+  })
+  return asAudio(res)
+}
+
+async function speakSpeechify ({ text, apiKey, voice }) {
+  if (!apiKey) throw new Error('Speechify API key is required')
+  const res = await checkedFetch('Speechify', 'https://api.sws.speechify.com/v1/audio/speech', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ input: text, voice_id: voice || 'george', audio_format: 'mp3' })
+  })
+  const j = await res.json()
+  if (!j.audio_data) throw new Error('Speechify returned no audio')
+  return { audio: j.audio_data, mime: 'audio/mpeg' }
+}
+
+async function speakHume ({ text, apiKey, voice }) {
+  if (!apiKey) throw new Error('Hume API key is required')
+  const utterance = { text }
+  if (voice) utterance.voice = { name: voice, provider: 'HUME_AI' }
+  const res = await checkedFetch('Hume', 'https://api.hume.ai/v0/tts/file', {
+    method: 'POST',
+    headers: { 'X-Hume-Api-Key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ utterances: [utterance], format: { type: 'mp3' } })
+  })
+  return asAudio(res)
+}
+
+async function speakMurf ({ text, apiKey, voice }) {
+  if (!apiKey) throw new Error('Murf API key is required')
+  const res = await checkedFetch('Murf', 'https://api.murf.ai/v1/speech/generate', {
+    method: 'POST',
+    headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, voiceId: voice || 'en-US-natalie', format: 'MP3' })
+  })
+  const j = await res.json()
+  if (j.encodedAudio) return { audio: j.encodedAudio, mime: 'audio/mpeg' }
+  if (!j.audioFile) throw new Error('Murf returned no audio')
+  return asAudio(await checkedFetch('Murf audio', j.audioFile, {}))
+}
+
+// ---- Self-hosted voice servers (free, run on your PC / server) ---------------
+const trimBase = (u, def) => String(u || def).trim().replace(/\/+$/, '')
+
+// Coqui TTS server ("tts-server", e.g. XTTS / VITS models): GET /api/tts.
+async function speakCoqui ({ text, endpoint, voice, language }) {
+  const base = trimBase(endpoint, 'http://localhost:5002')
+  const q = new URLSearchParams({ text })
+  if (voice) q.set('speaker_id', voice)
+  if (language) q.set('language_id', language)
+  const res = await checkedFetch('Coqui TTS', `${base}/api/tts?${q}`, {})
+  return asAudio(res, 'audio/wav')
+}
+
+// Piper's HTTP server ("python -m piper.http_server"): POST the text, get WAV.
+async function speakPiper ({ text, endpoint, voice }) {
+  const base = trimBase(endpoint, 'http://localhost:5000')
+  const body = { text }
+  if (voice) body.voice = voice
+  const res = await checkedFetch('Piper', base, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  return asAudio(res, 'audio/wav')
+}
+
+// MaryTTS server: GET /process.
+async function speakMary ({ text, endpoint, voice, language }) {
+  const base = trimBase(endpoint, 'http://localhost:59125')
+  const q = new URLSearchParams({ INPUT_TEXT: text, INPUT_TYPE: 'TEXT', OUTPUT_TYPE: 'AUDIO', AUDIO: 'WAVE_FILE', LOCALE: language || 'en_US' })
+  if (voice) q.set('VOICE', voice)
+  const res = await checkedFetch('MaryTTS', `${base}/process?${q}`, {})
+  return asAudio(res, 'audio/wav')
+}
+
 function escapeXml (s) {
   return String(s || '').replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]))
 }
@@ -348,8 +560,21 @@ async function speak (opts = {}) {
     case 'glados': return speakGlados(opts)
     case 'moonbase': return speakMoonbase(opts)
     case 'selfhosted': return speakSelfHosted(opts)
+    case 'googletranslate': return speakGoogleTranslate({ ...opts, text: input })
+    case 'openaicompat': return speakOpenAiCompatible({ ...opts, text: input })
+    case 'geminitts': return speakGeminiTts({ ...opts, text: input })
+    case 'unrealspeech': return speakUnrealSpeech({ ...opts, text: input })
+    case 'cartesia': return speakCartesia({ ...opts, text: input })
+    case 'fishaudio': return speakFishAudio({ ...opts, text: input })
+    case 'lmnt': return speakLmnt({ ...opts, text: input })
+    case 'speechify': return speakSpeechify({ ...opts, text: input })
+    case 'hume': return speakHume({ ...opts, text: input })
+    case 'murf': return speakMurf({ ...opts, text: input })
+    case 'coqui': return speakCoqui({ ...opts, text: input })
+    case 'piper': return speakPiper({ ...opts, text: input })
+    case 'marytts': return speakMary({ ...opts, text: input })
     default: throw new Error(`Unknown TTS engine: ${engine}`)
   }
 }
 
-module.exports = { speak, listSapiVoices, TTS_PROVIDERS }
+module.exports = { speak, listSapiVoices, TTS_PROVIDERS, splitForTts, pcmToWav }
